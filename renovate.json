@@ -1,0 +1,38 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended", "schedule:weekdays", ":gitSignOff"],
+  "schedule": ["before 9am on Monday"],
+  "timezone": "America/New_York",
+  "labels": ["dependencies"],
+  "rangeStrategy": "bump",
+  "packageRules": [
+    {
+      "description": "Group minor and patch updates into a single PR",
+      "matchUpdateTypes": ["minor", "patch"],
+      "groupName": "minor-patch-updates",
+      "automerge": true
+    },
+    {
+      "description": "Major updates get individual PRs for manual review",
+      "matchUpdateTypes": ["major"],
+      "automerge": false
+    },
+    {
+      "description": "Pin GitHub Actions to SHA digests",
+      "matchManagers": ["github-actions"],
+      "pinDigests": true
+    },
+    {
+      "description": "Automerge vulnerability fixes immediately",
+      "matchUpdateTypes": ["patch", "minor"],
+      "isVulnerabilityAlert": true,
+      "schedule": ["at any time"],
+      "automerge": true,
+      "groupName": null
+    }
+  ],
+  "lockFileMaintenance": {
+    "enabled": true,
+    "schedule": ["before 9am on Monday"]
+  }
+}
