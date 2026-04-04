@@ -2,6 +2,13 @@
   "name": "@mycollections/ui",
   "version": "0.0.0",
   "private": true,
+  "author": "Solve4It <https://solve4it.com>",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/solve4it/mycollections.git",
+    "directory": "packages/ui"
+  },
   "scripts": {
     "build": "echo 'No build step yet'",
     "test": "echo 'No tests yet'",
