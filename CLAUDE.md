@@ -73,5 +73,8 @@ gh project item-edit --project-id PVT_kwDOEDb4es4BTKDH --id "$ITEM_ID" --field-i
 - **Spell check**: cSpell
 - **Node**: Version pinned in `.nvmrc`, use fnm
 
+## Keeping this file current
+Update CLAUDE.md whenever conventions, workflows, or project practices change. This file is the source of truth for all Claude Code sessions — if it's stale, new sessions will follow outdated instructions.
+
 ## When plan changes
 If items are added to or removed from the plan, create or close the corresponding GitHub issues to keep the project board in sync.
