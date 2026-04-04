@@ -1,0 +1,11 @@
+{
+  "name": "@mycollections/core",
+  "version": "0.0.0",
+  "private": true,
+  "scripts": {
+    "build": "echo 'No build step yet'",
+    "test": "echo 'No tests yet'",
+    "lint": "echo 'No lint yet'",
+    "typecheck": "echo 'No typecheck yet'"
+  }
+}
