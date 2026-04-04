@@ -13,14 +13,8 @@
       "dependsOn": ["build"],
       "outputs": ["coverage/**"]
     },
-    "lint": {
-      "dependsOn": ["^build"]
-    },
     "typecheck": {
       "dependsOn": ["^build"]
-    },
-    "format": {
-      "cache": false
     }
   }
 }

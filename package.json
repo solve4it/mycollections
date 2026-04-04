@@ -16,15 +16,20 @@
     "dev": "turbo run dev",
     "build": "turbo run build",
     "test": "turbo run test",
-    "lint": "turbo run lint",
+    "lint": "biome check .",
+    "lint:fix": "biome check --write .",
     "typecheck": "turbo run typecheck",
-    "format": "turbo run format",
-    "check": "turbo run lint typecheck test build"
+    "format": "biome format --write .",
+    "format:check": "biome format .",
+    "check": "biome check . && turbo run typecheck test build"
   },
   "pnpm": {
-    "onlyBuiltDependencies": ["esbuild"]
+    "onlyBuiltDependencies": [
+      "esbuild"
+    ]
   },
   "devDependencies": {
+    "@biomejs/biome": "^2.4.10",
     "turbo": "^2",
     "typescript": "^6",
     "vitest": "^4"
