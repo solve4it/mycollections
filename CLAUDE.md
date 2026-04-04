@@ -69,7 +69,7 @@ gh project item-edit --project-id PVT_kwDOEDb4es4BTKDH --id "$ITEM_ID" --field-i
 - **PR Labels**: Include relevant type, area, phase, and `AI-assisted` labels
 - **Testing**: TDD — write failing tests first, then implementation
 - **Dependencies**: Always use the latest stable version
-- **Linting**: Biome (spaces, indent 2, line width 120) + eslint-plugin-jsx-a11y
+- **Linting**: Biome (spaces, indent 2, line width 120, built-in a11y rules — no ESLint needed)
 - **Spell check**: cSpell
 - **Node**: Version pinned in `.nvmrc`, use fnm
 
