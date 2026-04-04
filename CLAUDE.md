@@ -63,9 +63,9 @@ gh project item-edit --project-id PVT_kwDOEDb4es4BTKDH --id "$ITEM_ID" --field-i
 
 ## Conventions
 
-- **Commits**: Conventional format — `feat:`, `fix:`, `chore:`, `refactor:`, `test:`, `docs:`
+- **Commits**: Conventional format — `feat:`, `fix:`, `chore:`, `refactor:`, `test:`, `docs:`. Commit early and often — capture work at every logical boundary (e.g., after config, after tests, after implementation), not just at the end.
 - **Branches**: `<type>/issue-<number>-<short-description>`
-- **PRs**: One feature per PR, squash merged, must link to an issue, add labels
+- **PRs**: One feature per PR, squash merged, must link to an issue, add labels. Keep PRs as small as possible — split into multiple PRs if an issue touches too many files.
 - **PR Labels**: Include relevant type, area, phase, and `AI-assisted` labels
 - **Testing**: TDD — write failing tests first, then implementation
 - **Dependencies**: Always use the latest stable version
