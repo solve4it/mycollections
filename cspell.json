@@ -1,0 +1,35 @@
+{
+  "$schema": "https://raw.githubusercontent.com/streetsidesoftware/cspell/main/cspell.schema.json",
+  "version": "0.2",
+  "language": "en",
+  "words": [
+    "mycollections",
+    "biomejs",
+    "commitlint",
+    "Fastify",
+    "pnpm",
+    "tanstack",
+    "tsbuildinfo",
+    "tsconfig",
+    "turbo",
+    "vitest",
+    "gpgsign",
+    "shusak",
+    "PVTSSF"
+  ],
+  "ignoreRegExpList": [
+    "/PVT_[a-zA-Z0-9]+/g",
+    "/PVTSSF_[a-zA-Z0-9]+/g",
+    "/[a-f0-9]{8,}/g"
+  ],
+  "enableGlobDot": false,
+  "ignorePaths": [
+    "node_modules",
+    "dist",
+    "build",
+    "coverage",
+    ".turbo",
+    "pnpm-lock.yaml",
+    ".git"
+  ]
+}
