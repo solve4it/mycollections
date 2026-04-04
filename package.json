@@ -1,0 +1,32 @@
+{
+  "name": "mycollections",
+  "private": true,
+  "description": "A personal collection management application with a plugin architecture",
+  "author": "Solve4It <https://solve4it.com>",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/solve4it/mycollections.git"
+  },
+  "packageManager": "pnpm@10.33.0",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "test": "turbo run test",
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
+    "format": "turbo run format",
+    "check": "turbo run lint typecheck test build"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": ["esbuild"]
+  },
+  "devDependencies": {
+    "turbo": "^2",
+    "typescript": "^6",
+    "vitest": "^4"
+  }
+}
