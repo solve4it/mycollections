@@ -1,3 +1,42 @@
+# Dependencies
 node_modules
+
+# Build output
 dist
+build
+*.tsbuildinfo
+
+# Turbo
 .turbo
+
+# Test coverage
+coverage
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE / Editor
+.idea
+.vscode/*
+!.vscode/extensions.json
+*.swp
+*.swo
+*~
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# Tauri (phase 6)
+src-tauri/target
+
+# Misc
+*.tgz
+.cache
