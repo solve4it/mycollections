@@ -5,6 +5,7 @@
   "timezone": "America/New_York",
   "labels": ["dependencies"],
   "rangeStrategy": "bump",
+  "minimumReleaseAge": "24 hours",
   "prHourlyLimit": 0,
   "prConcurrentLimit": 0,
   "packageRules": [
