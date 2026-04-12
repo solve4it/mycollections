@@ -1,14 +1,17 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "extends": ["config:recommended", "schedule:weekdays", ":gitSignOff", "group:allNonMajor"],
+  "extends": ["config:recommended", "schedule:weekdays", ":gitSignOff"],
   "schedule": ["before 9am on Monday"],
   "timezone": "America/New_York",
   "labels": ["dependencies"],
   "rangeStrategy": "bump",
   "packageRules": [
     {
-      "description": "Automerge grouped minor/patch updates",
-      "matchUpdateTypes": ["minor", "patch"],
+      "description": "Group and automerge all non-major updates into a single PR",
+      "matchUpdateTypes": ["minor", "patch", "digest"],
+      "matchPackageNames": ["*"],
+      "groupName": "all non-major dependencies",
+      "groupSlug": "all-minor-patch",
       "automerge": true
     },
     {
