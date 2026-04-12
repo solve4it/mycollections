@@ -43,6 +43,6 @@
     "lint-staged": "^16.4.0",
     "turbo": "^2",
     "typescript": "^6",
-    "vitest": "^4"
+    "vitest": "^4.1.4"
   }
 }
