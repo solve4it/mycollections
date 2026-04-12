@@ -5,11 +5,12 @@
   "timezone": "America/New_York",
   "labels": ["dependencies"],
   "rangeStrategy": "bump",
+  "prHourlyLimit": 0,
+  "prConcurrentLimit": 0,
   "packageRules": [
     {
       "description": "Group and automerge all non-major updates into a single PR",
       "matchUpdateTypes": ["minor", "patch", "digest"],
-      "matchPackageNames": ["*"],
       "groupName": "all non-major dependencies",
       "groupSlug": "all-minor-patch",
       "automerge": true
