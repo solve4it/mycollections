@@ -24,16 +24,11 @@
       "description": "Pin GitHub Actions to SHA digests",
       "matchManagers": ["github-actions"],
       "pinDigests": true
-    },
-    {
-      "description": "Automerge vulnerability fixes immediately (outside group)",
-      "matchUpdateTypes": ["patch", "minor"],
-      "isVulnerabilityAlert": true,
-      "schedule": ["at any time"],
-      "automerge": true,
-      "groupName": null
     }
   ],
+  "vulnerabilityAlerts": {
+    "schedule": ["at any time"]
+  },
   "lockFileMaintenance": {
     "enabled": true,
     "schedule": ["before 9am on Monday"]
