@@ -17,6 +17,11 @@
     "tsconfig",
     "turbo",
     "vitest",
+    "predev",
+    "prebuild",
+    "astrojs",
+    "Pagefind",
+    "tsconfck",
     "gpgsign",
     "shusak",
     "PVTSSF"

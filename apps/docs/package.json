@@ -2,6 +2,7 @@
   "name": "@mycollections/docs",
   "version": "0.0.0",
   "private": true,
+  "type": "module",
   "author": "Solve4It <https://solve4it.com>",
   "license": "Apache-2.0",
   "repository": {
@@ -10,9 +11,21 @@
     "directory": "apps/docs"
   },
   "scripts": {
-    "build": "echo 'No build step yet'",
-    "test": "echo 'No tests yet'",
+    "predev": "node scripts/copy-shared-docs.mjs",
+    "dev": "astro dev",
+    "prebuild": "node scripts/copy-shared-docs.mjs",
+    "build": "astro build",
+    "preview": "astro preview",
+    "typecheck": "astro check",
     "lint": "echo 'No lint yet'",
-    "typecheck": "echo 'No typecheck yet'"
+    "test": "echo 'No tests yet'"
+  },
+  "dependencies": {
+    "@astrojs/starlight": "^0.38.3",
+    "astro": "^6.1.5",
+    "sharp": "^0.34.5"
+  },
+  "devDependencies": {
+    "@astrojs/check": "^0.9.8"
   }
 }

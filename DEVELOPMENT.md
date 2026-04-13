@@ -85,18 +85,35 @@ pnpm --filter @mycollections/web dev
 
 ## Running the API and web app locally
 
-> Note: the runtime apps are scaffolded but not yet implemented — commands below are placeholders and will fill in as [#12 Starlight docs](https://github.com/solve4it/mycollections/issues/12) and later feature issues land.
+> Note: the runtime apps (`api`, `web`) are scaffolded but not yet implemented — those commands below are placeholders. The docs site is live.
 
 ```bash
-# API (Fastify)
+# API (Fastify) — placeholder
 pnpm --filter @mycollections/api dev
 
-# Web app
+# Web app — placeholder
 pnpm --filter @mycollections/web dev
 
-# Docs site (Astro Starlight)
+# Docs site (Astro Starlight) — http://localhost:4321/mycollections/
 pnpm --filter @mycollections/docs dev
 ```
+
+## Working on the docs site
+
+The docs site at `apps/docs` is an [Astro Starlight](https://starlight.astro.build/) project that renders the shared markdown in `docs/` at the repo root, plus its own Starlight-native landing page.
+
+- Shared user docs are copied from `docs/*.md` into `apps/docs/src/content/docs/user/` by `apps/docs/scripts/copy-shared-docs.mjs`, which runs automatically as a `predev` / `prebuild` hook.
+- The generated `user/` directory is gitignored — never edit files there; edit the source in `docs/` instead.
+- The Starlight splash page lives at `apps/docs/src/content/docs/index.mdx` and is Starlight-specific (not shared with in-app Help).
+- Deployment to GitHub Pages happens automatically via `.github/workflows/deploy-docs.yml` on push to `main` when `apps/docs/**` or `docs/**` changes.
+
+```bash
+pnpm --filter @mycollections/docs dev      # local dev server
+pnpm --filter @mycollections/docs build    # static build into apps/docs/dist
+pnpm --filter @mycollections/docs preview  # preview the production build
+```
+
+See [`docs/README.md`](./docs/README.md) for the dual-rendering pattern that keeps Starlight and the planned in-app Help in sync.
 
 ## Running tests
 
