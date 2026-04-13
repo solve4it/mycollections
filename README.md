@@ -42,7 +42,7 @@ pnpm dev
 - **Contributing guide**: [`CONTRIBUTING.md`](./CONTRIBUTING.md)
 - **Code of Conduct**: [`CODE_OF_CONDUCT.md`](./CODE_OF_CONDUCT.md)
 - **Security policy**: [`SECURITY.md`](./SECURITY.md)
-- **Full docs site**: _coming soon_ (tracked in [#12](https://github.com/solve4it/mycollections/issues/12))
+- **Full docs site**: [solve4it.github.io/mycollections](https://solve4it.github.io/mycollections/)
 
 ## Contributing
 
