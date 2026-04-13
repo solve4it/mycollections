@@ -39,6 +39,7 @@ mycollections/
 │   ├── api/          # Backend API (Fastify)
 │   ├── docs/         # Documentation site (Astro Starlight)
 │   └── web/          # Web app frontend
+├── docs/             # Shared user-facing docs (rendered by Starlight and in-app Help)
 ├── packages/
 │   ├── auth/         # Authentication utilities
 │   ├── core/         # Core domain types and plugin contracts
@@ -51,6 +52,8 @@ mycollections/
 │   └── plugin-lego/  # LEGO sets collection plugin
 └── package.json      # Root workspace config
 ```
+
+User-facing documentation lives in `docs/` at the repo root, not in `apps/docs`. The `apps/docs` workspace is the Starlight renderer; `docs/` is the markdown source it reads from. See [`docs/README.md`](./docs/README.md) for the dual-rendering pattern (Starlight + in-app Help).
 
 Each workspace is a pnpm package and a Turborepo target. The monorepo uses [Turborepo](https://turbo.build/) to orchestrate build/test/lint across workspaces with caching.
 
