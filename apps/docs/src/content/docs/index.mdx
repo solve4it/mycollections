@@ -1,0 +1,38 @@
+---
+title: MyCollections
+description: Local-first personal collection management with a plugin architecture.
+template: splash
+hero:
+  tagline: Your collections, your way. Local-first, plugin-powered, optionally synced.
+  actions:
+    - text: Get Started
+      link: /mycollections/user/getting-started/
+      icon: right-arrow
+      variant: primary
+    - text: View on GitHub
+      link: https://github.com/solve4it/mycollections
+      icon: external
+---
+
+import { Card, CardGrid } from "@astrojs/starlight/components";
+
+## What is MyCollections?
+
+MyCollections is a local-first app for cataloging the things you collect — vinyl, LEGO sets,
+audio gear, trading cards, or anything else. Each kind of collection is powered by a dedicated
+plugin that knows the right fields, lookups, and behaviors.
+
+<CardGrid>
+  <Card title="Plugin-powered" icon="puzzle">
+    Purpose-built plugins for each kind of collection.
+  </Card>
+  <Card title="Local-first" icon="laptop">
+    Your data lives on your device. Cloud sync is opt-in.
+  </Card>
+  <Card title="Fast capture" icon="magnifier">
+    Add items via barcode, image, or external lookup.
+  </Card>
+  <Card title="Open source" icon="open-book">
+    Apache 2.0 licensed. Built by Solve4It.
+  </Card>
+</CardGrid>
