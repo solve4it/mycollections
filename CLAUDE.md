@@ -68,7 +68,8 @@ gh project item-edit --project-id PVT_kwDOEDb4es4BTKDH --id "$ITEM_ID" --field-i
 - **PRs**: One feature per PR, squash merged, must link to an issue, add labels. Keep PRs as small as possible — split into multiple PRs if an issue touches too many files.
 - **PR Labels**: Include relevant type, area, phase, and `AI-assisted` labels
 - **Testing**: TDD — write failing tests first, then implementation
-- **Dependencies**: Always use the latest stable version
+- **Dependencies**: Always use the latest stable version; run `depscore` before introducing any new dependency
+- **Docs in every PR**: README, CONTRIBUTING, DEVELOPMENT, CLAUDE.md, and any package/feature docs affected by the change must be updated in the same PR. Docs are part of the Definition of Done, never a follow-up. If a change has no doc impact, state that explicitly in the PR body.
 - **Linting**: Biome (spaces, indent 2, line width 120, built-in a11y rules — no ESLint needed)
 - **Spell check**: cSpell
 - **Node**: Version pinned in `.nvmrc`, use fnm

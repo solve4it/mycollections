@@ -6,6 +6,7 @@
     "mycollections",
     "barcodes",
     "biomejs",
+    "depscore",
     "commitlint",
     "Fastify",
     "pnpm",
