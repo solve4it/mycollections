@@ -1,5 +1,6 @@
 # Dependencies
 node_modules
+.pnpm-store
 
 # Build output
 dist
@@ -40,3 +41,6 @@ src-tauri/target
 # Misc
 *.tgz
 .cache
+
+# Claude Code per-user permission allowlist (auto-managed, never committed)
+.claude/settings.local.json
