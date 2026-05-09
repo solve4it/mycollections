@@ -29,12 +29,6 @@
     "*": "biome check --write --no-errors-on-unmatched",
     "*.{js,jsx,ts,tsx,json,md,css,html}": "cspell --no-must-find-files"
   },
-  "pnpm": {
-    "onlyBuiltDependencies": [
-      "esbuild",
-      "sharp"
-    ]
-  },
   "devDependencies": {
     "@biomejs/biome": "^2.4.14",
     "@commitlint/cli": "^21.0.0",

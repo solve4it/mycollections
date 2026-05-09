@@ -2,3 +2,7 @@ packages:
   - "packages/*"
   - "apps/*"
   - "plugins/*"
+
+allowBuilds:
+  esbuild: true
+  sharp: true
