@@ -29,7 +29,11 @@ That's it. The monorepo installs all workspaces in one step.
 
 MyCollections ships with a [Dev Container](https://containers.dev/) definition so you can work in a consistent, preconfigured environment without installing Node, pnpm, or other toolchain pieces on your host.
 
-> Note: the DevContainer setup is tracked in [#6](https://github.com/solve4it/mycollections/issues/6) and is not yet present. Once it lands, open the repo in VS Code and choose **"Reopen in Container"** (or run `Dev Containers: Reopen in Container` from the command palette).
+**Requirements:** A running container runtime — typically [Docker Desktop](https://www.docker.com/products/docker-desktop/), but any OCI-compatible runtime supported by the VS Code Dev Containers extension works (Podman, OrbStack, Rancher Desktop, Colima, GitHub Codespaces, etc.). The runtime must be running before you reopen in container.
+
+The container is built on `mcr.microsoft.com/devcontainers/typescript-node:24` and configures Corepack, runs `pnpm install` automatically, forwards the dev-server ports for the API/docs/web apps, and pre-installs the recommended VS Code extensions (Biome, cSpell, Vitest, Astro, GitHub Actions, etc.).
+
+To use it, open the repo in VS Code and choose **"Reopen in Container"** (or run `Dev Containers: Reopen in Container` from the command palette). The first build downloads the image; subsequent opens are instant. The DevContainer config lives in [`.devcontainer/devcontainer.json`](./.devcontainer/devcontainer.json).
 
 ## Monorepo structure
 

@@ -1,0 +1,40 @@
+{
+  "$schema": "https://raw.githubusercontent.com/devcontainers/spec/main/schemas/devContainer.schema.json",
+  "name": "MyCollections",
+  "image": "mcr.microsoft.com/devcontainers/typescript-node:24",
+  "features": {
+    "ghcr.io/devcontainers/features/github-cli:1": {}
+  },
+  "postCreateCommand": "corepack enable && pnpm install",
+  "forwardPorts": [3000, 4321, 5173],
+  "portsAttributes": {
+    "3000": { "label": "Fastify API" },
+    "4321": { "label": "Astro Docs" },
+    "5173": { "label": "Vite Web" }
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "biomejs.biome",
+        "streetsidesoftware.code-spell-checker",
+        "vitest.explorer",
+        "astro-build.astro-vscode",
+        "github.vscode-github-actions",
+        "github.vscode-pull-request-github",
+        "redhat.vscode-yaml",
+        "editorconfig.editorconfig",
+        "ms-playwright.playwright"
+      ],
+      "settings": {
+        "editor.defaultFormatter": "biomejs.biome",
+        "editor.formatOnSave": true,
+        "[json]": { "editor.defaultFormatter": "biomejs.biome" },
+        "[jsonc]": { "editor.defaultFormatter": "biomejs.biome" },
+        "[typescript]": { "editor.defaultFormatter": "biomejs.biome" },
+        "[typescriptreact]": { "editor.defaultFormatter": "biomejs.biome" },
+        "[javascript]": { "editor.defaultFormatter": "biomejs.biome" },
+        "[javascriptreact]": { "editor.defaultFormatter": "biomejs.biome" }
+      }
+    }
+  }
+}
