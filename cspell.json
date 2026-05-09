@@ -7,6 +7,7 @@
     "barcodes",
     "biomejs",
     "depscore",
+    "esbuild",
     "frontmatter",
     "Turborepo",
     "commitlint",
