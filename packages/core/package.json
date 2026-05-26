@@ -9,10 +9,30 @@
     "url": "https://github.com/solve4it/mycollections.git",
     "directory": "packages/core"
   },
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
   "scripts": {
-    "build": "echo 'No build step yet'",
-    "test": "echo 'No tests yet'",
-    "lint": "echo 'No lint yet'",
-    "typecheck": "echo 'No typecheck yet'"
+    "build": "tsc",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "lint": "biome check src"
+  },
+  "dependencies": {
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.6"
   }
 }
