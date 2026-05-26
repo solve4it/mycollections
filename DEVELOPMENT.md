@@ -89,7 +89,7 @@ pnpm --filter @mycollections/web dev
 
 ## Running the API and web app locally
 
-> Note: the runtime apps (`api`, `web`) are scaffolded but not yet implemented — those commands below are placeholders. The docs site is live.
+> Note: the runtime apps (`api`, `web`) are scaffolded but not yet implemented — those commands below are placeholders. The docs site is live. The first real package is [`@mycollections/core`](./packages/core/), which holds the shared domain types, Zod schemas, and plugin host contracts.
 
 ```bash
 # API (Fastify) — placeholder
