@@ -21,7 +21,7 @@ This is a private, pure-TypeScript package — no runtime concerns beyond [Zod](
 
 | Export | Purpose |
 |---|---|
-| `AuthProvider` / `AuthResult` / `AuthUser` / `AuthCredentials` | Pluggable auth backend ([`@mycollections/auth`](../auth/) implements this) |
+| `AuthProvider` / `Session` / `AuthUser` / `SignInOptions` | Pluggable auth backend ([`@mycollections/auth`](../auth/) implements this). Tokens never appear on this surface — they are vended via `getAccessToken()` |
 | `FeatureFlagProvider` | Feature-flag lookup |
 | `ErrorReporter` | Error-capture sink |
 
