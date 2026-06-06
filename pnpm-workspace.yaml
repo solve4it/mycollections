@@ -6,3 +6,9 @@ packages:
 allowBuilds:
   esbuild: true
   sharp: true
+
+# Pin the @types/node that vite/vitest pull as a floating optional peer, so every
+# workspace resolves one deterministic, release-age-gated version (avoids pulling
+# a <24h-old release and the resulting minimumReleaseAge exclusion).
+overrides:
+  "@types/node": "24.13.0"
