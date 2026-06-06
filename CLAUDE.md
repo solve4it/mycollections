@@ -5,7 +5,7 @@ MyCollections is a personal collection management application with a plugin arch
 - **Organization**: Solve4It (solve4it.com)
 - **Repo**: solve4it/mycollections
 - **License**: Apache 2.0
-- **Plan**: `.claude/plans/magical-finding-axolotl.md`
+- **Plan**: The GitHub project board is the source of truth — issues are the plan items, in order, with live status. There is no separate plan file.
 - **Project board**: https://github.com/orgs/solve4it/projects/1
 
 ## Bot Workflow (CRITICAL)

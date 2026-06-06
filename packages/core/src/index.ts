@@ -14,12 +14,12 @@ export {
 } from "./media.js";
 export { PLUGIN_API_VERSION } from "./plugin-api.js";
 export type {
-  AuthCredentials,
   AuthProvider,
-  AuthResult,
   AuthUser,
   ErrorReporter,
   FeatureFlagProvider,
+  Session,
+  SignInOptions,
 } from "./providers.js";
 export {
   ITEM_STATUSES,
