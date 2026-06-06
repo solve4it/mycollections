@@ -4,7 +4,9 @@
  * on desktop and web with no native dependency.
  */
 
-const UNRESERVED = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~";
+// 64 characters, all drawn from the PKCE/URI unreserved set, so a 6-bit mask
+// (`byte & 63`) selects each one with uniform probability (no modulo bias).
+const URL_SAFE = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
 
 function toBase64Url(bytes: Uint8Array): string {
   let binary = "";
@@ -23,8 +25,8 @@ export function randomUrlSafe(length: number): string {
   crypto.getRandomValues(bytes);
   let out = "";
   for (const byte of bytes) {
-    // biome-ignore lint/style/noNonNullAssertion: index is always within UNRESERVED
-    out += UNRESERVED[byte % UNRESERVED.length]!;
+    // biome-ignore lint/style/noNonNullAssertion: `byte & 63` is always 0..63, in range
+    out += URL_SAFE[byte & 63]!;
   }
   return out;
 }

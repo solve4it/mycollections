@@ -87,6 +87,13 @@ export class OidcAuthProvider implements AuthProvider {
   readonly #refreshSkewMs: number;
   #session: Session | null = null;
   #refreshInFlight: Promise<string | null> | null = null;
+  /**
+   * Bumped on every sign-in and sign-out. A refresh captures it before awaiting
+   * the token endpoint and discards its result if the value changed meanwhile,
+   * so a refresh that resolves after sign-out cannot write a fresh token back
+   * into the store (token resurrection).
+   */
+  #generation = 0;
 
   constructor(deps: OidcAuthProviderDeps) {
     this.#deps = deps;
@@ -132,6 +139,7 @@ export class OidcAuthProvider implements AuthProvider {
       expiresAt,
     });
 
+    this.#generation += 1;
     this.#session = { user, accountKey, expiresAt, providerId: config.providerId };
     return this.#session;
   }
@@ -177,6 +185,7 @@ export class OidcAuthProvider implements AuthProvider {
     }
 
     await store.delete(session.accountKey);
+    this.#generation += 1;
     this.#session = null;
     this.#refreshInFlight = null;
   }
@@ -191,15 +200,29 @@ export class OidcAuthProvider implements AuthProvider {
       return null;
     }
 
+    // Capture the session generation before the network round-trip so we can tell
+    // whether a sign-out (or new sign-in) happened while we were awaiting the IdP.
+    const generation = this.#generation;
+
     let tokens: TokenEndpointResponse;
     try {
       tokens = await this.#deps.tokenEndpoint.refresh({ refreshToken });
     } catch (error) {
       // Treat a failed refresh (e.g. rotation reuse detection) as a compromised
-      // session: purge local state and surface the error.
-      await this.#deps.store.delete(accountKey);
-      this.#session = null;
+      // session: purge local state and surface the error — but only if this
+      // refresh still owns the session, so we don't clobber a concurrent
+      // sign-out's result or a fresh sign-in under the same account key.
+      if (this.#generation === generation) {
+        await this.#deps.store.delete(accountKey);
+        this.#session = null;
+      }
       throw error;
+    }
+
+    // If a sign-out or new sign-in landed while we awaited the IdP, this token
+    // set is stale: discard it rather than resurrecting it in the store.
+    if (this.#generation !== generation) {
+      return null;
     }
 
     const expiresAt = this.#now() + tokens.expiresIn * 1000;

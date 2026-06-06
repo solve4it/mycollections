@@ -186,6 +186,36 @@ describe("OidcAuthProvider.getAccessToken", () => {
     expect(tokenEndpoint.refreshCalls).toBe(1);
   });
 
+  it("does not resurrect tokens when sign-out completes during an in-flight refresh", async () => {
+    let clock = 0;
+    let release!: () => void;
+    let refreshStarted!: () => void;
+    const gate = new Promise<void>((r) => {
+      release = r;
+    });
+    const started = new Promise<void>((r) => {
+      refreshStarted = r;
+    });
+    const tokenEndpoint = new FakeTokenEndpoint();
+    tokenEndpoint.onRefresh = () => {
+      refreshStarted();
+      return gate;
+    };
+    const { provider, store } = makeProvider({ now: () => clock, tokenEndpoint });
+    await provider.signIn();
+    clock = 3600_000; // expired
+
+    const tokenP = provider.getAccessToken(); // starts the refresh, then awaits the gate
+    await started; // refresh is now in flight at the token endpoint
+    await provider.signOut(); // revokes + clears the store while the refresh is in flight
+    release();
+    const token = await tokenP;
+
+    expect(token).toBeNull(); // stale refresh result is discarded
+    expect(await store.get("test:sub-1")).toBeNull(); // nothing written back after sign-out
+    expect(await provider.getCurrentUser()).toBeNull();
+  });
+
   it("returns null when expired with no refresh token", async () => {
     let clock = 0;
     const tokenEndpoint = new FakeTokenEndpoint();
