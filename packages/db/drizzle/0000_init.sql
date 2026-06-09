@@ -20,6 +20,7 @@ CREATE TABLE `items` (
 	FOREIGN KEY (`collection_id`) REFERENCES `collections`(`id`) ON UPDATE no action ON DELETE cascade
 );
 --> statement-breakpoint
+CREATE INDEX `items_collection_id_idx` ON `items` (`collection_id`,`deleted_at`);--> statement-breakpoint
 CREATE TABLE `media` (
 	`id` text PRIMARY KEY NOT NULL,
 	`item_id` text NOT NULL,
@@ -33,6 +34,7 @@ CREATE TABLE `media` (
 	FOREIGN KEY (`item_id`) REFERENCES `items`(`id`) ON UPDATE no action ON DELETE cascade
 );
 --> statement-breakpoint
+CREATE INDEX `media_item_id_idx` ON `media` (`item_id`);--> statement-breakpoint
 CREATE TABLE `user_profile` (
 	`id` text PRIMARY KEY NOT NULL,
 	`display_name` text NOT NULL,

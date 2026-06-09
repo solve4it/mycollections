@@ -67,6 +67,15 @@ describe("ItemsRepository", () => {
     expect(await handle.items.findByFieldValue(collection.id, "title", "Missing")).toEqual([]);
   });
 
+  it("findByFieldValue handles field ids containing quotes and backslashes", async () => {
+    const weird = await handle.items.create({
+      collectionId: collection.id,
+      fields: { 'he"said': "yes", "back\\slash": 7 },
+    });
+    expect(await handle.items.findByFieldValue(collection.id, 'he"said', "yes")).toEqual([weird]);
+    expect(await handle.items.findByFieldValue(collection.id, "back\\slash", 7)).toEqual([weird]);
+  });
+
   it("updates status and fields, bumping updatedAt", async () => {
     const created = await handle.items.create({ collectionId: collection.id, status: "wanted", fields: {} });
     const updated = await handle.items.update(created.id, { status: "owned", fields: { title: "Dune" } });

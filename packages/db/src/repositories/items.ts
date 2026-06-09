@@ -100,7 +100,9 @@ export class ItemsRepository {
   async findByFieldValue(collectionId: string, fieldId: string, value: string | number | boolean): Promise<Item[]> {
     // JSON booleans come back from json_extract() as integers.
     const compare = typeof value === "boolean" ? (value ? 1 : 0) : value;
-    const path = `$."${fieldId}"`;
+    // The field id is embedded in a JSON path string literal, so escape per JSON string rules.
+    const escaped = fieldId.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+    const path = `$."${escaped}"`;
     const rows = this.#db
       .select()
       .from(schema.items)

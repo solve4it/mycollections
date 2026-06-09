@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "d5e4aaa5-48bf-4ad2-8cf0-d0d2845e7219",
+  "id": "f668b7eb-fdf5-4dd1-9af8-29500037702f",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "tables": {
     "collections": {
@@ -123,7 +123,13 @@
           "autoincrement": false
         }
       },
-      "indexes": {},
+      "indexes": {
+        "items_collection_id_idx": {
+          "name": "items_collection_id_idx",
+          "columns": ["collection_id", "deleted_at"],
+          "isUnique": false
+        }
+      },
       "foreignKeys": {
         "items_collection_id_collections_id_fk": {
           "name": "items_collection_id_collections_id_fk",
@@ -206,7 +212,13 @@
           "autoincrement": false
         }
       },
-      "indexes": {},
+      "indexes": {
+        "media_item_id_idx": {
+          "name": "media_item_id_idx",
+          "columns": ["item_id"],
+          "isUnique": false
+        }
+      },
       "foreignKeys": {
         "media_item_id_items_id_fk": {
           "name": "media_item_id_items_id_fk",

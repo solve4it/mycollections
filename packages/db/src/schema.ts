@@ -1,4 +1,4 @@
-import { integer, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
+import { index, integer, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 
 /**
  * Phase 1 tables only. Later phases add their own tables via new migrations:
@@ -21,32 +21,40 @@ export const collections = sqliteTable("collections", {
   deletedAt: text("deleted_at"),
 });
 
-export const items = sqliteTable("items", {
-  id: text("id").primaryKey(),
-  collectionId: text("collection_id")
-    .notNull()
-    .references(() => collections.id, { onDelete: "cascade" }),
-  status: text("status").notNull(),
-  /** JSON object mapping field id -> value, queryable with json_extract(). */
-  fields: text("fields").notNull(),
-  createdAt: text("created_at").notNull(),
-  updatedAt: text("updated_at").notNull(),
-  deletedAt: text("deleted_at"),
-});
+export const items = sqliteTable(
+  "items",
+  {
+    id: text("id").primaryKey(),
+    collectionId: text("collection_id")
+      .notNull()
+      .references(() => collections.id, { onDelete: "cascade" }),
+    status: text("status").notNull(),
+    /** JSON object mapping field id -> value, queryable with json_extract(). */
+    fields: text("fields").notNull(),
+    createdAt: text("created_at").notNull(),
+    updatedAt: text("updated_at").notNull(),
+    deletedAt: text("deleted_at"),
+  },
+  (table) => [index("items_collection_id_idx").on(table.collectionId, table.deletedAt)],
+);
 
-export const media = sqliteTable("media", {
-  id: text("id").primaryKey(),
-  itemId: text("item_id")
-    .notNull()
-    .references(() => items.id, { onDelete: "cascade" }),
-  kind: text("kind").notNull(),
-  mimeType: text("mime_type").notNull(),
-  bytes: integer("bytes").notNull(),
-  isPrimary: integer("is_primary", { mode: "boolean" }).notNull(),
-  storagePath: text("storage_path"),
-  createdAt: text("created_at").notNull(),
-  deletedAt: text("deleted_at"),
-});
+export const media = sqliteTable(
+  "media",
+  {
+    id: text("id").primaryKey(),
+    itemId: text("item_id")
+      .notNull()
+      .references(() => items.id, { onDelete: "cascade" }),
+    kind: text("kind").notNull(),
+    mimeType: text("mime_type").notNull(),
+    bytes: integer("bytes").notNull(),
+    isPrimary: integer("is_primary", { mode: "boolean" }).notNull(),
+    storagePath: text("storage_path"),
+    createdAt: text("created_at").notNull(),
+    deletedAt: text("deleted_at"),
+  },
+  (table) => [index("media_item_id_idx").on(table.itemId)],
+);
 
 export const userProfile = sqliteTable(
   "user_profile",
