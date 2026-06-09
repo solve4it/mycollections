@@ -13,6 +13,7 @@ export const MediaSchema = z.object({
   isPrimary: z.boolean(),
   storagePath: z.string().optional(),
   createdAt: z.iso.datetime(),
+  deletedAt: z.iso.datetime().nullable().default(null),
 });
 
 export type Media = z.infer<typeof MediaSchema>;
