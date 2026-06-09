@@ -12,4 +12,4 @@ allowBuilds:
 # workspace resolves one deterministic, release-age-gated version (avoids pulling
 # a <24h-old release and the resulting minimumReleaseAge exclusion).
 overrides:
-  "@types/node": "24.13.0"
+  "@types/node": "24.13.1"
