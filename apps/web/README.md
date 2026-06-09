@@ -23,6 +23,38 @@ Code-based routing via TanStack Router. Routes are defined in `src/routes/`:
 
 The root layout (`routes/__root.tsx`) wraps all routes with the `Shell` component.
 
+## Internationalization (i18n)
+
+All UI strings use `react-i18next`. Translation files live in `src/locales/<lang>/<namespace>.json`:
+
+| Namespace | File | Contents |
+|---|---|---|
+| `common` | `locales/en/common.json` | App name, nav labels, ARIA strings |
+| `collections` | `locales/en/collections.json` | Collections page strings |
+| `settings` | `locales/en/settings.json` | Settings page strings, language selector |
+
+**Adding a translation key:**
+
+1. Add the key/value to the relevant `src/locales/en/<namespace>.json`.
+2. In the component, call `const { t } = useTranslation("<namespace>")` then `t("key")`.
+
+**Adding a new language:**
+
+1. Create `src/locales/<lang>/<namespace>.json` files.
+2. Register the resources in `src/i18n/index.ts`.
+3. Add `{ code: "<lang>", labelKey: "language_<lang>" }` to `SUPPORTED_LANGUAGES` in `src/routes/settings/index.tsx`.
+
+**Locale-aware formatting:**
+
+Use the helpers from `src/lib/intl.ts` which wrap the browser's `Intl` API:
+
+```ts
+import { formatDate, formatNumber, formatCurrency } from "@/lib/intl.js";
+
+formatDate(new Date(), i18n.language, { dateStyle: "medium" });
+formatCurrency(42.50, i18n.language, "USD");
+```
+
 ## Development
 
 ```bash
