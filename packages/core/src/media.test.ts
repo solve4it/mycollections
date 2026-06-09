@@ -24,4 +24,13 @@ describe("MediaSchema", () => {
   it("rejects unknown kind", () => {
     expect(() => MediaSchema.parse({ ...baseMedia, kind: "video" })).toThrow();
   });
+
+  it("defaults deletedAt to null", () => {
+    expect(MediaSchema.parse(baseMedia).deletedAt).toBeNull();
+  });
+
+  it("accepts a deletedAt timestamp", () => {
+    const parsed = MediaSchema.parse({ ...baseMedia, deletedAt: "2026-05-26T00:00:00.000Z" });
+    expect(parsed.deletedAt).toBe("2026-05-26T00:00:00.000Z");
+  });
 });
