@@ -1,4 +1,5 @@
 import { createRoute } from "@tanstack/react-router";
+import { useTranslation } from "react-i18next";
 import { rootRoute } from "../__root.js";
 
 export const collectionsRoute = createRoute({
@@ -8,10 +9,11 @@ export const collectionsRoute = createRoute({
 });
 
 function CollectionsPage() {
+  const { t } = useTranslation("collections");
   return (
     <div>
-      <h1>Collections</h1>
-      <p>Your collections will appear here.</p>
+      <h1>{t("title")}</h1>
+      <p>{t("empty_message")}</p>
     </div>
   );
 }

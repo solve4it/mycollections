@@ -1,29 +1,32 @@
 import { Link } from "@tanstack/react-router";
 import type { ReactNode } from "react";
+import { useTranslation } from "react-i18next";
 
-const NAV_ITEMS = [
-  { to: "/collections" as const, label: "Collections", icon: "⊞" },
-  { to: "/settings" as const, label: "Settings", icon: "⚙" },
-] as const;
+const NAV_ITEM_DEFS = [
+  { to: "/collections" as const, labelKey: "nav_collections", icon: "⊞" },
+  { to: "/settings" as const, labelKey: "nav_settings", icon: "⚙" },
+];
 
 interface ShellProps {
   children: ReactNode;
 }
 
 export function Shell({ children }: ShellProps) {
+  const { t } = useTranslation("common");
+
   return (
     <>
       <a href="#main-content" className="skip-link">
-        Skip to main content
+        {t("skip_to_main")}
       </a>
       <div className="shell">
-        <nav className="shell-sidebar" aria-label="Main navigation">
-          <div className="sidebar-logo">MyCollections</div>
+        <nav className="shell-sidebar" aria-label={t("aria_main_nav")}>
+          <div className="sidebar-logo">{t("app_name")}</div>
           <div className="sidebar-nav">
-            {NAV_ITEMS.map(({ to, label, icon }) => (
+            {NAV_ITEM_DEFS.map(({ to, labelKey, icon }) => (
               <Link key={to} to={to} className="touch-target" activeProps={{ "data-status": "active" }}>
                 <span aria-hidden="true">{icon}</span>
-                {label}
+                {t(labelKey)}
               </Link>
             ))}
           </div>
@@ -33,11 +36,11 @@ export function Shell({ children }: ShellProps) {
           {children}
         </main>
 
-        <nav className="shell-bottom-nav" aria-label="Bottom navigation">
-          {NAV_ITEMS.map(({ to, label, icon }) => (
+        <nav className="shell-bottom-nav" aria-label={t("aria_bottom_nav")}>
+          {NAV_ITEM_DEFS.map(({ to, labelKey, icon }) => (
             <Link key={to} to={to} className="bottom-nav-item touch-target" activeProps={{ "data-status": "active" }}>
               <span aria-hidden="true">{icon}</span>
-              <span>{label}</span>
+              <span>{t(labelKey)}</span>
             </Link>
           ))}
         </nav>
