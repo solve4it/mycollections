@@ -18,3 +18,6 @@ export const CollectionSchema = z
   });
 
 export type Collection = z.infer<typeof CollectionSchema>;
+
+/** A collection augmented with the number of non-deleted items it contains. */
+export type CollectionWithItemCount = Collection & { itemCount: number };

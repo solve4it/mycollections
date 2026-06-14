@@ -100,4 +100,26 @@ describe("ItemsRepository", () => {
     await handle.items.hardDelete(item.id);
     expect(await handle.media.getById(m.id, { includeDeleted: true })).toBeNull();
   });
+
+  describe("countByCollection", () => {
+    it("counts non-deleted items grouped by collection, omitting empty ones", async () => {
+      const other = await handle.collections.create({ name: "Movies", fields, isFiniteSet: false });
+      const empty = await handle.collections.create({ name: "Coins", fields, isFiniteSet: false });
+
+      await handle.items.create({ collectionId: collection.id, fields: {} });
+      await handle.items.create({ collectionId: collection.id, fields: {} });
+      const deleted = await handle.items.create({ collectionId: collection.id, fields: {} });
+      await handle.items.softDelete(deleted.id);
+      await handle.items.create({ collectionId: other.id, fields: {} });
+
+      const counts = await handle.items.countByCollection();
+      expect(counts[collection.id]).toBe(2);
+      expect(counts[other.id]).toBe(1);
+      expect(counts[empty.id]).toBeUndefined();
+    });
+
+    it("returns an empty map when there are no items", async () => {
+      expect(await handle.items.countByCollection()).toEqual({});
+    });
+  });
 });

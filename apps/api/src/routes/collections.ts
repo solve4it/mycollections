@@ -25,7 +25,8 @@ const updateBodySchema = {
 
 export async function registerCollectionRoutes(app: FastifyInstance, db: DatabaseHandle) {
   app.get("/api/collections", async () => {
-    return db.collections.list();
+    const [collections, counts] = await Promise.all([db.collections.list(), db.items.countByCollection()]);
+    return collections.map((collection) => ({ ...collection, itemCount: counts[collection.id] ?? 0 }));
   });
 
   app.post("/api/collections", { schema: { body: createBodySchema } }, async (request, reply) => {

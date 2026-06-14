@@ -89,6 +89,21 @@ export class ItemsRepository {
     return rowToItem(row);
   }
 
+  /**
+   * Counts non-deleted items grouped by collection, in a single query. Returns a
+   * map of collection id -> count; collections with no items are absent (callers
+   * should treat a missing key as 0).
+   */
+  async countByCollection(): Promise<Record<string, number>> {
+    const rows = this.#db
+      .select({ collectionId: schema.items.collectionId, count: sql<number>`count(*)` })
+      .from(schema.items)
+      .where(isNull(schema.items.deletedAt))
+      .groupBy(schema.items.collectionId)
+      .all();
+    return Object.fromEntries(rows.map((r) => [r.collectionId, r.count]));
+  }
+
   async listByCollection(collectionId: string, options: ListItemsOptions = {}): Promise<Item[]> {
     const conditions = [eq(schema.items.collectionId, collectionId)];
     if (!options.includeDeleted) {
