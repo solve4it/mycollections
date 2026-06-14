@@ -127,7 +127,7 @@ By default the token is a **random UUID regenerated on every restart**, so after
 API_TOKEN=dev-local-token pnpm --filter @mycollections/api dev
 ```
 
-The SQLite database is created automatically at `apps/api/data/app.db` on first run (override with `DB_PATH`). The `data/` directory is gitignored.
+The SQLite database is created automatically at `apps/api/data/app.db` on first run (override with `DB_PATH`). This location is anchored to the app directory, so it's the same file no matter which directory you launch from, and the resolved path is printed on startup (`Database: …`). The `data/` directory is gitignored.
 
 ## Working on the docs site
 

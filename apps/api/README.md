@@ -47,7 +47,7 @@ await app.listen({ port: 3001, host: "127.0.0.1" });
 
 | Env var | Default | Description |
 |---|---|---|
-| `DB_PATH` | `data/app.db` | SQLite database file path |
+| `DB_PATH` | `apps/api/data/app.db` | SQLite database file path. The default is anchored to the app directory (not the current working directory), so it's the same file no matter where you launch from. The resolved path is printed on startup. |
 | `PORT` | `3001` | HTTP port |
 | `HOST` | `127.0.0.1` | Bind address (do not change to `0.0.0.0`) |
 | `API_TOKEN` | random UUID | Bearer token (logged to stdout in dev) |
