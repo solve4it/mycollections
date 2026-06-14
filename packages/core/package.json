@@ -24,6 +24,7 @@
   ],
   "scripts": {
     "build": "tsc",
+    "dev": "tsc --watch --preserveWatchOutput",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "lint": "biome check src"

@@ -95,12 +95,16 @@ Run everything at once from the repo root:
 pnpm dev
 ```
 
-This starts all apps via Turborepo. The two you'll usually want:
+This starts all apps via Turborepo. `dev` depends on `^build`, so the workspace
+packages are compiled before any server starts, and the buildable packages
+(`core`, `db`, `auth`) run `tsc --watch` alongside the apps to keep their `dist/`
+fresh. The two apps you'll usually want:
 
-- **API (Fastify)** on `http://127.0.0.1:3001` — runs straight from TypeScript source via `tsx watch` (no build step needed; restarts on change).
+- **API (Fastify)** on `http://127.0.0.1:3001` — runs from TypeScript source via `tsx watch` and restarts on change. Note it imports the workspace packages from their compiled `dist/`, which is why `pnpm dev` builds and watches them; running `tsx` against `apps/api` alone with a stale `dist` will serve old code.
 - **Web app (Vite + React)** on `http://localhost:5173`.
 
-Or start them individually:
+Or start them individually — but a single app's `dev` won't rebuild its workspace
+dependencies, so build them first (`pnpm build`) or run the full `pnpm dev`:
 
 ```bash
 pnpm --filter @mycollections/api dev   # API → http://127.0.0.1:3001
