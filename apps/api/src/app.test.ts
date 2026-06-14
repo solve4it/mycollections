@@ -50,3 +50,31 @@ describe("auth guard", () => {
     expect(res.statusCode).toBe(200);
   });
 });
+
+describe("CORS preflight (dev)", () => {
+  async function preflight(method: string) {
+    const app = await buildApp({ db: handle, token: TEST_TOKEN, isDev: true });
+    return app.inject({
+      method: "OPTIONS",
+      url: "/api/collections/some-id/items/item-id",
+      headers: {
+        Origin: "http://localhost:5173",
+        "Access-Control-Request-Method": method,
+      },
+    });
+  }
+
+  // The web app calls every CRUD method; the preflight must allow them all or the
+  // browser blocks the request. @fastify/cors defaults to only GET,HEAD,POST.
+  it.each(["GET", "POST", "PATCH", "DELETE"])("permits %s in the preflight response", async (method) => {
+    const res = await preflight(method);
+    expect(res.statusCode).toBeLessThan(400);
+    const allowed = (res.headers["access-control-allow-methods"] as string) ?? "";
+    expect(allowed.split(",").map((m) => m.trim())).toContain(method);
+  });
+
+  it("reflects the allowed dev origin", async () => {
+    const res = await preflight("DELETE");
+    expect(res.headers["access-control-allow-origin"]).toBe("http://localhost:5173");
+  });
+});

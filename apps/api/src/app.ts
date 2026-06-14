@@ -28,6 +28,10 @@ export async function buildApp(options: AppOptions) {
   await app.register(fastifyCors, {
     origin: isDev ? /^http:\/\/localhost(:\d+)?$/ : false,
     credentials: true,
+    // @fastify/cors defaults Access-Control-Allow-Methods to only GET, HEAD and
+    // POST, which makes browsers block our PATCH/DELETE routes in preflight.
+    // Advertise every method the API exposes.
+    methods: ["GET", "HEAD", "POST", "PATCH", "DELETE", "OPTIONS"],
   });
 
   await app.register(fastifySensible);
