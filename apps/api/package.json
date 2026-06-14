@@ -9,15 +9,35 @@
     "url": "https://github.com/solve4it/mycollections.git",
     "directory": "apps/api"
   },
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
   "scripts": {
-    "build": "echo 'No build step yet'",
-    "test": "echo 'No tests yet'",
-    "lint": "echo 'No lint yet'",
-    "typecheck": "echo 'No typecheck yet'"
+    "build": "tsc",
+    "dev": "node --watch dist/server.js",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "lint": "biome check src"
   },
   "dependencies": {
+    "@fastify/cors": "^11.2.0",
+    "@fastify/helmet": "^13.0.2",
+    "@fastify/sensible": "^6.0.4",
+    "@fastify/swagger": "^9.7.0",
+    "@fastify/swagger-ui": "^5.2.6",
+    "@mycollections/auth": "workspace:*",
     "@mycollections/core": "workspace:*",
     "@mycollections/db": "workspace:*",
-    "@mycollections/auth": "workspace:*"
+    "fastify": "^5.8.5"
+  },
+  "devDependencies": {
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.8"
   }
 }
