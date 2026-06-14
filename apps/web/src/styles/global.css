@@ -142,6 +142,148 @@ body {
   color: var(--color-primary);
 }
 
+/* Page header with actions */
+.page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+/* Primary action links/buttons */
+.touch-target,
+button[type="submit"] {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+a.touch-target,
+button[type="submit"] {
+  padding: 0 16px;
+  border-radius: 6px;
+  border: 1px solid var(--color-border);
+  background: var(--color-primary);
+  color: #fff;
+  text-decoration: none;
+  font: inherit;
+  cursor: pointer;
+}
+
+a.touch-target:hover,
+button[type="submit"]:hover {
+  background: var(--color-primary-hover);
+}
+
+button[type="submit"]:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Empty state */
+.empty-state {
+  text-align: center;
+  padding: 48px 16px;
+  color: var(--color-text-muted);
+}
+
+.empty-state h1 {
+  color: var(--color-text);
+}
+
+/* Collection grid + cards */
+.collection-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 16px;
+}
+
+.collection-card {
+  display: block;
+  padding: 16px;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-surface);
+}
+
+.collection-card-name {
+  margin: 0 0 4px;
+  font-size: 1.0625rem;
+}
+
+.collection-card-description {
+  margin: 0 0 8px;
+  color: var(--color-text-muted);
+  font-size: 0.875rem;
+}
+
+.collection-card-meta {
+  font-size: 0.8125rem;
+  color: var(--color-text-muted);
+}
+
+/* Forms: setup + new collection */
+.setup-page,
+.new-collection-page {
+  max-width: 640px;
+}
+
+.form-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 16px;
+}
+
+.form-row input[type="text"],
+.form-row input[type="password"],
+.form-row select,
+.form-row textarea {
+  padding: 8px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  font: inherit;
+  min-height: var(--touch-target-size);
+}
+
+.form-row .checkbox-row {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+}
+
+.fields-builder {
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 16px;
+}
+
+.field-row {
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  padding: 12px;
+  margin-bottom: 12px;
+  background: var(--color-surface);
+}
+
+.field-row button,
+.fields-builder > button {
+  padding: 0 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  background: var(--color-bg);
+  color: var(--color-text);
+  font: inherit;
+  cursor: pointer;
+}
+
+.form-actions {
+  display: flex;
+  gap: 12px;
+}
+
 /* Responsive: mobile (<768px) */
 @media (max-width: 767px) {
   .shell-sidebar {

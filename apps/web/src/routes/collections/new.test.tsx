@@ -71,7 +71,8 @@ describe("NewCollectionPage", () => {
     await screen.findByLabelText(/field label/i);
     fireEvent.click(screen.getByRole("button", { name: /add field/i }));
     expect(screen.getAllByLabelText(/field label/i)).toHaveLength(2);
-    fireEvent.click(screen.getAllByRole("button", { name: /remove field/i })[0]);
+    const [firstRemove] = screen.getAllByRole("button", { name: /remove field/i });
+    fireEvent.click(firstRemove as HTMLElement);
     expect(screen.getAllByLabelText(/field label/i)).toHaveLength(1);
   });
 
@@ -81,11 +82,13 @@ describe("NewCollectionPage", () => {
     fireEvent.change(screen.getByLabelText(/field label/i), { target: { value: "Title" } });
     fireEvent.click(screen.getByRole("button", { name: /create collection/i }));
     await waitFor(() => expect(createCollection).toHaveBeenCalledTimes(1));
-    const payload = vi.mocked(createCollection).mock.calls[0]![0];
-    expect(payload.name).toBe("Books");
-    expect(payload.fields).toHaveLength(1);
-    expect(payload.fields[0]).toMatchObject({ label: "Title", type: "text", required: false });
-    expect(payload.fields[0]).toHaveProperty("id");
+    expect(createCollection).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: "Books",
+        fields: [expect.objectContaining({ id: expect.any(String), label: "Title", type: "text", required: false })],
+      }),
+      expect.anything(),
+    );
   });
 
   it("includes options for a select field", async () => {
@@ -96,12 +99,12 @@ describe("NewCollectionPage", () => {
     fireEvent.change(screen.getByLabelText(/options/i), { target: { value: "PC, Switch, PS5" } });
     fireEvent.click(screen.getByRole("button", { name: /create collection/i }));
     await waitFor(() => expect(createCollection).toHaveBeenCalledTimes(1));
-    const payload = vi.mocked(createCollection).mock.calls[0]![0];
-    expect(payload.fields[0]).toMatchObject({
-      label: "Platform",
-      type: "select",
-      options: ["PC", "Switch", "PS5"],
-    });
+    expect(createCollection).toHaveBeenCalledWith(
+      expect.objectContaining({
+        fields: [expect.objectContaining({ label: "Platform", type: "select", options: ["PC", "Switch", "PS5"] })],
+      }),
+      expect.anything(),
+    );
   });
 
   it("does not submit when name is empty", async () => {

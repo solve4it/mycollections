@@ -1,4 +1,4 @@
-import { createRoute, redirect } from "@tanstack/react-router";
+import { createRoute, Link, redirect } from "@tanstack/react-router";
 import { useTranslation } from "react-i18next";
 import { CollectionCard } from "../../components/CollectionCard.js";
 import { getToken } from "../../lib/api-client.js";
@@ -33,13 +33,20 @@ function CollectionsPage() {
       <div className="empty-state">
         <h1>{t("empty_title")}</h1>
         <p>{t("empty_description")}</p>
-        <button type="button">{t("create_cta")}</button>
+        <Link to="/collections/new" className="touch-target">
+          {t("create_cta")}
+        </Link>
       </div>
     );
 
   return (
     <div>
-      <h1>{t("title")}</h1>
+      <div className="page-header">
+        <h1>{t("title")}</h1>
+        <Link to="/collections/new" className="touch-target">
+          {t("create_cta")}
+        </Link>
+      </div>
       <div className="collection-grid">
         {collections.map((c) => (
           <CollectionCard key={c.id} collection={c} />

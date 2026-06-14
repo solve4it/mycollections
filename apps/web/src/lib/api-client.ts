@@ -1,4 +1,11 @@
-import type { Collection } from "@mycollections/core";
+import type { Collection, FieldDefinition } from "@mycollections/core";
+
+export interface CreateCollectionInput {
+  name: string;
+  description?: string;
+  fields: FieldDefinition[];
+  isFiniteSet: boolean;
+}
 
 const BASE_URL = import.meta.env.VITE_API_URL ?? "http://localhost:3001";
 
@@ -40,4 +47,10 @@ export async function listCollections(): Promise<Collection[]> {
   const res = await request("/api/collections");
   if (!res.ok) throw new ApiError(res.status);
   return res.json() as Promise<Collection[]>;
+}
+
+export async function createCollection(input: CreateCollectionInput): Promise<Collection> {
+  const res = await request("/api/collections", { method: "POST", body: JSON.stringify(input) });
+  if (!res.ok) throw new ApiError(res.status);
+  return res.json() as Promise<Collection>;
 }
