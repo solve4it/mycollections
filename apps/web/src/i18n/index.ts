@@ -3,6 +3,7 @@ import LanguageDetector from "i18next-browser-languagedetector";
 import { initReactI18next } from "react-i18next";
 import enCollections from "../locales/en/collections.json";
 import enCommon from "../locales/en/common.json";
+import enItems from "../locales/en/items.json";
 import enSettings from "../locales/en/settings.json";
 import enSetup from "../locales/en/setup.json";
 
@@ -14,6 +15,7 @@ i18n
       en: {
         common: enCommon,
         collections: enCollections,
+        items: enItems,
         settings: enSettings,
         setup: enSetup,
       },

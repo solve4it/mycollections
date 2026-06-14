@@ -1,3 +1,4 @@
+import type { Collection, Item } from "@mycollections/core";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createMemoryHistory, createRouter, RouterProvider } from "@tanstack/react-router";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
@@ -17,7 +18,7 @@ import { createItem, deleteItem, getCollection, listItems } from "../../lib/api-
 
 const testRouteTree = rootRoute.addChildren([collectionDetailRoute]);
 
-const COLLECTION = {
+const COLLECTION: Collection = {
   id: "11111111-1111-1111-1111-111111111111",
   name: "Games",
   fields: [
@@ -30,7 +31,7 @@ const COLLECTION = {
   deletedAt: null,
 };
 
-const ITEM = {
+const ITEM: Item = {
   id: "22222222-2222-2222-2222-222222222222",
   collectionId: COLLECTION.id,
   status: "owned",
