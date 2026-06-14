@@ -78,10 +78,31 @@ describe("CollectionDetailPage", () => {
     expect(await screen.findByText(/no items yet/i)).toBeInTheDocument();
   });
 
-  it("lists existing items with their field values", async () => {
+  it("lists existing items with each field label paired with its own value", async () => {
     vi.mocked(listItems).mockResolvedValue([ITEM]);
     renderDetail();
-    expect(await screen.findByText("Zelda")).toBeInTheDocument();
+    await screen.findByText("Zelda");
+
+    // Assert the label↔value pairing, not just that the values appear somewhere:
+    // a swapped or mis-keyed (item.fields[field.id]) lookup must fail this.
+    const titleField = screen.getByText("Title:").closest(".item-field");
+    expect(titleField).toHaveTextContent("Title: Zelda");
+    const yearField = screen.getByText("Year:").closest(".item-field");
+    expect(yearField).toHaveTextContent("Year: 2017");
+
+    // The status is rendered via its translated label ("Owned"), not the raw enum
+    // value. Scope to the row's status badge so the add-item form's status
+    // <option> with the same text doesn't satisfy the assertion.
+    const statusBadge = titleField?.closest(".item-row")?.querySelector(".item-status");
+    expect(statusBadge).toHaveTextContent("Owned");
+  });
+
+  it("renders an empty placeholder for a missing field value", async () => {
+    vi.mocked(listItems).mockResolvedValue([{ ...ITEM, fields: { title: "Mario" } }]);
+    renderDetail();
+    await screen.findByText("Mario");
+    // The year field has no value for this item, so its cell shows the placeholder.
+    expect(screen.getByText("Year:").closest(".item-field")).toHaveTextContent("Year: —");
   });
 
   it("creates an item from the dynamic form", async () => {
