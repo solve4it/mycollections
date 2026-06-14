@@ -1,4 +1,5 @@
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync } from "node:fs";
+import { dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import Database from "better-sqlite3";
 import { type BetterSQLite3Database, drizzle } from "drizzle-orm/better-sqlite3";
@@ -39,6 +40,12 @@ export interface DatabaseHandle {
 export async function openDatabase(options: OpenDatabaseOptions): Promise<DatabaseHandle> {
   const { path, migrationsFolder = DEFAULT_MIGRATIONS_FOLDER } = options;
   const isFile = path !== ":memory:";
+
+  if (isFile) {
+    // better-sqlite3 won't create missing parent directories; do it ourselves so
+    // a fresh checkout (e.g. the default "data/app.db") works without manual setup.
+    mkdirSync(dirname(path), { recursive: true });
+  }
 
   const sqlite = new Database(path);
   if (isFile) {
