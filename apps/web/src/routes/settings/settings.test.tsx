@@ -1,15 +1,17 @@
 import { createMemoryHistory, createRouter, RouterProvider } from "@tanstack/react-router";
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 import { rootRoute } from "../__root.js";
+import { setupRoute } from "../setup/index.js";
 import { settingsRoute } from "./index.js";
 
-const testRouteTree = rootRoute.addChildren([settingsRoute]);
+const testRouteTree = rootRoute.addChildren([settingsRoute, setupRoute]);
 
 function renderSettings() {
   const history = createMemoryHistory({ initialEntries: ["/settings"] });
   const router = createRouter({ routeTree: testRouteTree, history });
   render(<RouterProvider router={router} />);
+  return { router };
 }
 
 afterEach(cleanup);
@@ -36,5 +38,18 @@ describe("SettingsPage", () => {
     renderSettings();
     const option = await screen.findByRole("option", { name: /english/i });
     expect(option).toBeInTheDocument();
+  });
+
+  it("renders a Disconnect button", async () => {
+    renderSettings();
+    expect(await screen.findByRole("button", { name: /disconnect/i })).toBeInTheDocument();
+  });
+
+  it("clearing the connection removes the stored token and goes to /setup", async () => {
+    localStorage.setItem("api_token", "some-token");
+    const { router } = renderSettings();
+    fireEvent.click(await screen.findByRole("button", { name: /disconnect/i }));
+    expect(localStorage.getItem("api_token")).toBeNull();
+    await waitFor(() => expect(router.state.location.pathname).toBe("/setup"));
   });
 });
