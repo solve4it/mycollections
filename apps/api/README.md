@@ -16,7 +16,7 @@ All routes require `Authorization: Bearer <token>`.
 | Method | Path | Description |
 |---|---|---|
 | `GET` | `/api/health` | Health check (no auth required) |
-| `GET` | `/api/collections` | List all collections |
+| `GET` | `/api/collections` | List all collections (each includes `itemCount`, the number of non-deleted items) |
 | `POST` | `/api/collections` | Create a collection |
 | `GET` | `/api/collections/:id` | Get a collection |
 | `PATCH` | `/api/collections/:id` | Update a collection |

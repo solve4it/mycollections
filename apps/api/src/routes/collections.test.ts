@@ -38,6 +38,21 @@ describe("GET /api/collections", () => {
     expect(res.json()).toHaveLength(1);
     expect(res.json()[0].name).toBe("Books");
   });
+
+  it("includes a non-deleted item count per collection", async () => {
+    const books = await handle.collections.create({ name: "Books", fields: baseFields, isFiniteSet: false });
+    const empty = await handle.collections.create({ name: "Coins", fields: baseFields, isFiniteSet: false });
+    await handle.items.create({ collectionId: books.id, fields: { title: "Dune" } });
+    const deleted = await handle.items.create({ collectionId: books.id, fields: { title: "Old" } });
+    await handle.items.softDelete(deleted.id);
+
+    const app = await makeApp();
+    const res = await app.inject({ method: "GET", url: "/api/collections", headers: auth });
+    expect(res.statusCode).toBe(200);
+    const byId = Object.fromEntries(res.json().map((c: { id: string; itemCount: number }) => [c.id, c.itemCount]));
+    expect(byId[books.id]).toBe(1);
+    expect(byId[empty.id]).toBe(0);
+  });
 });
 
 describe("POST /api/collections", () => {

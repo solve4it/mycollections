@@ -1,4 +1,4 @@
-import type { Collection, FieldDefinition, Item, ItemStatus } from "@mycollections/core";
+import type { Collection, CollectionWithItemCount, FieldDefinition, Item, ItemStatus } from "@mycollections/core";
 
 export interface CreateCollectionInput {
   name: string;
@@ -48,10 +48,10 @@ async function request(path: string, init?: RequestInit): Promise<Response> {
   return res;
 }
 
-export async function listCollections(): Promise<Collection[]> {
+export async function listCollections(): Promise<CollectionWithItemCount[]> {
   const res = await request("/api/collections");
   if (!res.ok) throw new ApiError(res.status);
-  return res.json() as Promise<Collection[]>;
+  return res.json() as Promise<CollectionWithItemCount[]>;
 }
 
 export async function createCollection(input: CreateCollectionInput): Promise<Collection> {

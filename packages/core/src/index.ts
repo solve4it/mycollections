@@ -1,4 +1,4 @@
-export { type Collection, CollectionSchema } from "./collection.js";
+export { type Collection, CollectionSchema, type CollectionWithItemCount } from "./collection.js";
 export {
   EXPORT_VERSION,
   type ExportDocument,

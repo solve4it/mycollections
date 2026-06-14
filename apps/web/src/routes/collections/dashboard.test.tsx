@@ -43,6 +43,7 @@ const SAMPLE_COLLECTION = {
   description: "My book collection",
   fields: [{ id: "f1", label: "Title", type: "text" as const, required: true }],
   isFiniteSet: false,
+  itemCount: 3,
   createdAt: "2024-01-01T00:00:00.000Z",
   updatedAt: "2024-01-01T00:00:00.000Z",
   deletedAt: null,
@@ -61,6 +62,13 @@ describe("CollectionsPage", () => {
     expect(await screen.findByText("Books")).toBeInTheDocument();
   });
 
+  it("shows the item count, not the field count", async () => {
+    vi.mocked(listCollections).mockResolvedValue([SAMPLE_COLLECTION]);
+    renderCollections();
+    // SAMPLE_COLLECTION has 1 field but 3 items.
+    expect(await screen.findByText("3 items")).toBeInTheDocument();
+  });
+
   it("shows multiple collection cards", async () => {
     vi.mocked(listCollections).mockResolvedValue([
       SAMPLE_COLLECTION,
@@ -69,6 +77,18 @@ describe("CollectionsPage", () => {
     renderCollections();
     await screen.findByText("Books");
     expect(screen.getByText("Movies")).toBeInTheDocument();
+  });
+
+  it("uses the singular label for a single item", async () => {
+    vi.mocked(listCollections).mockResolvedValue([{ ...SAMPLE_COLLECTION, itemCount: 1 }]);
+    renderCollections();
+    expect(await screen.findByText("1 item")).toBeInTheDocument();
+  });
+
+  it("shows 0 items for an empty collection", async () => {
+    vi.mocked(listCollections).mockResolvedValue([{ ...SAMPLE_COLLECTION, itemCount: 0 }]);
+    renderCollections();
+    expect(await screen.findByText("0 items")).toBeInTheDocument();
   });
 
   it("shows an error state when the API fails", async () => {
