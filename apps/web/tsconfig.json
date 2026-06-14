@@ -6,5 +6,9 @@
     "outDir": "dist",
     "rootDir": "src"
   },
-  "include": ["src"]
+  "include": ["src"],
+  // The integration test boots the API as a Node subprocess and uses Node APIs.
+  // It runs under vitest, but is a node-context file, so it is excluded from this
+  // browser-targeted typecheck.
+  "exclude": ["src/**/*.integration.test.ts"]
 }
