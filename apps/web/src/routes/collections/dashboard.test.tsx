@@ -41,7 +41,7 @@ const SAMPLE_COLLECTION = {
   id: "00000000-0000-0000-0000-000000000001",
   name: "Books",
   description: "My book collection",
-  fields: [{ id: "f1", name: "Title", type: "text", required: true }],
+  fields: [{ id: "f1", label: "Title", type: "text" as const, required: true }],
   isFiniteSet: false,
   createdAt: "2024-01-01T00:00:00.000Z",
   updatedAt: "2024-01-01T00:00:00.000Z",

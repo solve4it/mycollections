@@ -1,4 +1,11 @@
 {
   "title": "Collections",
-  "empty_message": "Your collections will appear here."
+  "empty_message": "Your collections will appear here.",
+  "empty_title": "No collections yet",
+  "empty_description": "Create your first collection to start tracking.",
+  "create_cta": "Create collection",
+  "loading": "Loading collections…",
+  "error_title": "Could not load collections",
+  "items_count_one": "{{count}} item",
+  "items_count_other": "{{count}} items"
 }
