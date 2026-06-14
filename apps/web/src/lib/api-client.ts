@@ -41,7 +41,10 @@ export function clearToken(): void {
 async function request(path: string, init?: RequestInit): Promise<Response> {
   const token = getToken();
   const headers = new Headers(init?.headers);
-  headers.set("Content-Type", "application/json");
+  // Only declare a JSON body when there is one: sending Content-Type:
+  // application/json on a request with no body (e.g. DELETE) makes the server
+  // reject it as an empty JSON body.
+  if (init?.body != null) headers.set("Content-Type", "application/json");
   if (token) headers.set("Authorization", `Bearer ${token}`);
   const res = await fetch(`${BASE_URL}${path}`, { ...init, headers });
   if (res.status === 401) throw new UnauthorizedError();
