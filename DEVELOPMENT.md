@@ -89,18 +89,45 @@ pnpm --filter @mycollections/web dev
 
 ## Running the API and web app locally
 
-> Note: the runtime apps (`api`, `web`) are scaffolded but not yet implemented — those commands below are placeholders. The docs site is live. The first real package is [`@mycollections/core`](./packages/core/), which holds the shared domain types, Zod schemas, and plugin host contracts.
+Run everything at once from the repo root:
 
 ```bash
-# API (Fastify) — placeholder
-pnpm --filter @mycollections/api dev
-
-# Web app — placeholder
-pnpm --filter @mycollections/web dev
-
-# Docs site (Astro Starlight) — http://localhost:4321/mycollections/
-pnpm --filter @mycollections/docs dev
+pnpm dev
 ```
+
+This starts all apps via Turborepo. The two you'll usually want:
+
+- **API (Fastify)** on `http://127.0.0.1:3001` — runs straight from TypeScript source via `tsx watch` (no build step needed; restarts on change).
+- **Web app (Vite + React)** on `http://localhost:5173`.
+
+Or start them individually:
+
+```bash
+pnpm --filter @mycollections/api dev   # API → http://127.0.0.1:3001
+pnpm --filter @mycollections/web dev   # web → http://localhost:5173
+pnpm --filter @mycollections/docs dev  # docs → http://localhost:4321/mycollections/
+```
+
+### Connecting the web app to the API (the API token)
+
+The API protects every route (except `GET /api/health`) with a bearer token. On startup in dev mode it **prints the token to stdout**:
+
+```
+API token: 0789678b-8fe9-4794-9ff4-c1fe5092ad84
+Swagger UI: http://127.0.0.1:3001/api/docs
+```
+
+> Running `pnpm dev`? Turborepo prefixes each line, so look for `@mycollections/api:dev: API token: …`.
+
+On first load the web app shows a setup screen — paste that token to connect. It's stored in `localStorage` (key `api_token`).
+
+By default the token is a **random UUID regenerated on every restart**, so after a server restart (including the auto-restart on file changes) you'd have to paste a fresh one. To keep a **stable token** across restarts, set it yourself:
+
+```bash
+API_TOKEN=dev-local-token pnpm --filter @mycollections/api dev
+```
+
+The SQLite database is created automatically at `apps/api/data/app.db` on first run (override with `DB_PATH`). The `data/` directory is gitignored.
 
 ## Working on the docs site
 

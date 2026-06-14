@@ -57,6 +57,14 @@ describe("openDatabase", () => {
     handle.close();
   });
 
+  it("creates missing parent directories for the database file", async () => {
+    tmp = makeTmpDir();
+    const path = join(tmp, "nested", "data", "app.db");
+    const handle = await openDatabase({ path });
+    handle.close();
+    expect(existsSync(path)).toBe(true);
+  });
+
   it("does not create a backup for a fresh database", async () => {
     tmp = makeTmpDir();
     const handle = await openDatabase({ path: join(tmp, "app.db") });
