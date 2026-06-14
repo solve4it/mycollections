@@ -11,6 +11,18 @@ description: Configuring MyCollections — app-level preferences, per-collection
 
 _Global preferences — theme, language, shortcuts, accessibility options._
 
+## Data backup & restore
+
+The **Data** section of Settings lets you back up and move your data:
+
+- **Export** downloads every collection and item as a single JSON file
+  (`mycollections-export-<date>.json`). The file is human-readable and includes a
+  schema `version` so future versions can read older backups.
+- **Import** restores from a backup file. Importing is additive and safe:
+  collections and items already present are kept untouched and only new ones are
+  added, so re-importing the same file does nothing. An invalid file is rejected
+  with a clear error and never partially corrupts your data.
+
 ## Per-collection settings
 
 _Settings that apply to a single collection — display mode, default fields, plugin-specific options._

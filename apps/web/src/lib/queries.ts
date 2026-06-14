@@ -5,6 +5,7 @@ import {
   deleteItem,
   getCollection,
   type ItemInput,
+  importData,
   listCollections,
   listItems,
   updateItem,
@@ -18,6 +19,14 @@ export function useCreateCollection() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: createCollection,
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["collections"] }),
+  });
+}
+
+export function useImportData() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: importData,
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["collections"] }),
   });
 }

@@ -32,6 +32,7 @@
     "PKCE",
     "Tauri",
     "vite",
+    "unstub",
     "WCAG",
     "cutover",
     "languagedetector"

@@ -66,6 +66,18 @@ export class CollectionsRepository {
     return collection;
   }
 
+  /**
+   * Inserts a fully-formed collection (preserving its id and timestamps) for
+   * backup restore. Skips the row if a collection with the same id already
+   * exists, so imports are idempotent and non-destructive. Synchronous so it can
+   * participate in a caller's transaction. Returns whether a row was inserted.
+   */
+  insertImported(collection: Collection): boolean {
+    const validated = CollectionSchema.parse(collection);
+    const result = this.#db.insert(schema.collections).values(collectionToRow(validated)).onConflictDoNothing().run();
+    return result.changes > 0;
+  }
+
   async getById(id: string, options: ReadOptions = {}): Promise<Collection | null> {
     const row = this.#db.select().from(schema.collections).where(eq(schema.collections.id, id)).get();
     if (!row || (row.deletedAt !== null && !options.includeDeleted)) {

@@ -69,6 +69,18 @@ export class ItemsRepository {
     return item;
   }
 
+  /**
+   * Inserts a fully-formed item (preserving its id and timestamps) for backup
+   * restore. Skips the row if an item with the same id already exists, so imports
+   * are idempotent and non-destructive. Synchronous so it can participate in a
+   * caller's transaction. Returns whether a row was inserted.
+   */
+  insertImported(item: Item): boolean {
+    const validated = ItemSchema.parse(item);
+    const result = this.#db.insert(schema.items).values(itemToRow(validated)).onConflictDoNothing().run();
+    return result.changes > 0;
+  }
+
   async getById(id: string, options: ReadOptions = {}): Promise<Item | null> {
     const row = this.#db.select().from(schema.items).where(eq(schema.items.id, id)).get();
     if (!row || (row.deletedAt !== null && !options.includeDeleted)) {

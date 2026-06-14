@@ -4,6 +4,7 @@ import fastifySensible from "@fastify/sensible";
 import type { DatabaseHandle } from "@mycollections/db";
 import Fastify from "fastify";
 import { registerCollectionRoutes } from "./routes/collections.js";
+import { registerExportRoutes } from "./routes/export.js";
 import { registerItemRoutes } from "./routes/items.js";
 
 export interface AppOptions {
@@ -61,6 +62,7 @@ export async function buildApp(options: AppOptions) {
 
   await registerCollectionRoutes(app, db);
   await registerItemRoutes(app, db);
+  await registerExportRoutes(app, db);
 
   return app;
 }

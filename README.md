@@ -8,6 +8,7 @@ MyCollections helps you catalog, organize, and explore the things you collect �
 
 - **Plugin architecture** — Each collection type is a self-contained plugin (e.g. LEGO, audio gear). Install only what you need; build your own for anything that isn't covered.
 - **Local-first** — Your data lives on your machine. Works fully offline; no account or cloud required to get started.
+- **Backup & restore** — Export all your collections and items to a portable JSON file, and import it back to recover or move your data between machines.
 - **Optional cloud sync** — Opt in to encrypted sync across devices when you want it.
 - **Barcode & identifier scanning** — Add items by scanning barcodes, matrix codes, or images instead of typing everything.
 - **External lookups** — Enrich your catalog by pulling metadata from plugin-specific sources (catalogs, marketplaces, databases).

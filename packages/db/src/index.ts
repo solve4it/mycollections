@@ -1,3 +1,9 @@
+export {
+  exportBackup,
+  type ImportMode,
+  type ImportSummary,
+  importBackup,
+} from "./backup.js";
 export { type DatabaseHandle, type OpenDatabaseOptions, openDatabase } from "./open-database.js";
 export {
   CollectionsRepository,
