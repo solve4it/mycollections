@@ -77,6 +77,17 @@ MyCollections uses **test-driven development** across all packages. The loop is:
 
 Don't open a PR with production code that has no tests. Don't open a PR where tests were written after the fact to pad coverage — the point of TDD is that tests drive design, not that they exist.
 
+### Assert behavior, not presence
+
+The most common defect a passing test still lets through is a **semantically-wrong but type-valid value** — a number or string that compiles and renders fine but means the wrong thing (e.g. showing a collection's _field count_ where the _item count_ was intended). Guard against it:
+
+1. **Assert the rendered value, not just that an element exists.** `findByText("Books")` proves the card rendered; it says nothing about whether the count next to it is right. Assert the actual text/number the user sees.
+2. **Make fixtures discriminating.** Every plausible-but-wrong source should produce a _different_ value than the right one. If a collection in your fixture has 1 field and 1 item, a `fields.length`-vs-`itemCount` mix-up is invisible — give it 1 field and 3 items so only the correct source yields "3". The same applies to id-vs-label-vs-value lookups: keep all three distinct (id `title`, label `Title`, value `Zelda`) so a wrong mapping fails.
+3. **Prefer adding the correct data primitive over improvising.** When a view needs a value the model doesn't carry, add it to the API/model (e.g. `itemCount`) rather than reaching for a nearby number that happens to be in scope. Missing data is what makes wrong substitutes attractive.
+4. **Run the app on representative data before calling it done.** Types and unit tests miss semantic mistakes that are obvious on screen. View the happy path with data where the right answer is known ("this collection has 3 items"). See the `verify` / `run` helpers.
+
+`apps/web/src/components/DynamicItemForm.test.tsx` is the reference example: distinct id/label/value fixtures, and it asserts the exact submitted object keyed by field id.
+
 ## Pull request process
 
 - **One feature per PR.** If your issue touches many unrelated files, split it into multiple PRs, each with its own issue if needed.
@@ -94,6 +105,7 @@ Before marking a PR ready for review, tick every item:
 - [ ] The PR is linked to an issue via `Closes #<number>`
 - [ ] Commits follow conventional-commit format and reference the issue number
 - [ ] Tests were written TDD-style (red first, then green)
+- [ ] Tests assert the actual displayed/returned values (not just element presence) using discriminating fixtures — see "Assert behavior, not presence"
 - [ ] All tests pass locally (`pnpm test`)
 - [ ] Type checking passes (`pnpm typecheck`)
 - [ ] Lint passes with no new warnings (`pnpm lint`)
