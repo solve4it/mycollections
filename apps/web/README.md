@@ -18,10 +18,25 @@ Code-based routing via TanStack Router. Routes are defined in `src/routes/`:
 | Route | File | Description |
 |---|---|---|
 | `/` | `routes/index.tsx` | Redirects to `/collections` |
-| `/collections` | `routes/collections/index.tsx` | Collections list (placeholder) |
-| `/settings` | `routes/settings/index.tsx` | Settings (placeholder) |
+| `/setup` | `routes/setup/index.tsx` | First-run onboarding: API token entry. Redirects to `/collections` if a token is already stored |
+| `/collections` | `routes/collections/index.tsx` | Dashboard: collection cards, loading/error/empty states. Redirects to `/setup` if no token |
+| `/collections/new` | `routes/collections/new.tsx` | Create a collection with the field schema builder |
+| `/settings` | `routes/settings/index.tsx` | Settings + language selector |
 
-The root layout (`routes/__root.tsx`) wraps all routes with the `Shell` component.
+The root layout (`routes/__root.tsx`) wraps all routes with the `Shell` component. Routes that need a connected API guard against a missing token in `beforeLoad` and redirect to `/setup`.
+
+## Data fetching & API client
+
+The web app talks to the `@mycollections/api` server over HTTP.
+
+- **`src/lib/api-client.ts`**: thin `fetch` wrapper. Adds `Authorization: Bearer <token>` from `localStorage` (`api_token`), throws `UnauthorizedError` on 401 and `ApiError` on other failures. Base URL comes from `VITE_API_URL` (default `http://localhost:3001`). Exposes `getToken` / `setToken` / `clearToken`, `listCollections`, and `createCollection`.
+- **`src/lib/queries.ts`**: TanStack Query hooks — `useCollections()` (query) and `useCreateCollection()` (mutation, invalidates the `collections` query on success). `QueryClientProvider` is mounted in `main.tsx`.
+
+The API token is the random UUID the server prints to stdout on startup; the user pastes it into the `/setup` screen.
+
+## Collection creation
+
+`/collections/new` builds a `Collection` payload including a **field schema builder**. Each field row captures a label, a type (from `BUILT_IN_FIELD_TYPES` in `@mycollections/core`), and a required flag; `select`/`multiselect` types reveal a comma-separated options input. On submit the drafts are converted to validated `FieldDefinition` objects and posted via `createCollection`.
 
 ## Internationalization (i18n)
 
@@ -30,8 +45,9 @@ All UI strings use `react-i18next`. Translation files live in `src/locales/<lang
 | Namespace | File | Contents |
 |---|---|---|
 | `common` | `locales/en/common.json` | App name, nav labels, ARIA strings |
-| `collections` | `locales/en/collections.json` | Collections page strings |
+| `collections` | `locales/en/collections.json` | Dashboard, empty state, and collection-creation form strings |
 | `settings` | `locales/en/settings.json` | Settings page strings, language selector |
+| `setup` | `locales/en/setup.json` | Onboarding / token entry strings |
 
 **Adding a translation key:**
 

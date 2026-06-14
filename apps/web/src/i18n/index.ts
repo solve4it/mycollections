@@ -4,6 +4,7 @@ import { initReactI18next } from "react-i18next";
 import enCollections from "../locales/en/collections.json";
 import enCommon from "../locales/en/common.json";
 import enSettings from "../locales/en/settings.json";
+import enSetup from "../locales/en/setup.json";
 
 i18n
   .use(LanguageDetector)
@@ -14,6 +15,7 @@ i18n
         common: enCommon,
         collections: enCollections,
         settings: enSettings,
+        setup: enSetup,
       },
     },
     fallbackLng: "en",
