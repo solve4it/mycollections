@@ -1,5 +1,8 @@
 {
   "title": "Settings",
   "language_label": "Language",
-  "language_en": "English"
+  "language_en": "English",
+  "connection_label": "Connection",
+  "disconnect_description": "Disconnect from the API and enter a different token. Use this if the server restarted with a new token.",
+  "disconnect_button": "Disconnect"
 }

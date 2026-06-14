@@ -1,5 +1,6 @@
-import { createRoute } from "@tanstack/react-router";
+import { createRoute, useNavigate } from "@tanstack/react-router";
 import { useTranslation } from "react-i18next";
+import { clearToken } from "../../lib/api-client.js";
 import { rootRoute } from "../__root.js";
 
 export const settingsRoute = createRoute({
@@ -12,11 +13,17 @@ const SUPPORTED_LANGUAGES = [{ code: "en", labelKey: "language_en" }] as const;
 
 function SettingsPage() {
   const { t, i18n } = useTranslation("settings");
+  const navigate = useNavigate();
+
+  function handleDisconnect() {
+    clearToken();
+    void navigate({ to: "/setup" });
+  }
 
   return (
     <div>
       <h1>{t("title")}</h1>
-      <div>
+      <div className="form-row">
         <label htmlFor="language-select">{t("language_label")}</label>
         <select
           id="language-select"
@@ -32,6 +39,14 @@ function SettingsPage() {
           ))}
         </select>
       </div>
+
+      <section className="settings-connection">
+        <h2>{t("connection_label")}</h2>
+        <p>{t("disconnect_description")}</p>
+        <button type="button" className="touch-target" onClick={handleDisconnect}>
+          {t("disconnect_button")}
+        </button>
+      </section>
     </div>
   );
 }
