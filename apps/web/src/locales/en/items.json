@@ -1,0 +1,18 @@
+{
+  "status_label": "Status",
+  "status_owned": "Owned",
+  "status_wanted": "Wanted",
+  "status_ordered": "Ordered",
+  "add_item": "Add item",
+  "save": "Save",
+  "cancel": "Cancel",
+  "edit": "Edit",
+  "delete": "Delete",
+  "empty_items": "No items yet",
+  "empty_items_description": "Add your first item using the form below.",
+  "loading": "Loading…",
+  "error_title": "Could not load this collection",
+  "back_to_collections": "All collections",
+  "items_heading": "Items",
+  "untitled": "(untitled)"
+}

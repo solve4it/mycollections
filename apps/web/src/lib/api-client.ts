@@ -1,10 +1,15 @@
-import type { Collection, FieldDefinition } from "@mycollections/core";
+import type { Collection, FieldDefinition, Item, ItemStatus } from "@mycollections/core";
 
 export interface CreateCollectionInput {
   name: string;
   description?: string;
   fields: FieldDefinition[];
   isFiniteSet: boolean;
+}
+
+export interface ItemInput {
+  status?: ItemStatus;
+  fields: Record<string, unknown>;
 }
 
 const BASE_URL = import.meta.env.VITE_API_URL ?? "http://localhost:3001";
@@ -53,4 +58,40 @@ export async function createCollection(input: CreateCollectionInput): Promise<Co
   const res = await request("/api/collections", { method: "POST", body: JSON.stringify(input) });
   if (!res.ok) throw new ApiError(res.status);
   return res.json() as Promise<Collection>;
+}
+
+export async function getCollection(id: string): Promise<Collection> {
+  const res = await request(`/api/collections/${id}`);
+  if (!res.ok) throw new ApiError(res.status);
+  return res.json() as Promise<Collection>;
+}
+
+export async function listItems(collectionId: string, status?: ItemStatus): Promise<Item[]> {
+  const query = status ? `?status=${encodeURIComponent(status)}` : "";
+  const res = await request(`/api/collections/${collectionId}/items${query}`);
+  if (!res.ok) throw new ApiError(res.status);
+  return res.json() as Promise<Item[]>;
+}
+
+export async function createItem(collectionId: string, input: ItemInput): Promise<Item> {
+  const res = await request(`/api/collections/${collectionId}/items`, {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+  if (!res.ok) throw new ApiError(res.status);
+  return res.json() as Promise<Item>;
+}
+
+export async function updateItem(collectionId: string, itemId: string, input: ItemInput): Promise<Item> {
+  const res = await request(`/api/collections/${collectionId}/items/${itemId}`, {
+    method: "PATCH",
+    body: JSON.stringify(input),
+  });
+  if (!res.ok) throw new ApiError(res.status);
+  return res.json() as Promise<Item>;
+}
+
+export async function deleteItem(collectionId: string, itemId: string): Promise<void> {
+  const res = await request(`/api/collections/${collectionId}/items/${itemId}`, { method: "DELETE" });
+  if (!res.ok) throw new ApiError(res.status);
 }

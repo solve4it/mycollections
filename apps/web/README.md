@@ -21,6 +21,7 @@ Code-based routing via TanStack Router. Routes are defined in `src/routes/`:
 | `/setup` | `routes/setup/index.tsx` | First-run onboarding: API token entry. Redirects to `/collections` if a token is already stored |
 | `/collections` | `routes/collections/index.tsx` | Dashboard: collection cards, loading/error/empty states. Redirects to `/setup` if no token |
 | `/collections/new` | `routes/collections/new.tsx` | Create a collection with the field schema builder |
+| `/collections/$id` | `routes/collections/$id.tsx` | Collection detail: item list + add/edit/delete with a dynamically generated form |
 | `/settings` | `routes/settings/index.tsx` | Settings + language selector |
 
 The root layout (`routes/__root.tsx`) wraps all routes with the `Shell` component. Routes that need a connected API guard against a missing token in `beforeLoad` and redirect to `/setup`.
@@ -29,14 +30,32 @@ The root layout (`routes/__root.tsx`) wraps all routes with the `Shell` componen
 
 The web app talks to the `@mycollections/api` server over HTTP.
 
-- **`src/lib/api-client.ts`**: thin `fetch` wrapper. Adds `Authorization: Bearer <token>` from `localStorage` (`api_token`), throws `UnauthorizedError` on 401 and `ApiError` on other failures. Base URL comes from `VITE_API_URL` (default `http://localhost:3001`). Exposes `getToken` / `setToken` / `clearToken`, `listCollections`, and `createCollection`.
-- **`src/lib/queries.ts`**: TanStack Query hooks — `useCollections()` (query) and `useCreateCollection()` (mutation, invalidates the `collections` query on success). `QueryClientProvider` is mounted in `main.tsx`.
+- **`src/lib/api-client.ts`**: thin `fetch` wrapper. Adds `Authorization: Bearer <token>` from `localStorage` (`api_token`), throws `UnauthorizedError` on 401 and `ApiError` on other failures. Base URL comes from `VITE_API_URL` (default `http://localhost:3001`). Exposes `getToken` / `setToken` / `clearToken`, `listCollections`, `createCollection`, `getCollection`, and item operations (`listItems`, `createItem`, `updateItem`, `deleteItem`).
+- **`src/lib/queries.ts`**: TanStack Query hooks — `useCollections()`, `useCollection(id)`, `useItems(id)` (queries) and `useCreateCollection()`, `useCreateItem(id)`, `useUpdateItem(id)`, `useDeleteItem(id)` (mutations, each invalidating the relevant query on success). `QueryClientProvider` is mounted in `main.tsx`.
 
 The API token is the random UUID the server prints to stdout on startup; the user pastes it into the `/setup` screen.
 
 ## Collection creation
 
 `/collections/new` builds a `Collection` payload including a **field schema builder**. Each field row captures a label, a type (from `BUILT_IN_FIELD_TYPES` in `@mycollections/core`), and a required flag; `select`/`multiselect` types reveal a comma-separated options input. On submit the drafts are converted to validated `FieldDefinition` objects and posted via `createCollection`.
+
+## Items & dynamic forms
+
+`/collections/$id` lists the collection's items and lets you create, edit, and delete them. The `DynamicItemForm` component (`src/components/DynamicItemForm.tsx`) **generates form controls from the collection's `FieldDefinition[]`**:
+
+| Field type | Control |
+|---|---|
+| `text` / `url` / `email` / `image` | `<input>` (`text` / `url` / `email` / `url`) |
+| `number` / `currency` | `<input type="number">` (currency uses `step="0.01"`) |
+| `boolean` | checkbox |
+| `date` | `<input type="date">` |
+| `select` / `rating` | `<select>` (rating is `0…max`) |
+| `multiselect` | checkbox group |
+| `tags` | comma-separated text → `string[]` |
+
+Every item also has a **status** (`owned` / `wanted` / `ordered`, default `owned`) from `ITEM_STATUSES`. On submit the form emits an `ItemInput` (`{ status, fields }`) where `fields` is keyed by field id and coerced to the right runtime type (numbers parsed, tags split, etc.). The same component is reused for editing by passing `initialStatus` / `initialValues`.
+
+> Not yet implemented (follow-ups on #32): tag autocomplete from existing tags, and a dedicated item detail view.
 
 ## Internationalization (i18n)
 
@@ -46,6 +65,7 @@ All UI strings use `react-i18next`. Translation files live in `src/locales/<lang
 |---|---|---|
 | `common` | `locales/en/common.json` | App name, nav labels, ARIA strings |
 | `collections` | `locales/en/collections.json` | Dashboard, empty state, and collection-creation form strings |
+| `items` | `locales/en/items.json` | Item list, status labels, and dynamic-form strings |
 | `settings` | `locales/en/settings.json` | Settings page strings, language selector |
 | `setup` | `locales/en/setup.json` | Onboarding / token entry strings |
 
