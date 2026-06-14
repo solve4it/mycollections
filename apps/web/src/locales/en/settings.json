@@ -4,5 +4,13 @@
   "language_en": "English",
   "connection_label": "Connection",
   "disconnect_description": "Disconnect from the API and enter a different token. Use this if the server restarted with a new token.",
-  "disconnect_button": "Disconnect"
+  "disconnect_button": "Disconnect",
+  "data_label": "Data",
+  "export_description": "Download all your collections and items as a JSON backup file.",
+  "export_button": "Export data",
+  "export_error": "Export failed. Please try again.",
+  "import_description": "Restore from a backup file. Existing collections and items are kept; only new ones are added.",
+  "import_button": "Choose backup file",
+  "import_success": "Imported {{collectionsImported}} collections and {{itemsImported}} items ({{collectionsSkipped}} collections and {{itemsSkipped}} items already present were skipped).",
+  "import_error": "Import failed. Make sure you chose a valid MyCollections backup file."
 }

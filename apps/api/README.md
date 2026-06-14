@@ -27,8 +27,29 @@ All routes require `Authorization: Bearer <token>`.
 | `GET` | `/api/collections/:id/items/:itemId` | Get an item |
 | `PATCH` | `/api/collections/:id/items/:itemId` | Update an item |
 | `DELETE` | `/api/collections/:id/items/:itemId` | Soft-delete an item |
+| `GET` | `/api/export` | Download a JSON backup of all collections and items |
+| `POST` | `/api/import` | Restore a backup document (`?mode=skip`) |
 
 In dev mode, OpenAPI docs are available at `GET /api/docs`.
+
+### Backup format
+
+`GET /api/export` returns a versioned, human-readable JSON document:
+
+```json
+{
+  "version": 1,
+  "exportedAt": "2026-06-14T12:00:00.000Z",
+  "collections": [ /* full Collection records, incl. soft-deleted */ ],
+  "items": [ /* full Item records, each carrying its collectionId */ ]
+}
+```
+
+`POST /api/import` accepts exactly that document. The whole import runs in a single
+transaction, so an invalid payload is rejected with `400` and leaves the database
+untouched (no partial writes). The only `mode` today is `skip` (the default):
+records whose id already exists are left as-is, making imports idempotent and
+non-destructive. `replace` / `merge` modes are reserved for the future.
 
 ## Usage
 

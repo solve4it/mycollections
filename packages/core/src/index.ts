@@ -1,5 +1,10 @@
 export { type Collection, CollectionSchema } from "./collection.js";
 export {
+  EXPORT_VERSION,
+  type ExportDocument,
+  ExportDocumentSchema,
+} from "./export-document.js";
+export {
   BUILT_IN_FIELD_TYPES,
   type BuiltInFieldType,
   type FieldDefinition,

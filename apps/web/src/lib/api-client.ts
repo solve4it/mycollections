@@ -95,3 +95,24 @@ export async function deleteItem(collectionId: string, itemId: string): Promise<
   const res = await request(`/api/collections/${collectionId}/items/${itemId}`, { method: "DELETE" });
   if (!res.ok) throw new ApiError(res.status);
 }
+
+export interface ImportSummary {
+  collectionsImported: number;
+  collectionsSkipped: number;
+  itemsImported: number;
+  itemsSkipped: number;
+}
+
+/** Fetches the full backup document as a Blob suitable for a browser download. */
+export async function exportData(): Promise<Blob> {
+  const res = await request("/api/export");
+  if (!res.ok) throw new ApiError(res.status);
+  return res.blob();
+}
+
+/** Sends a parsed backup document to the server and returns the import summary. */
+export async function importData(document: unknown): Promise<ImportSummary> {
+  const res = await request("/api/import", { method: "POST", body: JSON.stringify(document) });
+  if (!res.ok) throw new ApiError(res.status);
+  return res.json() as Promise<ImportSummary>;
+}
