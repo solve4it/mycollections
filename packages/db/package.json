@@ -33,7 +33,7 @@
   },
   "dependencies": {
     "@mycollections/core": "workspace:*",
-    "better-sqlite3": "^12.10.1",
+    "better-sqlite3": "^12.11.1",
     "drizzle-orm": "^0.45.2"
   },
   "devDependencies": {
@@ -41,6 +41,6 @@
     "@types/node": "24.13.2",
     "drizzle-kit": "^0.31.10",
     "typescript": "^6.0.3",
-    "vitest": "^4.1.8"
+    "vitest": "^4.1.9"
   }
 }
