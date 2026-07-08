@@ -165,6 +165,65 @@ describe("PATCH /api/collections/:id/items/:itemId", () => {
     });
     expect(res.statusCode).toBe(404);
   });
+
+  it("updates only the status when fields is omitted", async () => {
+    const item = await handle.items.create({
+      collectionId: collection.id,
+      status: "wanted",
+      fields: { title: "Dune" },
+    });
+    const app = await makeApp();
+    const res = await app.inject({
+      method: "PATCH",
+      url: `/api/collections/${collection.id}/items/${item.id}`,
+      headers: { ...auth, "Content-Type": "application/json" },
+      payload: { status: "ordered" },
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json<Item>();
+    expect(body.status).toBe("ordered");
+    expect(body.fields).toEqual({ title: "Dune" });
+  });
+
+  it("updates only fields when status is omitted", async () => {
+    const item = await handle.items.create({
+      collectionId: collection.id,
+      status: "wanted",
+      fields: { title: "Dune" },
+    });
+    const app = await makeApp();
+    const res = await app.inject({
+      method: "PATCH",
+      url: `/api/collections/${collection.id}/items/${item.id}`,
+      headers: { ...auth, "Content-Type": "application/json" },
+      payload: { fields: { title: "Foundation" } },
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json<Item>();
+    expect(body.status).toBe("wanted");
+    expect(body.fields).toEqual({ title: "Foundation" });
+  });
+
+  it("returns 404 and leaves the item untouched when addressed via a different collection", async () => {
+    const other = await handle.collections.create({ name: "Other", fields: baseFields, isFiniteSet: false });
+    const item = await handle.items.create({
+      collectionId: collection.id,
+      status: "wanted",
+      fields: { title: "Dune" },
+    });
+    const app = await makeApp();
+    const res = await app.inject({
+      method: "PATCH",
+      url: `/api/collections/${other.id}/items/${item.id}`,
+      headers: { ...auth, "Content-Type": "application/json" },
+      payload: { status: "owned", fields: { title: "MUTATED" } },
+    });
+    expect(res.statusCode).toBe(404);
+    // The 404 must be side-effect free: the item keeps its original state.
+    const after = await handle.items.getById(item.id);
+    expect(after?.status).toBe("wanted");
+    expect(after?.fields).toEqual({ title: "Dune" });
+  });
 });
 
 describe("DELETE /api/collections/:id/items/:itemId", () => {

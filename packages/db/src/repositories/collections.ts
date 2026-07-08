@@ -3,6 +3,7 @@ import { type Collection, CollectionSchema, type FieldDefinition } from "@mycoll
 import { and, eq, isNotNull, isNull } from "drizzle-orm";
 import type { BetterSQLite3Database } from "drizzle-orm/better-sqlite3";
 import * as schema from "../schema.js";
+import { stripUndefined } from "./strip-undefined.js";
 
 type Db = BetterSQLite3Database<typeof schema>;
 type CollectionRow = typeof schema.collections.$inferSelect;
@@ -99,7 +100,7 @@ export class CollectionsRepository {
     }
     const updated = CollectionSchema.parse({
       ...existing,
-      ...patch,
+      ...stripUndefined(patch),
       id,
       updatedAt: new Date().toISOString(),
     });
