@@ -84,6 +84,23 @@ describe("ItemsRepository", () => {
     expect(updated && updated.updatedAt >= created.updatedAt).toBe(true);
   });
 
+  it("ignores explicitly-undefined patch keys instead of clobbering stored values", async () => {
+    const created = await handle.items.create({
+      collectionId: collection.id,
+      status: "wanted",
+      fields: { title: "Dune" },
+    });
+    // Callers building a patch from optional inputs pass explicit undefined
+    // (e.g. { status: body.status }); that must behave like an absent key.
+    const statusOnly = await handle.items.update(created.id, { status: "ordered", fields: undefined });
+    expect(statusOnly?.status).toBe("ordered");
+    expect(statusOnly?.fields).toEqual({ title: "Dune" });
+
+    const fieldsOnly = await handle.items.update(created.id, { status: undefined, fields: { title: "Foundation" } });
+    expect(fieldsOnly?.status).toBe("ordered");
+    expect(fieldsOnly?.fields).toEqual({ title: "Foundation" });
+  });
+
   it("soft delete, restore, and hard delete behave like collections", async () => {
     const created = await handle.items.create({ collectionId: collection.id, fields: {} });
     expect(await handle.items.softDelete(created.id)).toBe(true);

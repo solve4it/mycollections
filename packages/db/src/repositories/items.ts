@@ -4,6 +4,7 @@ import { and, eq, isNotNull, isNull, sql } from "drizzle-orm";
 import type { BetterSQLite3Database } from "drizzle-orm/better-sqlite3";
 import * as schema from "../schema.js";
 import type { ReadOptions } from "./collections.js";
+import { stripUndefined } from "./strip-undefined.js";
 
 type Db = BetterSQLite3Database<typeof schema>;
 type ItemRow = typeof schema.items.$inferSelect;
@@ -151,7 +152,7 @@ export class ItemsRepository {
     }
     const updated = ItemSchema.parse({
       ...existing,
-      ...patch,
+      ...stripUndefined(patch),
       id,
       updatedAt: new Date().toISOString(),
     });

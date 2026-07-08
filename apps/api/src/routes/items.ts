@@ -70,9 +70,13 @@ export async function registerItemRoutes(app: FastifyInstance, db: DatabaseHandl
     const body = request.body as { status?: string; fields?: Record<string, unknown> };
     const collection = await db.collections.getById(id);
     if (!collection) throw app.httpErrors.notFound("Collection not found");
+    // Ownership must be checked before the update runs — a 404 must never
+    // leave a side effect behind (an item is only reachable via its own collection).
+    const existing = await db.items.getById(itemId);
+    if (!existing || existing.collectionId !== id) throw app.httpErrors.notFound("Item not found");
     // biome-ignore lint/suspicious/noExplicitAny: narrowed by schema enum
     const updated = await db.items.update(itemId, { status: body.status as any, fields: body.fields });
-    if (!updated || updated.collectionId !== id) throw app.httpErrors.notFound("Item not found");
+    if (!updated) throw app.httpErrors.notFound("Item not found");
     return updated;
   });
 
