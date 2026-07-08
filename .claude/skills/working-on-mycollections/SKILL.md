@@ -31,6 +31,19 @@ board IDs); this file holds the judgment. When they overlap, CLAUDE.md wins on m
    PR with `Closes #<n>`. After merge: move the issue to Done, pull main, delete the branch
    (`-D`; squash merges mean `-d` refuses).
 
+## Orchestrate — don't solo
+
+Use multi-agent orchestration (subagents and workflows) for authoring and review; token cost
+is not a constraint on this project — correctness is. Concretely:
+
+- **At pickup**: spawn a design/security review agent on your proposed approach before
+  finalizing it (the #21 design review caught two would-be bugs before a line was written).
+- **For review tasks**: fan out independent review dimensions, then adversarially verify each
+  finding — a finding that survives an agent prompted to refute it is worth ten from a single
+  pass. Report only what survived, labeled confirmed vs. plausible.
+- **For broad sweeps** (audits, migrations, multi-file refactors): use a workflow with a
+  discover → transform → verify pipeline rather than one long solo context.
+
 ## Verify before you claim anything
 
 Tests passing is CI's evidence, not yours. Before "done" or "fixed":
