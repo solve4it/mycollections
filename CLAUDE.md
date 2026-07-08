@@ -74,6 +74,13 @@ gh project item-edit --project-id PVT_kwDOEDb4es4BTKDH --id "$ITEM_ID" --field-i
 - **Spell check**: cSpell
 - **Node**: Version pinned in `.nvmrc`, use fnm
 
+## Project skill
+
+`.claude/skills/working-on-mycollections/SKILL.md` teaches the working method for this repo —
+the task loop, runtime-verification discipline, known pitfalls, and output structure. Invoke it
+at the start of any coding, review, or fix task. This file holds the mechanics (bot config,
+tokens, board IDs); the skill holds the judgment. Keep both current together.
+
 ## Keeping this file current
 Update CLAUDE.md whenever conventions, workflows, or project practices change. This file is the source of truth for all Claude Code sessions — if it's stale, new sessions will follow outdated instructions.
 
