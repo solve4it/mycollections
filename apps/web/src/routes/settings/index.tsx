@@ -109,14 +109,15 @@ function SettingsPage() {
       <section className="settings-privacy">
         <h2>{t("privacy_label")}</h2>
         <div className="form-row">
-          <input
-            id="error-reporting-toggle"
-            type="checkbox"
-            className="touch-target"
-            checked={errorReporting}
-            onChange={handleErrorReportingChange}
-          />
-          <label htmlFor="error-reporting-toggle">{t("error_reporting_label")}</label>
+          <label htmlFor="error-reporting-toggle" className="checkbox-row">
+            <input
+              id="error-reporting-toggle"
+              type="checkbox"
+              checked={errorReporting}
+              onChange={handleErrorReportingChange}
+            />
+            {t("error_reporting_label")}
+          </label>
         </div>
         <p>{t("error_reporting_description")}</p>
       </section>
