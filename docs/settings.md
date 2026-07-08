@@ -23,6 +23,16 @@ The **Data** section of Settings lets you back up and move your data:
   added, so re-importing the same file does nothing. An invalid file is rejected
   with a clear error and never partially corrupts your data.
 
+## Privacy
+
+The **Privacy** section controls error reporting:
+
+- **Record error reports** — when enabled (the default), unexpected errors are
+  recorded so crashes can be diagnosed. Reports contain only technical details
+  (error type, message, and where it happened) — never your collection data —
+  and are only logged locally in your browser; nothing leaves your device.
+  Uncheck the toggle to opt out entirely; the choice is remembered.
+
 ## Per-collection settings
 
 _Settings that apply to a single collection — display mode, default fields, plugin-specific options._

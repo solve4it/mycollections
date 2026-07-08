@@ -133,6 +133,24 @@ API_TOKEN=dev-local-token pnpm --filter @mycollections/api dev
 
 The SQLite database is created automatically at `apps/api/data/app.db` on first run (override with `DB_PATH`). This location is anchored to the app directory, so it's the same file no matter which directory you launch from, and the resolved path is printed on startup (`Database: …`). The `data/` directory is gitignored.
 
+## Observability
+
+### Logging (API)
+
+The API logs structured JSON via Fastify's built-in [pino](https://getpino.io/) logger — every request is logged automatically. `LOG_LEVEL` overrides the level (`fatal`–`trace`; defaults to `debug` in dev, `info` in production). `Authorization` and `Cookie` request headers are redacted. Two rules when touching logging:
+
+- **Never log request bodies** — they contain collection data. The default `req` serializer only logs method/URL/host; don't add a custom serializer that includes headers or bodies.
+- **Never put user data or secrets in query strings** — the request URL is logged as-is.
+
+### Error reporting
+
+`packages/core` exports the `ErrorReporter` interface plus `createErrorReporter` / `buildErrorReport`, which sanitize every capture: only allowlisted context keys (`SAFE_CONTEXT_KEYS` — route, method, statusCode, componentStack, source, reqId) survive, so collection data and credentials can't leak into a report. Error `message`/`stack` pass through (truncated) and may contain user data — any future sink that transmits reports off-device must scrub them first; today's sinks are local-only (pino on the server, browser console on the web).
+
+Wiring:
+
+- **API** — the Fastify error handler reports unhandled (5xx) errors and returns a generic `500` body so internal details never reach clients; 4xx errors pass through untouched.
+- **Web** — route render errors are caught by TanStack Router (`defaultOnCatch`), everything else by the top-level `ErrorBoundary`, `window` `error`/`unhandledrejection` handlers, and the React Query cache `onError`. Users can opt out via Settings → Privacy (persisted in `localStorage`, checked on every capture).
+
 ## Working on the docs site
 
 The docs site at `apps/docs` is an [Astro Starlight](https://starlight.astro.build/) project that renders the shared markdown in `docs/` at the repo root, plus its own Starlight-native landing page.
