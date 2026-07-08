@@ -1,6 +1,7 @@
 import fastifyCors from "@fastify/cors";
 import fastifyHelmet from "@fastify/helmet";
 import fastifySensible from "@fastify/sensible";
+import { createErrorReporter, type ErrorReporter, toReportableError } from "@mycollections/core";
 import type { DatabaseHandle } from "@mycollections/db";
 import Fastify from "fastify";
 import { registerCollectionRoutes } from "./routes/collections.js";
@@ -14,12 +15,37 @@ export interface AppOptions {
   /** Enable Swagger UI at /api/docs and relax CSP. Only use in development. */
   isDev?: boolean;
   logger?: boolean | object;
+  /** Receives unhandled (5xx) errors. Defaults to a reporter that writes sanitized reports to the app log. */
+  errorReporter?: ErrorReporter;
 }
 
 export async function buildApp(options: AppOptions) {
   const { db, token, isDev = false } = options;
 
   const app = Fastify({ logger: options.logger ?? false });
+
+  const errorReporter =
+    options.errorReporter ??
+    createErrorReporter({ sink: (report) => app.log.error({ errorReport: report }, "error captured") });
+
+  app.setErrorHandler((error: unknown, request, reply) => {
+    const rawStatus = (error as { statusCode?: unknown }).statusCode;
+    const statusCode = typeof rawStatus === "number" && rawStatus >= 400 ? rawStatus : 500;
+    if (statusCode < 500) {
+      // Client errors (validation, 404, …) keep Fastify's default shape and message.
+      return reply.code(statusCode).send(error);
+    }
+    request.log.error({ err: error }, "unhandled error");
+    errorReporter.capture(toReportableError(error), {
+      method: request.method,
+      // routeOptions.url is undefined for unmatched routes; the reporter drops non-primitives.
+      route: request.routeOptions.url,
+      statusCode,
+      reqId: request.id,
+    });
+    // Never echo internal error details to the client.
+    return reply.code(500).send({ statusCode: 500, error: "Internal Server Error", message: "Internal Server Error" });
+  });
 
   await app.register(fastifyHelmet, {
     contentSecurityPolicy: isDev ? false : undefined,

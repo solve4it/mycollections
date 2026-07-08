@@ -2,6 +2,7 @@ import { createRoute, useNavigate } from "@tanstack/react-router";
 import { type ChangeEvent, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { clearToken, exportData } from "../../lib/api-client.js";
+import { isErrorReportingEnabled, setErrorReportingEnabled } from "../../lib/error-reporter.js";
 import { useImportData } from "../../lib/queries.js";
 import { rootRoute } from "../__root.js";
 
@@ -19,6 +20,12 @@ function SettingsPage() {
   const importData = useImportData();
   const [exportError, setExportError] = useState(false);
   const [importInvalid, setImportInvalid] = useState(false);
+  const [errorReporting, setErrorReporting] = useState(isErrorReportingEnabled);
+
+  function handleErrorReportingChange(event: ChangeEvent<HTMLInputElement>) {
+    setErrorReportingEnabled(event.target.checked);
+    setErrorReporting(event.target.checked);
+  }
 
   function handleDisconnect() {
     clearToken();
@@ -97,6 +104,22 @@ function SettingsPage() {
         />
         {importData.isSuccess && <p role="status">{t("import_success", { ...importData.data })}</p>}
         {importFailed && <p role="alert">{t("import_error")}</p>}
+      </section>
+
+      <section className="settings-privacy">
+        <h2>{t("privacy_label")}</h2>
+        <div className="form-row">
+          <label htmlFor="error-reporting-toggle" className="checkbox-row">
+            <input
+              id="error-reporting-toggle"
+              type="checkbox"
+              checked={errorReporting}
+              onChange={handleErrorReportingChange}
+            />
+            {t("error_reporting_label")}
+          </label>
+        </div>
+        <p>{t("error_reporting_description")}</p>
       </section>
 
       <section className="settings-connection">

@@ -1,5 +1,14 @@
 export { type Collection, CollectionSchema, type CollectionWithItemCount } from "./collection.js";
 export {
+  buildErrorReport,
+  type CreateErrorReporterOptions,
+  createErrorReporter,
+  type ErrorReport,
+  SAFE_CONTEXT_KEYS,
+  type SafeContextKey,
+  toReportableError,
+} from "./error-reporter.js";
+export {
   EXPORT_VERSION,
   type ExportDocument,
   ExportDocumentSchema,

@@ -14,6 +14,7 @@ vi.mock("../../lib/api-client.js", () => ({
 }));
 
 import { exportData, importData } from "../../lib/api-client.js";
+import { isErrorReportingEnabled, setErrorReportingEnabled } from "../../lib/error-reporter.js";
 
 const testRouteTree = rootRoute.addChildren([settingsRoute, setupRoute]);
 
@@ -35,6 +36,7 @@ function selectFile(input: HTMLElement, contents: string, name = "backup.json") 
 }
 
 beforeEach(() => {
+  localStorage.clear();
   vi.resetAllMocks();
   vi.mocked(exportData).mockResolvedValue(new Blob(["{}"], { type: "application/json" }));
   vi.mocked(importData).mockResolvedValue({
@@ -82,6 +84,38 @@ describe("SettingsPage", () => {
     fireEvent.click(await screen.findByRole("button", { name: /disconnect/i }));
     expect(localStorage.getItem("api_token")).toBeNull();
     await waitFor(() => expect(router.state.location.pathname).toBe("/setup"));
+  });
+});
+
+describe("SettingsPage privacy", () => {
+  it("renders an error-reporting toggle that is on by default", async () => {
+    renderSettings();
+    const toggle = await screen.findByRole("checkbox", { name: /error report/i });
+    expect(toggle).toBeChecked();
+  });
+
+  it("unchecking the toggle opts out of error reporting", async () => {
+    renderSettings();
+    const toggle = await screen.findByRole("checkbox", { name: /error report/i });
+    fireEvent.click(toggle);
+    expect(toggle).not.toBeChecked();
+    expect(isErrorReportingEnabled()).toBe(false);
+  });
+
+  it("reflects a previously saved opt-out", async () => {
+    setErrorReportingEnabled(false);
+    renderSettings();
+    const toggle = await screen.findByRole("checkbox", { name: /error report/i });
+    expect(toggle).not.toBeChecked();
+  });
+
+  it("re-checking the toggle opts back in", async () => {
+    setErrorReportingEnabled(false);
+    renderSettings();
+    const toggle = await screen.findByRole("checkbox", { name: /error report/i });
+    fireEvent.click(toggle);
+    expect(toggle).toBeChecked();
+    expect(isErrorReportingEnabled()).toBe(true);
   });
 });
 

@@ -12,5 +12,8 @@
   "import_description": "Restore from a backup file. Existing collections and items are kept; only new ones are added.",
   "import_button": "Choose backup file",
   "import_success": "Imported {{collectionsImported}} collections and {{itemsImported}} items ({{collectionsSkipped}} collections and {{itemsSkipped}} items already present were skipped).",
-  "import_error": "Import failed. Make sure you chose a valid MyCollections backup file."
+  "import_error": "Import failed. Make sure you chose a valid MyCollections backup file.",
+  "privacy_label": "Privacy",
+  "error_reporting_label": "Record error reports",
+  "error_reporting_description": "Error reports help diagnose crashes. They contain no collection data and are only logged locally in your browser — nothing ever leaves this device."
 }
