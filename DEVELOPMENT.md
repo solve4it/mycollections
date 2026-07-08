@@ -1,6 +1,6 @@
 # Development Guide
 
-This guide takes you from a fresh clone to a running MyCollections dev environment. If you're here to contribute code, also read [`CONTRIBUTING.md`](./CONTRIBUTING.md) for the workflow and Definition of Done.
+This guide takes you from a fresh clone to a running MyCollections dev environment. If you're here to contribute code, also read [`CONTRIBUTING.md`](./CONTRIBUTING.md) for the workflow and Definition of Done. UI work should follow the visual direction in [`DESIGN.md`](./DESIGN.md).
 
 ## Prerequisites
 

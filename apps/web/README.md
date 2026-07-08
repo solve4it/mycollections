@@ -103,7 +103,13 @@ pnpm lint       # Biome lint + format check
 
 ## CSS design tokens
 
-All breakpoints and spacing constants are CSS custom properties on `:root`:
+`src/styles/global.css` defines the full "Cabinet & Paper" token system — palette (light +
+dark), type roles (three self-hosted variable fonts in `src/styles/fonts/`), shape, elevation,
+and spacing. The palette table, usage rules, and theming mechanics are documented in
+[`DESIGN.md`](../../DESIGN.md) at the repo root; every contrast pair is enforced by
+`src/styles/tokens.test.ts`, so WCAG regressions fail CI.
+
+Layout constants on `:root`:
 
 | Variable | Default | Purpose |
 |---|---|---|
