@@ -1,16 +1,175 @@
-/* Breakpoint system */
+/* Self-hosted variable fonts (latin subsets) — see fonts/README.md for licenses. */
+@font-face {
+  font-family: "Bricolage Grotesque";
+  font-style: normal;
+  font-weight: 200 800;
+  font-display: swap;
+  src: url("./fonts/bricolage-grotesque-latin.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Instrument Sans";
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url("./fonts/instrument-sans-latin.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Spline Sans Mono";
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url("./fonts/spline-sans-mono-latin.woff2") format("woff2");
+}
+
+/*
+ * Cabinet & Paper design tokens (see DESIGN.md; epic #199).
+ * Contrast pairs are enforced by src/styles/tokens.test.ts — change a value
+ * here and the test recomputes WCAG ratios. Light is the :root default; dark
+ * ships via prefers-color-scheme, and [data-theme="dark"|"light"] overrides
+ * both directions for the explicit switch that lands with #25.
+ */
 :root {
+  /* Theme native form controls, scrollbars, etc. alongside the tokens. */
+  color-scheme: light dark;
+
+  /* Layout */
   --breakpoint-md: 768px;
   --sidebar-width: 240px;
   --bottom-nav-height: 64px;
   --touch-target-size: 44px;
-  --color-bg: #ffffff;
-  --color-surface: #f8f8f8;
-  --color-border: #e0e0e0;
-  --color-text: #1a1a1a;
-  --color-text-muted: #666666;
-  --color-primary: #4a6cf7;
-  --color-primary-hover: #3b5ce6;
+
+  /* Surfaces & ink */
+  --paper: #f1f2ee;
+  --card: #fafaf7;
+  --ink: #1d231f;
+  --ink-muted: #5c645e;
+  --line: #dde0d9;
+
+  /* Cabinet (nav chrome) */
+  --cabinet: #232b26;
+  --cabinet-line: #37413a;
+  --cabinet-ink: #e9ece7;
+  --cabinet-muted: #a7b1a9;
+
+  /* Action & accent */
+  --stamp: #3e46c8;
+  --stamp-hover: #333bb2;
+  --stamp-ink: #ffffff;
+  --focus: #3e46c8;
+  --focus-on-cabinet: #97a0ff;
+  --accent-text: #3e46c8;
+  --manila: #d9b36c;
+  --progress: #9a7420;
+
+  /* Item status */
+  --owned: #2a7448;
+  --wanted: #9a6208;
+  --ordered: #3e46c8;
+
+  /* Type roles */
+  --font-display: "Bricolage Grotesque", system-ui, sans-serif;
+  --font-body: "Instrument Sans", system-ui, sans-serif;
+  --font-mono: "Spline Sans Mono", ui-monospace, monospace;
+
+  /* Shape, elevation, rhythm */
+  --radius: 10px;
+  --radius-sm: 8px;
+  --shadow: 0 1px 2px rgb(29 35 31 / 0.06), 0 4px 12px rgb(29 35 31 / 0.06);
+  --shadow-lift: 0 2px 4px rgb(29 35 31 / 0.08), 0 10px 24px rgb(29 35 31 / 0.12);
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+
+  /* Legacy aliases — pre-token rules consume these; #221-#225 migrate them. */
+  --color-bg: var(--paper);
+  --color-surface: var(--card);
+  --color-border: var(--line);
+  --color-text: var(--ink);
+  --color-text-muted: var(--ink-muted);
+  --color-primary: var(--stamp);
+  --color-primary-hover: var(--stamp-hover);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --paper: #141816;
+    --card: #1d2320;
+    --ink: #e7eae5;
+    --ink-muted: #9aa39c;
+    --line: #2c332e;
+    --cabinet: #0e120f;
+    --cabinet-line: #262d28;
+    --cabinet-ink: #e9ece7;
+    --cabinet-muted: #97a199;
+    --stamp: #4a52d6;
+    --stamp-hover: #5a62e6;
+    --stamp-ink: #ffffff;
+    --focus: #97a0ff;
+    --focus-on-cabinet: #97a0ff;
+    --accent-text: #97a0ff;
+    --manila: #d9b36c;
+    --progress: #d9b36c;
+    --owned: #5cbf8a;
+    --wanted: #e0a33e;
+    --ordered: #97a0ff;
+    --shadow: 0 1px 2px rgb(0 0 0 / 0.3), 0 4px 12px rgb(0 0 0 / 0.3);
+    --shadow-lift: 0 2px 4px rgb(0 0 0 / 0.4), 0 10px 24px rgb(0 0 0 / 0.5);
+  }
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --paper: #141816;
+  --card: #1d2320;
+  --ink: #e7eae5;
+  --ink-muted: #9aa39c;
+  --line: #2c332e;
+  --cabinet: #0e120f;
+  --cabinet-line: #262d28;
+  --cabinet-ink: #e9ece7;
+  --cabinet-muted: #97a199;
+  --stamp: #4a52d6;
+  --stamp-hover: #5a62e6;
+  --stamp-ink: #ffffff;
+  --focus: #97a0ff;
+  --focus-on-cabinet: #97a0ff;
+  --accent-text: #97a0ff;
+  --manila: #d9b36c;
+  --progress: #d9b36c;
+  --owned: #5cbf8a;
+  --wanted: #e0a33e;
+  --ordered: #97a0ff;
+  --shadow: 0 1px 2px rgb(0 0 0 / 0.3), 0 4px 12px rgb(0 0 0 / 0.3);
+  --shadow-lift: 0 2px 4px rgb(0 0 0 / 0.4), 0 10px 24px rgb(0 0 0 / 0.5);
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+  --paper: #f1f2ee;
+  --card: #fafaf7;
+  --ink: #1d231f;
+  --ink-muted: #5c645e;
+  --line: #dde0d9;
+  --cabinet: #232b26;
+  --cabinet-line: #37413a;
+  --cabinet-ink: #e9ece7;
+  --cabinet-muted: #a7b1a9;
+  --stamp: #3e46c8;
+  --stamp-hover: #333bb2;
+  --stamp-ink: #ffffff;
+  --focus: #3e46c8;
+  --focus-on-cabinet: #97a0ff;
+  --accent-text: #3e46c8;
+  --manila: #d9b36c;
+  --progress: #9a7420;
+  --owned: #2a7448;
+  --wanted: #9a6208;
+  --ordered: #3e46c8;
+  --shadow: 0 1px 2px rgb(29 35 31 / 0.06), 0 4px 12px rgb(29 35 31 / 0.06);
+  --shadow-lift: 0 2px 4px rgb(29 35 31 / 0.08), 0 10px 24px rgb(29 35 31 / 0.12);
 }
 
 *,
@@ -21,9 +180,17 @@
 
 body {
   margin: 0;
-  font-family: system-ui, -apple-system, sans-serif;
+  font-family: var(--font-body);
   background: var(--color-bg);
   color: var(--color-text);
+  -webkit-font-smoothing: antialiased;
+}
+
+h1,
+h2 {
+  font-family: var(--font-display);
+  font-weight: 600;
+  letter-spacing: -0.005em;
 }
 
 /* Skip link for keyboard/screen reader users */
@@ -33,7 +200,7 @@ body {
   left: 0;
   padding: 8px 16px;
   background: var(--color-primary);
-  color: #fff;
+  color: var(--stamp-ink);
   text-decoration: none;
   z-index: 1000;
 }
@@ -93,7 +260,8 @@ body {
 
 .sidebar-nav a[data-status="active"] {
   background: color-mix(in srgb, var(--color-primary) 12%, transparent);
-  color: var(--color-primary);
+  /* accent-text, not color-primary: the button-fill blue is too dim as dark-mode text */
+  color: var(--accent-text);
   font-weight: 500;
 }
 
@@ -139,7 +307,7 @@ body {
 }
 
 .bottom-nav-item[data-status="active"] {
-  color: var(--color-primary);
+  color: var(--accent-text);
 }
 
 /* Page header with actions */
@@ -165,7 +333,7 @@ button[type="submit"] {
   border-radius: 6px;
   border: 1px solid var(--color-border);
   background: var(--color-primary);
-  color: #fff;
+  color: var(--stamp-ink);
   text-decoration: none;
   font: inherit;
   cursor: pointer;
@@ -244,6 +412,9 @@ button[type="submit"]:disabled {
   border: 1px solid var(--color-border);
   border-radius: 6px;
   font: inherit;
+  /* Explicit surface colors — UA defaults would render light inputs in dark mode. */
+  background: var(--card);
+  color: var(--ink);
   min-height: var(--touch-target-size);
 }
 
@@ -294,7 +465,7 @@ button[type="submit"]:disabled {
 }
 
 .back-link:hover {
-  color: var(--color-primary);
+  color: var(--accent-text);
 }
 
 .item-list {
@@ -337,7 +508,7 @@ button[type="submit"]:disabled {
   font-size: 0.75rem;
   font-weight: 600;
   background: color-mix(in srgb, var(--color-primary) 14%, transparent);
-  color: var(--color-primary);
+  color: var(--accent-text);
 }
 
 .item-actions {
