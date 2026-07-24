@@ -26,18 +26,18 @@
     "lint": "biome check src"
   },
   "dependencies": {
-    "@fastify/cors": "^11.2.0",
-    "@fastify/helmet": "^13.0.2",
+    "@fastify/cors": "^11.3.0",
+    "@fastify/helmet": "^13.1.0",
     "@fastify/sensible": "^6.0.4",
-    "@fastify/swagger": "^9.7.0",
-    "@fastify/swagger-ui": "^6.0.0",
+    "@fastify/swagger": "^9.8.1",
+    "@fastify/swagger-ui": "^6.1.0",
     "@mycollections/auth": "workspace:*",
     "@mycollections/core": "workspace:*",
     "@mycollections/db": "workspace:*",
     "fastify": "^5.10.0"
   },
   "devDependencies": {
-    "tsx": "^4.23.0",
+    "tsx": "^4.23.1",
     "typescript": "^6.0.3",
     "vitest": "^4.1.10"
   }
