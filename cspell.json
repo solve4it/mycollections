@@ -24,6 +24,7 @@
     "predev",
     "prebuild",
     "astrojs",
+    "withastro",
     "Pagefind",
     "tsconfck",
     "gpgsign",

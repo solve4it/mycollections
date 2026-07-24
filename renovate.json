@@ -25,6 +25,12 @@
       "description": "Pin GitHub Actions to SHA digests",
       "matchManagers": ["github-actions"],
       "pinDigests": true
+    },
+    {
+      "description": "apps/docs is stuck on TypeScript 6 until astro check supports the native compiler — see https://github.com/withastro/roadmap/discussions/1321",
+      "matchFileNames": ["apps/docs/package.json"],
+      "matchPackageNames": ["typescript"],
+      "allowedVersions": "<7"
     }
   ],
   "vulnerabilityAlerts": {
