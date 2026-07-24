@@ -168,6 +168,16 @@ pnpm --filter @mycollections/docs preview  # preview the production build
 
 See [`docs/README.md`](./docs/README.md) for the dual-rendering pattern that keeps Starlight and the planned in-app Help in sync.
 
+### Why apps/docs pins TypeScript 6
+
+`apps/docs` declares its own `typescript: ^6.0.3` devDependency while the rest of the workspace tracks the latest major. This is deliberate and load-bearing.
+
+`astro check` (via `@astrojs/language-server`) is built on TypeScript's **programmatic** compiler API — `ts.sys`, `ts.findConfigFile`, `LanguageServiceHost`. TypeScript 7 is the Go-native port and no longer ships that API; `require('typescript')` exposes only `{ version, versionMajorMinor }`. Running `astro check` against it fails with `Cannot read properties of undefined (reading 'fileExists')`. `@astrojs/check` confirms this in its peer range (`typescript: "^5.0.0 || ^6.0.0"`).
+
+Every other workspace type checks with the plain `tsc` CLI, which the native compiler provides — so only the docs site is affected. pnpm keys `@astrojs/language-server` by TypeScript version, letting `apps/docs` resolve TS 6 while the rest of the monorepo uses the newer major. A `renovate.json` package rule keeps the pin from being bumped automatically.
+
+Remove the pin, the Renovate rule, and this section once Astro supports the native compiler — tracked upstream at [withastro/roadmap#1321](https://github.com/withastro/roadmap/discussions/1321).
+
 ## Running tests
 
 MyCollections uses [Vitest](https://vitest.dev/) across all packages. Tests are written **TDD-first** — see [`CONTRIBUTING.md`](./CONTRIBUTING.md#development-workflow-tdd).
