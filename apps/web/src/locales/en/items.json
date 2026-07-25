@@ -11,7 +11,12 @@
   "empty_items": "No items yet",
   "empty_items_description": "Add your first item using the form below.",
   "loading": "Loading…",
+  "loading_items": "Loading items…",
   "error_title": "Could not load this collection",
+  "error_description": "Your data is safe. The app could not reach its server — check that it is running, then try again.",
+  "items_error_title": "Could not load items",
+  "items_error_description": "Your items are safe. The app could not reach its server — check that it is running, then try again.",
+  "items_reload_error": "Could not refresh from the server. These are the items from the last successful load.",
   "back_to_collections": "All collections",
   "items_heading": "Items",
   "untitled": "(untitled)"

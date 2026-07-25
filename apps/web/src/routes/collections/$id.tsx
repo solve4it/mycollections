@@ -1,4 +1,5 @@
 import type { Collection, Item } from "@mycollections/core";
+import type { UseQueryResult } from "@tanstack/react-query";
 import { createRoute, Link, redirect } from "@tanstack/react-router";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -30,16 +31,21 @@ function CollectionDetailPage() {
   const itemsQuery = useItems(id);
   const createItem = useCreateItem(id);
 
-  if (collectionQuery.isLoading) return <p>{t("loading")}</p>;
-  if (collectionQuery.error || !collectionQuery.data)
-    return (
-      <div role="alert">
-        <h1>{t("error_title")}</h1>
-      </div>
-    );
-
   const collection = collectionQuery.data;
-  const items = itemsQuery.data ?? [];
+
+  // A query can sit pending without fetching, so "no data yet" is not an error
+  // and must not be presented as one. Once the collection has loaded it stays
+  // on screen even if a later reload fails.
+  if (collection === undefined) {
+    if (collectionQuery.error)
+      return (
+        <div role="alert">
+          <h1>{t("error_title")}</h1>
+          <p>{t("error_description")}</p>
+        </div>
+      );
+    return <p role="status">{t("loading")}</p>;
+  }
 
   return (
     <div className="collection-detail">
@@ -50,18 +56,7 @@ function CollectionDetailPage() {
       {collection.description && <p>{collection.description}</p>}
 
       <h2>{t("items_heading")}</h2>
-      {items.length === 0 ? (
-        <div className="empty-state">
-          <p>{t("empty_items")}</p>
-          <p>{t("empty_items_description")}</p>
-        </div>
-      ) : (
-        <ul className="item-list">
-          {items.map((item) => (
-            <ItemRow key={item.id} collection={collection} item={item} />
-          ))}
-        </ul>
-      )}
+      <ItemList collection={collection} query={itemsQuery} />
 
       <section className="add-item">
         <h2>{t("add_item")}</h2>
@@ -72,6 +67,51 @@ function CollectionDetailPage() {
         />
       </section>
     </div>
+  );
+}
+
+interface ItemListProps {
+  collection: Collection;
+  query: UseQueryResult<Item[]>;
+}
+
+/**
+ * Renders the item list, keeping "we could not load these" and "we loaded them
+ * and there are none" as distinct outcomes — collapsing the two is what made a
+ * failed load read as an empty collection (#228).
+ */
+function ItemList({ collection, query }: ItemListProps) {
+  const { t } = useTranslation("items");
+  const items = query.data;
+
+  if (items === undefined) {
+    if (query.error)
+      return (
+        <div role="alert">
+          <p>{t("items_error_title")}</p>
+          <p>{t("items_error_description")}</p>
+        </div>
+      );
+    return <p role="status">{t("loading_items")}</p>;
+  }
+
+  if (items.length === 0)
+    return (
+      <div className="empty-state">
+        <p>{t("empty_items")}</p>
+        <p>{t("empty_items_description")}</p>
+      </div>
+    );
+
+  return (
+    <>
+      {query.error && <p role="alert">{t("items_reload_error")}</p>}
+      <ul className="item-list">
+        {items.map((item) => (
+          <ItemRow key={item.id} collection={collection} item={item} />
+        ))}
+      </ul>
+    </>
   );
 }
 

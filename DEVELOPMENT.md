@@ -150,6 +150,17 @@ Wiring:
 
 - **API** — the Fastify error handler reports unhandled (5xx) errors and returns a generic `500` body so internal details never reach clients; 4xx errors pass through untouched.
 - **Web** — route render errors are caught by TanStack Router (`defaultOnCatch`), everything else by the top-level `ErrorBoundary`, `window` `error`/`unhandledrejection` handlers, and the React Query cache `onError`. Users can opt out via Settings → Privacy (persisted in `localStorage`, checked on every capture).
+- **Never render `error.message` to the user** — it is never sanitized and can carry internals or collection data (a malformed response makes `res.json()` throw a `SyntaxError` quoting the payload). Show a translated string; the reporter keeps the original.
+
+### Query state on the web
+
+The app-wide QueryClient is built by `createQueryClient` in `apps/web/src/lib/query-client.ts`, which sets `networkMode: "always"`. React Query decides connectivity from the window's `online`/`offline` events, but the API runs on the same machine and stays reachable while the internet is down — under the default mode an offline browser holds every request in `fetchStatus: "paused"`, so the query never fetches, never rejects, and never reaches `onError`.
+
+That does not remove the paused state entirely (a hidden tab still pauses a retry), so when rendering a query, follow the rule the two collection routes use:
+
+- Treat `data === undefined` as the only state that replaces the page — never `isLoading`, which is `isPending && isFetching` and is therefore `false` for a paused query.
+- Keep "failed to load" and "loaded, and there is nothing" as separate outcomes. Falling back to `data ?? []` tells the user their collection is empty when the request actually failed.
+- Once data has loaded, keep it on screen if a later reload fails and show a warning alongside it, rather than replacing it with an error page.
 
 ## Working on the docs site
 

@@ -1,5 +1,5 @@
 import type { Collection, Item } from "@mycollections/core";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { type NetworkMode, onlineManager, QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createMemoryHistory, createRouter, RouterProvider } from "@tanstack/react-router";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -41,12 +41,13 @@ const ITEM: Item = {
   deletedAt: null,
 };
 
-function makeQueryClient() {
-  return new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
+function makeQueryClient(networkMode?: NetworkMode) {
+  return new QueryClient({
+    defaultOptions: { queries: { retry: false, networkMode }, mutations: { retry: false } },
+  });
 }
 
-function renderDetail() {
-  const qc = makeQueryClient();
+function renderDetail(qc: QueryClient = makeQueryClient()) {
   const history = createMemoryHistory({ initialEntries: [`/collections/${COLLECTION.id}`] });
   const router = createRouter({ routeTree: testRouteTree, history });
   render(
@@ -54,6 +55,7 @@ function renderDetail() {
       <RouterProvider router={router} />
     </QueryClientProvider>,
   );
+  return { qc };
 }
 
 beforeEach(() => {
@@ -65,7 +67,10 @@ beforeEach(() => {
   vi.mocked(deleteItem).mockResolvedValue(undefined);
 });
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  onlineManager.setOnline(true);
+});
 
 describe("CollectionDetailPage", () => {
   it("shows the collection name", async () => {
@@ -114,6 +119,49 @@ describe("CollectionDetailPage", () => {
       COLLECTION.id,
       expect.objectContaining({ status: "owned", fields: expect.objectContaining({ title: "Mario" }) }),
     );
+  });
+
+  it("reports a failed item load instead of claiming the collection is empty", async () => {
+    // #228: the items query used to fall back to `[]`, so a failed load looked
+    // exactly like a collection the user had never added anything to.
+    vi.mocked(listItems).mockRejectedValue(new Error("API error 500"));
+    renderDetail();
+
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent("Could not load items");
+    expect(screen.queryByText(/no items yet/i)).not.toBeInTheDocument();
+  });
+
+  it("does not claim there are no items while the item load is still in flight", async () => {
+    vi.mocked(listItems).mockReturnValue(new Promise(() => {}));
+    renderDetail();
+
+    await screen.findByRole("heading", { name: "Games" });
+    expect(screen.getByRole("status")).toHaveTextContent(/loading/i);
+    expect(screen.queryByText(/no items yet/i)).not.toBeInTheDocument();
+  });
+
+  it("keeps showing loaded items when a later reload fails", async () => {
+    vi.mocked(listItems).mockResolvedValueOnce([ITEM]);
+    const { qc } = renderDetail();
+    await screen.findByText("Zelda");
+
+    vi.mocked(listItems).mockRejectedValue(new Error("API error 500"));
+    await qc.refetchQueries({ queryKey: ["collections", COLLECTION.id, "items"] });
+
+    await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent("Could not refresh"));
+    expect(screen.getByText("Zelda")).toBeInTheDocument();
+  });
+
+  it("shows loading rather than an error while the collection query is paused", async () => {
+    // A paused query has never run: it is not an error, and the page must not
+    // present it as one.
+    onlineManager.setOnline(false);
+    renderDetail(makeQueryClient("online"));
+
+    expect(await screen.findByRole("status")).toHaveTextContent(/loading/i);
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(getCollection).not.toHaveBeenCalled();
   });
 
   it("deletes an item", async () => {
