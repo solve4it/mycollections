@@ -22,8 +22,24 @@ This is a private, pure-TypeScript package — no runtime concerns beyond [Zod](
 | Export | Purpose |
 |---|---|
 | `AuthProvider` / `Session` / `AuthUser` / `SignInOptions` | Pluggable auth backend ([`@mycollections/auth`](../auth/) implements this). Tokens never appear on this surface — they are vended via `getAccessToken()` |
-| `FeatureFlagProvider` | Feature-flag lookup |
+| `FeatureFlagProvider` | Feature-flag lookup (`createStaticFeatureFlagProvider` implements it — see below) |
 | `ErrorReporter` | Error-capture sink |
+
+### Feature flags
+
+| Export | Purpose |
+|---|---|
+| `FeatureFlagsSchema` / `FeatureFlags` | A flat `flag name → boolean` map; the shape of `apps/web/src/config/flags.json` |
+| `parseFeatureFlags` | Validates untrusted flag config at the boundary. **Throws** on malformed input — a silent `{}` reads as "every feature off", which is indistinguishable from a working config |
+| `createStaticFeatureFlagProvider` | A `FeatureFlagProvider` over a fixed flag map |
+
+`createStaticFeatureFlagProvider` is deliberately strict:
+
+- **Unknown flags are disabled.** A typo'd flag name must never turn a gated feature on.
+- **Only `true` counts.** The flag map is copied into a null-prototype object, so `isEnabled("constructor")` and friends return `false` instead of a truthy `Object.prototype` member.
+- **The caller's object is snapshotted, not frozen.** Mutating it afterwards can't change the answers, and the caller's own object stays writable.
+
+Flags are a **UI gate, never an authorization boundary** — gated code still ships in the bundle, so anything with a security consequence is enforced in the API independently. See [`apps/web/README.md`](../../apps/web/README.md#feature-flags) for how the web app consumes this.
 
 ### Plugin API
 

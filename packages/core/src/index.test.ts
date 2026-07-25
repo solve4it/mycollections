@@ -13,6 +13,9 @@ describe("@mycollections/core public surface", () => {
       "CollectionSchema",
       "ItemSchema",
       "MediaSchema",
+      "FeatureFlagsSchema",
+      "parseFeatureFlags",
+      "createStaticFeatureFlagProvider",
     ]) {
       expect(keys.has(name)).toBe(true);
     }

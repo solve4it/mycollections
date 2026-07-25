@@ -9,6 +9,12 @@ export {
   toReportableError,
 } from "./error-reporter.js";
 export {
+  createStaticFeatureFlagProvider,
+  type FeatureFlags,
+  FeatureFlagsSchema,
+  parseFeatureFlags,
+} from "./feature-flags.js";
+export {
   EXPORT_VERSION,
   type ExportDocument,
   ExportDocumentSchema,
