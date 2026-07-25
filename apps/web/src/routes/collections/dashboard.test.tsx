@@ -1,7 +1,8 @@
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { type NetworkMode, onlineManager, QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createMemoryHistory, createRouter, RouterProvider } from "@tanstack/react-router";
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { createQueryClient } from "../../lib/query-client.js";
 import { rootRoute } from "../__root.js";
 import { collectionsRoute } from "./index.js";
 
@@ -14,12 +15,11 @@ import { listCollections } from "../../lib/api-client.js";
 
 const testRouteTree = rootRoute.addChildren([collectionsRoute]);
 
-function makeQueryClient() {
-  return new QueryClient({ defaultOptions: { queries: { retry: false } } });
+function makeQueryClient(networkMode?: NetworkMode) {
+  return new QueryClient({ defaultOptions: { queries: { retry: false, networkMode } } });
 }
 
-function renderCollections() {
-  const qc = makeQueryClient();
+function renderCollections(qc: QueryClient = makeQueryClient()) {
   const history = createMemoryHistory({ initialEntries: ["/collections"] });
   const router = createRouter({ routeTree: testRouteTree, history });
   render(
@@ -35,7 +35,10 @@ beforeEach(() => {
   vi.resetAllMocks();
 });
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  onlineManager.setOnline(true);
+});
 
 const SAMPLE_COLLECTION = {
   id: "00000000-0000-0000-0000-000000000001",
@@ -94,6 +97,60 @@ describe("CollectionsPage", () => {
   it("shows an error state when the API fails", async () => {
     vi.mocked(listCollections).mockRejectedValue(new Error("Network error"));
     renderCollections();
-    expect(await screen.findByRole("alert")).toBeInTheDocument();
+
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent("Could not load collections");
+    // Never tell the user their collections are gone just because a request failed.
+    expect(screen.queryByText(/no collections yet/i)).not.toBeInTheDocument();
+  });
+
+  it("does not report the raw error message to the user", async () => {
+    // Error messages can carry internals or user data, so the UI shows a
+    // translated explanation instead (the reporter still records the original).
+    vi.mocked(listCollections).mockRejectedValue(new Error("connect ECONNREFUSED 127.0.0.1:3001"));
+    renderCollections();
+
+    await screen.findByRole("alert");
+    expect(screen.queryByText(/ECONNREFUSED/)).not.toBeInTheDocument();
+  });
+
+  it("keeps showing loaded collections when a later reload fails", async () => {
+    vi.mocked(listCollections).mockResolvedValueOnce([SAMPLE_COLLECTION]);
+    const { qc } = renderCollections();
+    await screen.findByText("Books");
+
+    // The server goes away after a successful load. The collections on screen
+    // are still the truth about the user's data, so they must stay — with a
+    // warning, not replaced by a full-page error.
+    vi.mocked(listCollections).mockRejectedValue(new Error("API error 500"));
+    await qc.refetchQueries({ queryKey: ["collections"] });
+
+    await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent("Could not refresh"));
+    expect(screen.getByText("Books")).toBeInTheDocument();
+  });
+
+  it("keeps showing the loading state while the query is paused, never the empty state", async () => {
+    // Reproduces #228: React Query pauses a query it believes it cannot run, so
+    // the query sits pending without fetching — isLoading is false, error is
+    // null and data is undefined. The user owns a collection here, so the empty
+    // state would be a lie about their data.
+    onlineManager.setOnline(false);
+    vi.mocked(listCollections).mockResolvedValue([SAMPLE_COLLECTION]);
+    renderCollections(makeQueryClient("online"));
+
+    expect(await screen.findByText(/loading collections/i)).toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByText(/no collections yet/i)).not.toBeInTheDocument());
+    expect(listCollections).not.toHaveBeenCalled();
+  });
+
+  it("loads collections through the app's own query client while the browser reports no internet", async () => {
+    // The two halves of the #228 fix, together: the app's client keeps talking
+    // to the local API, and the page shows the data rather than an empty state.
+    onlineManager.setOnline(false);
+    vi.mocked(listCollections).mockResolvedValue([SAMPLE_COLLECTION]);
+    renderCollections(createQueryClient(() => {}));
+
+    expect(await screen.findByText("Books")).toBeInTheDocument();
+    expect(listCollections).toHaveBeenCalledTimes(1);
   });
 });

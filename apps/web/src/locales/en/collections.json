@@ -1,11 +1,12 @@
 {
   "title": "Collections",
-  "empty_message": "Your collections will appear here.",
   "empty_title": "No collections yet",
   "empty_description": "Create your first collection to start tracking.",
   "create_cta": "Create collection",
   "loading": "Loading collections…",
   "error_title": "Could not load collections",
+  "error_description": "Your collections are safe. The app could not reach its server — check that it is running, then try again.",
+  "reload_error": "Could not refresh from the server. These are the collections from the last successful load.",
   "items_count_one": "{{count}} item",
   "items_count_other": "{{count}} items",
   "new_title": "New collection",

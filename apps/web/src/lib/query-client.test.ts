@@ -35,6 +35,27 @@ describe("createQueryClient", () => {
     expect(result).toBe("created Books");
   });
 
+  it("settles a failing query into an error while the browser reports no internet connection", async () => {
+    // The regression that matters: under the default network mode this call
+    // never resolves or rejects, so nothing is ever reported and the UI is left
+    // guessing what happened.
+    onlineManager.setOnline(false);
+    const onError = vi.fn();
+    const client = createQueryClient(onError);
+
+    await expect(
+      client.fetchQuery({
+        queryKey: ["local-api-down"],
+        queryFn: async () => {
+          throw new Error("Failed to fetch");
+        },
+        retry: false,
+      }),
+    ).rejects.toThrow("Failed to fetch");
+
+    expect(onError).toHaveBeenCalledTimes(1);
+  });
+
   it("routes query failures to the shared error handler", async () => {
     const onError = vi.fn();
     const client = createQueryClient(onError);
