@@ -4,6 +4,7 @@ import { createRoute, Link, redirect } from "@tanstack/react-router";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { DynamicItemForm } from "../../components/DynamicItemForm.js";
+import { Icon } from "../../components/Icon.js";
 import { getToken } from "../../lib/api-client.js";
 import { useCollection, useCreateItem, useDeleteItem, useItems, useUpdateItem } from "../../lib/queries.js";
 import { rootRoute } from "../__root.js";
@@ -17,11 +18,19 @@ export const collectionDetailRoute = createRoute({
   component: CollectionDetailPage,
 });
 
-function formatValue(value: unknown): string {
-  if (value == null || value === "") return "—";
-  if (typeof value === "boolean") return value ? "✓" : "✗";
-  if (Array.isArray(value)) return value.join(", ");
-  return String(value);
+/**
+ * Renders a stored field value. Booleans become a labelled icon rather than the
+ * check/cross glyphs used before: the icon is the whole value, so it carries its
+ * own accessible name instead of leaving screen readers to announce a unicode
+ * character under whatever name they have for it (#221).
+ */
+function FieldValue({ value }: { value: unknown }) {
+  const { t } = useTranslation("items");
+  if (value == null || value === "") return <>—</>;
+  if (typeof value === "boolean")
+    return value ? <Icon name="check" label={t("value_yes")} /> : <Icon name="cross" label={t("value_no")} />;
+  if (Array.isArray(value)) return <>{value.join(", ")}</>;
+  return <>{String(value)}</>;
 }
 
 function CollectionDetailPage() {
@@ -50,7 +59,8 @@ function CollectionDetailPage() {
   return (
     <div className="collection-detail">
       <Link to="/collections" className="back-link">
-        ← {t("back_to_collections")}
+        <Icon name="back" />
+        {t("back_to_collections")}
       </Link>
       <h1>{collection.name}</h1>
       {collection.description && <p>{collection.description}</p>}
@@ -150,15 +160,17 @@ function ItemRow({ collection, item }: ItemRowProps) {
         <span className={`item-status item-status-${item.status}`}>{t(`status_${item.status}`)}</span>
         {collection.fields.map((field) => (
           <span key={field.id} className="item-field">
-            <span className="item-field-label">{field.label}:</span> {formatValue(item.fields[field.id])}
+            <span className="item-field-label">{field.label}:</span> <FieldValue value={item.fields[field.id]} />
           </span>
         ))}
       </div>
       <div className="item-actions">
         <button type="button" className="touch-target" onClick={() => setEditing(true)}>
+          <Icon name="edit" />
           {t("edit")}
         </button>
         <button type="button" className="touch-target" onClick={() => deleteItem.mutate(item.id)}>
+          <Icon name="delete" />
           {t("delete")}
         </button>
       </div>

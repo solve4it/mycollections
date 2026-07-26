@@ -2,6 +2,7 @@ import { BUILT_IN_FIELD_TYPES, type BuiltInFieldType, type FieldDefinition } fro
 import { createRoute, redirect, useNavigate } from "@tanstack/react-router";
 import { type FormEvent, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { Icon } from "../../components/Icon.js";
 import { getToken } from "../../lib/api-client.js";
 import { useCreateCollection } from "../../lib/queries.js";
 import { rootRoute } from "../__root.js";
@@ -177,12 +178,14 @@ function NewCollectionPage() {
                   className="touch-target"
                   onClick={() => setFields((prev) => prev.filter((f) => f.key !== field.key))}
                 >
+                  <Icon name="delete" />
                   {t("remove_field")}
                 </button>
               </div>
             );
           })}
           <button type="button" className="touch-target" onClick={() => setFields((prev) => [...prev, emptyField()])}>
+            <Icon name="add" />
             {t("add_field")}
           </button>
         </fieldset>

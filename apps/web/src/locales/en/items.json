@@ -19,5 +19,7 @@
   "items_reload_error": "Could not refresh from the server. These are the items from the last successful load.",
   "back_to_collections": "All collections",
   "items_heading": "Items",
+  "value_yes": "Yes",
+  "value_no": "No",
   "untitled": "(untitled)"
 }

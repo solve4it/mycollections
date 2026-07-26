@@ -237,12 +237,21 @@ h2 {
 }
 
 .sidebar-logo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   padding: 0 16px 16px;
   font-size: 1.125rem;
   font-weight: 600;
   color: var(--color-primary);
   border-bottom: 1px solid var(--color-border);
   margin-bottom: 8px;
+}
+
+.logo-mark {
+  inline-size: 1.4em;
+  block-size: 1.4em;
+  vertical-align: baseline;
 }
 
 .sidebar-nav {
@@ -320,6 +329,12 @@ h2 {
   color: var(--accent-text);
 }
 
+/* The label is deliberately small here; the icon is not. Scaling it by its own
+   font-size keeps the sizing relative rather than pinning a pixel width. */
+.bottom-nav-item .icon {
+  font-size: 1.125rem;
+}
+
 /* Page header with actions */
 .page-header {
   display: flex;
@@ -335,6 +350,7 @@ button[type="submit"] {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  gap: 8px;
 }
 
 a.touch-target,
@@ -451,6 +467,9 @@ button[type="submit"]:disabled {
 
 .field-row button,
 .fields-builder > button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   padding: 0 12px;
   border: 1px solid var(--color-border);
   border-radius: 6px;
@@ -467,7 +486,9 @@ button[type="submit"]:disabled {
 
 /* Collection detail + items */
 .back-link {
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   margin-bottom: 8px;
   color: var(--color-text-muted);
   text-decoration: none;
@@ -506,6 +527,12 @@ button[type="submit"]:disabled {
   min-width: 0;
 }
 
+/* A boolean value is an icon standing in for text, so it sits on the text
+   baseline with the labels beside it rather than floating above them. */
+.item-field .icon {
+  vertical-align: -0.2em;
+}
+
 .item-field-label {
   color: var(--color-text-muted);
   font-size: 0.8125rem;
@@ -529,6 +556,9 @@ button[type="submit"]:disabled {
 
 .item-actions button,
 .add-item .form-actions button[type="button"] {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   padding: 0 12px;
   border: 1px solid var(--color-border);
   border-radius: 6px;
@@ -536,6 +566,14 @@ button[type="submit"]:disabled {
   color: var(--color-text);
   font: inherit;
   cursor: pointer;
+}
+
+/* Settings: file picker row */
+.import-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--color-text-muted);
 }
 
 .add-item {

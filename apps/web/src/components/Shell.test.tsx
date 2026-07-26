@@ -41,6 +41,26 @@ describe("Shell layout", () => {
     }
   });
 
+  it("nav items use inline SVG icons, hidden from assistive tech (#221)", async () => {
+    render(<RouterProvider router={makeRouter()} />);
+    await screen.findByRole("navigation", { name: /main navigation/i });
+    const navLinks = screen.getAllByRole("link", { name: /collections|settings/i });
+    expect(navLinks.length).toBe(4); // two destinations × sidebar + bottom nav
+    for (const link of navLinks) {
+      const icon = link.querySelector("svg.icon");
+      expect(icon, `${link.textContent} must render an inline SVG icon`).not.toBeNull();
+      expect(icon).toHaveAttribute("aria-hidden", "true");
+      // The label is the accessible name; the icon must not add to it.
+      expect(link.textContent).toMatch(/^(Collections|Settings)$/);
+    }
+  });
+
+  it("shows the drawer mark beside the wordmark (#221)", async () => {
+    render(<RouterProvider router={makeRouter()} />);
+    const logo = (await screen.findByText("MyCollections")).closest(".sidebar-logo");
+    expect(logo?.querySelector("svg.icon")).toBeInTheDocument();
+  });
+
   it("Collections nav links point to /collections", async () => {
     render(<RouterProvider router={makeRouter()} />);
     await screen.findByRole("navigation", { name: /main navigation/i });
