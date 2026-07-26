@@ -1,32 +1,39 @@
-import { randomUUID } from "node:crypto";
-import { fileURLToPath } from "node:url";
 import { openDatabase } from "@mycollections/db";
 import { buildApp } from "./app.js";
+import { resolveServerConfig, type ServerConfig } from "./config.js";
 import { buildLoggerOptions } from "./logger.js";
 
-// Default to a fixed location anchored to the app directory (apps/api/data/app.db),
-// resolved from this module's URL so it's the SAME file regardless of the working
-// directory the server is launched from. A cwd-relative default would silently put
-// the database in different places, making collections appear to vanish. DB_PATH overrides.
-const DB_PATH = process.env.DB_PATH ?? fileURLToPath(new URL("../data/app.db", import.meta.url));
-const PORT = Number(process.env.PORT ?? 3001);
-const HOST = process.env.HOST ?? "127.0.0.1";
-const IS_DEV = process.env.NODE_ENV !== "production";
+function loadConfig(): ServerConfig {
+  try {
+    return resolveServerConfig();
+  } catch (error) {
+    // A misconfiguration is the operator's to fix, so print the message rather than
+    // a stack trace — and refuse to start rather than bind something unintended.
+    console.error(`Configuration error: ${error instanceof Error ? error.message : String(error)}`);
+    process.exit(1);
+  }
+}
 
-const token = process.env.API_TOKEN ?? randomUUID();
+const config = loadConfig();
 
-const handle = await openDatabase({ path: DB_PATH });
+const handle = await openDatabase({ path: config.dbPath });
 const app = await buildApp({
   db: handle,
-  token,
-  isDev: IS_DEV,
-  logger: buildLoggerOptions({ isDev: IS_DEV, level: process.env.LOG_LEVEL }),
+  token: config.token,
+  isDev: config.isDev,
+  allowedHosts: config.allowedHosts,
+  logger: buildLoggerOptions({ isDev: config.isDev, level: process.env.LOG_LEVEL }),
 });
 
-await app.listen({ port: PORT, host: HOST });
+await app.listen({ port: config.port, host: config.host });
 
-console.log(`Database: ${DB_PATH}`);
-if (IS_DEV) {
-  console.log(`API token: ${token}`);
-  console.log(`Swagger UI: http://${HOST}:${PORT}/api/docs`);
+console.log(`Database: ${config.dbPath}`);
+if (config.allowedHosts === false) {
+  console.warn(
+    `WARNING: bound to non-loopback host ${config.host}. The API is reachable from the network and Host header pinning is off.`,
+  );
+}
+if (config.isDev) {
+  console.log(`API token: ${config.token}`);
+  console.log(`Swagger UI: http://${config.host}:${config.port}/api/docs`);
 }

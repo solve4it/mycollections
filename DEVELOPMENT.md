@@ -101,7 +101,7 @@ packages are compiled before any server starts, and the buildable packages
 fresh. The two apps you'll usually want:
 
 - **API (Fastify)** on `http://127.0.0.1:3001` — runs from TypeScript source via `tsx watch` and restarts on change. Note it imports the workspace packages from their compiled `dist/`, which is why `pnpm dev` builds and watches them; running `tsx` against `apps/api` alone with a stale `dist` will serve old code.
-- **Web app (Vite + React)** on `http://localhost:5173`.
+- **Web app (Vite + React)** on `http://localhost:5173`. The port is pinned with `strictPort`, so if something else holds 5173 Vite fails loudly instead of moving to 5174 — the API's dev CORS allowlist names these exact origins (#242).
 
 Or start them individually — but a single app's `dev` won't rebuild its workspace
 dependencies, so build them first (`pnpm build`) or run the full `pnpm dev`:
@@ -130,6 +130,8 @@ By default the token is a **random UUID regenerated on every restart**, so after
 ```bash
 API_TOKEN=dev-local-token pnpm --filter @mycollections/api dev
 ```
+
+> This placeholder is for loopback development only. The server refuses to bind a non-loopback `HOST` unless `API_TOKEN` is set explicitly *and* is at least 32 characters, so a memorable token can never end up guarding a network-reachable API (#242).
 
 The SQLite database is created automatically at `apps/api/data/app.db` on first run (override with `DB_PATH`). This location is anchored to the app directory, so it's the same file no matter which directory you launch from, and the resolved path is printed on startup (`Database: …`). The `data/` directory is gitignored.
 
