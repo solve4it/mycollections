@@ -103,38 +103,43 @@ describe("resolveServerConfig", () => {
     },
   );
 
-  it.each([
-    ["unset", {}, true],
-    ["empty", { API_TOKEN: "" }, true],
-    ["provided", { API_TOKEN: "explicit-token" }, false],
-  ])("reports tokenIsGenerated for an %s API_TOKEN", (_name, env, expected) => {
-    expect(resolve(env).tokenIsGenerated).toBe(expected);
+  // Outside development the token is never printed, so a generated one is known to
+  // nobody: the server would bind, look healthy, and 401 everything (#241).
+  describe("outside development", () => {
+    it.each([
+      ["unset", {}],
+      ["empty", { API_TOKEN: "" }],
+    ])("refuses to start with an %s API_TOKEN", (_name, env) => {
+      expect(() => resolve({ NODE_ENV: "production", ...env })).toThrow(/API_TOKEN/);
+    });
+
+    it("starts with an explicit token", () => {
+      expect(resolve({ NODE_ENV: "production", API_TOKEN: "explicit-token" })).toMatchObject({
+        token: "explicit-token",
+        isDev: false,
+      });
+    });
+
+    // The 32-character floor guards network-reachable binds only; a short token on
+    // loopback is the operator's call.
+    it("does not impose the non-loopback length floor on a loopback production bind", () => {
+      expect(() => resolve({ NODE_ENV: "production", API_TOKEN: "short" })).not.toThrow();
+    });
+
+    it("still generates a token in development, where it is printed on startup", () => {
+      expect(resolve().token).toHaveLength(36);
+    });
   });
 });
 
 describe("startupWarnings", () => {
   const STRONG_TOKEN = "a".repeat(32);
 
-  it("is silent for the default loopback development setup", () => {
-    expect(startupWarnings(resolve())).toEqual([]);
-  });
-
-  // In production the token is never printed, so a generated one is known to nobody
-  // and every request 401s — the server looks up but is unusable (#241).
-  it("warns when production falls back to a generated token", () => {
-    const [warning, ...rest] = startupWarnings(resolve({ NODE_ENV: "production" }));
-    expect(rest).toEqual([]);
-    expect(warning).toContain("API_TOKEN");
-    expect(warning).toContain("401");
-  });
-
-  it("stays silent when production is given an explicit token", () => {
-    expect(startupWarnings(resolve({ NODE_ENV: "production", API_TOKEN: "explicit-token" }))).toEqual([]);
-  });
-
-  // Development prints the token on startup, so a generated one is usable there.
-  it("does not warn about a generated token in development", () => {
-    expect(startupWarnings(resolve())).toEqual([]);
+  it.each([
+    ["the default loopback development setup", {}],
+    ["a loopback production start with a token", { NODE_ENV: "production", API_TOKEN: "explicit-token" }],
+  ])("is silent for %s", (_name, env) => {
+    expect(startupWarnings(resolve(env))).toEqual([]);
   });
 
   it("warns about a non-loopback bind", () => {
@@ -143,16 +148,11 @@ describe("startupWarnings", () => {
     expect(warnings[0]).toContain("0.0.0.0");
   });
 
-  it("reports both conditions when both apply", () => {
-    // A LAN bind needs an explicit token, so pair it with a production start whose
-    // token is explicit — the generated-token warning must not fire here.
-    const warnings = startupWarnings(resolve({ HOST: "0.0.0.0", API_TOKEN: STRONG_TOKEN, NODE_ENV: "production" }));
-    expect(warnings).toHaveLength(1);
-  });
-
   it("never includes the token itself", () => {
-    const config = resolve({ NODE_ENV: "production" });
-    for (const warning of startupWarnings(config)) {
+    const config = resolve({ HOST: "0.0.0.0", API_TOKEN: STRONG_TOKEN });
+    const warnings = startupWarnings(config);
+    expect(warnings).not.toEqual([]);
+    for (const warning of warnings) {
       expect(warning).not.toContain(config.token);
     }
   });

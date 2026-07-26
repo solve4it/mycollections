@@ -72,7 +72,7 @@ await app.listen({ port: 3001, host: "127.0.0.1" });
 | `DB_PATH` | `apps/api/data/app.db` | SQLite database file path. The default is anchored to the app directory (not the current working directory), so it's the same file no matter where you launch from. The resolved path is printed on startup. |
 | `PORT` | `3001` | HTTP port. Must be an integer 0–65535; `0` asks the OS for a free port. |
 | `HOST` | `127.0.0.1` | Bind address. Anything other than loopback publishes the API to the network and is refused unless `API_TOKEN` is set explicitly and is at least 32 characters. |
-| `API_TOKEN` | random UUID | Bearer token, regenerated on every start and printed to stdout **in development only**. Outside development a generated token is known to nobody, so the server warns at startup that every authenticated request will 401 until you set this. |
+| `API_TOKEN` | random UUID (development only) | Bearer token, regenerated on every start and printed to stdout **in development only**. **Required outside development**: the generated fallback is never printed there, so it would be known to nobody and every authenticated request would 401 — the server refuses to start rather than bind something unusable. |
 | `NODE_ENV` | — | Set to `production` to disable Swagger UI and harden CSP |
 
 An empty value counts as unset, not as a value: `HOST=""` used to reach `app.listen()` verbatim and bind *every* interface. Invalid configuration prints a one-line reason and exits non-zero rather than starting.
@@ -85,6 +85,8 @@ The server is meant to be reachable only from the machine it runs on, and three 
 - **Host pinning** — requests whose `Host` header is not loopback are refused with `403`, which is what a DNS-rebinding page (an attacker domain resolving to `127.0.0.1`) presents; such a request is same-origin to the browser, so CORS never sees it. Reads the raw `Host` header, not `request.hostname`, which is derived from the client-supplied `X-Forwarded-Host` when `trustProxy` is on. Binding non-loopback deliberately turns this off — there is no way to know which name a LAN client will use — and logs a warning at startup.
 - **CORS** — an exact-origin allowlist in development (`http://localhost:5173` / `:4173` and their `127.0.0.1` equivalents), disabled entirely in production. The previous `/^http:\/\/localhost(:\d+)?$/` trusted every port on localhost; any local process can bind a high port, and with `credentials: true` that becomes a CSRF hole the moment a cookie session replaces the bearer header. `apps/web/vite.config.ts` sets `strictPort` so the dev server cannot drift off the allowlist.
 
-### Startup warnings
+### Refusing to start vs. warning
 
-`startupWarnings()` in `config.ts` reports conditions that are legal but likely to surprise, printed once after the server binds. It never includes the token itself, since these lines go to stdout and to whatever collects it. Today it covers a non-loopback bind (Host pinning off, network-reachable) and a production start with no `API_TOKEN` (the generated token is never printed, so the server looks healthy and 401s everything).
+`resolveServerConfig()` **throws** for configuration that cannot work — an invalid `PORT`, a non-loopback `HOST` without a strong explicit token, or a missing `API_TOKEN` outside development. The entrypoint prints `Configuration error: <reason>` and exits non-zero without binding, so a broken configuration is never a server that looks healthy and answers 401 to everything (#241).
+
+`startupWarnings()` covers the other case: configuration that is legal but likely to surprise, printed once after the server binds. Today that is a non-loopback bind, which is network-reachable and has Host pinning off. Warnings never include the token, since these lines go to stdout and to whatever collects it.
