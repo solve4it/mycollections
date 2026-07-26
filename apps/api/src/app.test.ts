@@ -98,8 +98,8 @@ describe("auth guard", () => {
     expect(res.statusCode).toBe(200);
   });
 
-  // RFC 6750 §2.1: the auth-scheme token is case-insensitive. Hand-rolled
-  // `startsWith("Bearer ")` rejected every spelling but one.
+  // RFC 7235 §2.1: an auth-scheme name is case-insensitive. The hand-rolled
+  // `startsWith("Bearer ")` accepted exactly one spelling.
   it.each(["bearer", "BEARER", "BeArEr"])("accepts the case-insensitive scheme %s", async (scheme) => {
     const app = await buildApp({ db: handle, token: TEST_TOKEN });
     const res = await app.inject({
