@@ -4,14 +4,15 @@ Local Fastify API server for MyCollections. Runs on `localhost` only and is inte
 
 ## Security
 
-- **Bearer token auth**: Every request (except `GET /api/health`) requires `Authorization: Bearer <token>`. The token is a random UUID generated at startup (or set via `API_TOKEN` env var).
+- **Bearer token auth**: Every request (except `GET /api/health`) requires `Authorization: Bearer <token>`. The token is a random UUID generated at startup (or set via `API_TOKEN` env var). Comparison is constant-time via [`@fastify/bearer-auth`](https://github.com/fastify/fastify-bearer-auth), and the scheme name is matched case-insensitively per RFC 7235.
+- **Auth by scope, not by path**: the collection, item and export routes are registered inside an encapsulated Fastify scope that owns the bearer guard, so a new route is protected by where it is registered rather than by matching an exemption list. Only `GET /api/health` — and the Swagger UI in development — are registered outside it. Path-matching exemptions previously let a query string (`/api/health?probe=1`) turn a public route into a 401 and left the whole `/api/docs` prefix unauthenticated in production (#242). A request to an unknown path answers 404 without authenticating, since no handler is reachable.
 - **OWASP headers**: `@fastify/helmet` applies `X-Content-Type-Options`, `Strict-Transport-Security`, `X-Frame-Options`, `X-XSS-Protection`, and a strict `Content-Security-Policy` in production.
 - **CORS**: Restricted to `http://localhost:<port>` in dev mode; disabled in production (same-origin only).
 - **Localhost binding**: The server binds to `127.0.0.1` by default — never exposed to the network.
 
 ## Routes
 
-All routes require `Authorization: Bearer <token>`.
+All routes require `Authorization: Bearer <token>` except `GET /api/health`.
 
 | Method | Path | Description |
 |---|---|---|

@@ -1,3 +1,4 @@
+import fastifyBearerAuth from "@fastify/bearer-auth";
 import fastifyCors from "@fastify/cors";
 import fastifyHelmet from "@fastify/helmet";
 import fastifySensible from "@fastify/sensible";
@@ -10,7 +11,7 @@ import { registerItemRoutes } from "./routes/items.js";
 
 export interface AppOptions {
   db: DatabaseHandle;
-  /** Bearer token required on all routes except /api/health and /api/docs. */
+  /** Bearer token required on every route except /api/health (and /api/docs in dev). */
   token: string;
   /** Enable Swagger UI at /api/docs and relax CSP. Only use in development. */
   isDev?: boolean;
@@ -76,23 +77,36 @@ export async function buildApp(options: AppOptions) {
     });
   }
 
-  app.addHook("onRequest", async (request, reply) => {
-    const url = request.url;
-    if (url === "/api/health" || url.startsWith("/api/docs")) return;
-    const auth = request.headers.authorization;
-    if (!auth?.startsWith("Bearer ")) {
-      return reply.code(401).send({ error: "Unauthorized" });
-    }
-    if (auth.slice(7) !== token) {
-      return reply.code(401).send({ error: "Unauthorized" });
-    }
-  });
-
+  // Public surface: registered on the root instance, outside the authenticated scope
+  // below. Swagger (registered above, dev only) is public for the same reason.
   app.get("/api/health", async () => ({ status: "ok" }));
 
-  await registerCollectionRoutes(app, db);
-  await registerItemRoutes(app, db);
-  await registerExportRoutes(app, db);
+  // Everything else lives inside an encapsulated scope that registers the bearer
+  // guard, so a route is protected by where it is registered rather than by its path
+  // matching an exemption list. The previous hook compared `request.url` against
+  // "/api/health" and a "/api/docs" prefix, which meant a query string turned the
+  // health route into a 401, "/api/docs-private" was exempt, and the docs exemption
+  // applied in production too — where Swagger is never registered (#242).
+  await app.register(async (authenticated) => {
+    await authenticated.register(fastifyBearerAuth, {
+      keys: new Set([token]),
+      // The plugin compares with timingSafeEqual, and on a length mismatch compares a
+      // buffer against itself rather than returning early, so neither the token nor
+      // its length leaks through response timing.
+      //
+      // "rfc6749" is the plugin's name for matching the auth scheme case-insensitively,
+      // which is what RFC 7235 §2.1 requires of every scheme name; its default mode
+      // accepts the literal "Bearer " only.
+      specCompliance: "rfc6749",
+      // Keep the response body identical for a missing and an invalid header, so it
+      // says nothing about why the request failed.
+      errorResponse: () => ({ error: "Unauthorized" }),
+    });
+
+    await registerCollectionRoutes(authenticated, db);
+    await registerItemRoutes(authenticated, db);
+    await registerExportRoutes(authenticated, db);
+  });
 
   return app;
 }
