@@ -193,6 +193,16 @@ h2 {
   letter-spacing: -0.005em;
 }
 
+/* Inline SVG icons (#221). Sized in em, so an icon tracks whatever type it
+   sits in; contexts that need a different optical size set font-size on the
+   icon itself rather than a pixel width, keeping the relationship relative. */
+.icon {
+  inline-size: 1.25em;
+  block-size: 1.25em;
+  flex-shrink: 0;
+  vertical-align: -0.15em;
+}
+
 /* Skip link for keyboard/screen reader users */
 .skip-link {
   position: absolute;
