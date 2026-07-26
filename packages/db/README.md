@@ -22,6 +22,14 @@ Later phases add their own tables via new migrations: `share_links` (#48), `plug
 
 Migrations are generated with drizzle-kit (`pnpm generate`) into `drizzle/` and ship with the package. `openDatabase()` applies pending migrations automatically on startup. If the database already has data and migrations are pending, a backup copy is written next to it first (`<path>.<timestamp>.bak`) — restoring is opening that file.
 
+## File permissions
+
+The database holds every collection in plaintext, so `openDatabase()` creates it — plus its `-wal`/`-shm` sidecars and any pre-migration `.bak` — readable and writable only by the owning account (`0600`), and creates missing parent directories as `0700`. An existing database opened with looser permissions is tightened on startup (#242).
+
+The file is pre-created at `0600` *before* SQLite opens it: SQLite would otherwise create it world-readable (`0644` under a typical umask), and it derives the sidecar modes from the database file's own mode, so getting the main file right is what makes the sidecars right.
+
+Two deliberate limits. A parent directory that already exists is left as it is — a `DB_PATH` of `/tmp/app.db` must not narrow `/tmp` — so upgrading an existing install leaves `data/` at its old mode; the `0600` files make that moot. And filesystems that cannot express POSIX permissions (exFAT, some network mounts) reject the change, which is ignored rather than fatal: failing to start would cost the user their app without buying back confidentiality that filesystem cannot provide anyway.
+
 ## Usage
 
 ```ts

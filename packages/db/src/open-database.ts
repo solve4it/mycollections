@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync } from "node:fs";
+import { chmodSync, closeSync, existsSync, mkdirSync, openSync, readFileSync } from "node:fs";
 import { dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import Database from "better-sqlite3";
@@ -12,6 +12,39 @@ import * as schema from "./schema.js";
 
 /** Migrations that ship with this package. */
 const DEFAULT_MIGRATIONS_FOLDER = fileURLToPath(new URL("../drizzle", import.meta.url));
+
+/**
+ * The database stores every collection in plaintext, so only the owning account may
+ * read it — SQLite's own default (0644 minus umask) would expose it to every other
+ * local user, bearer token or not (#242).
+ */
+const FILE_MODE = 0o600;
+const DIR_MODE = 0o700;
+
+/** Sidecars SQLite may create beside the database file, all holding live data. */
+const SIDECAR_SUFFIXES = ["-wal", "-shm", "-journal"];
+
+/**
+ * Best-effort chmod. Filesystems without POSIX permissions (exFAT, some network
+ * mounts) reject it; refusing to start there would cost the user their app without
+ * buying back the confidentiality that filesystem cannot express anyway.
+ */
+function restrict(path: string, mode: number): void {
+  try {
+    chmodSync(path, mode);
+  } catch {
+    // Ignored deliberately — see above.
+  }
+}
+
+/** Tightens the database file and any sidecar SQLite has created next to it. */
+function restrictDatabaseFiles(path: string): void {
+  for (const candidate of [path, ...SIDECAR_SUFFIXES.map((suffix) => `${path}${suffix}`)]) {
+    if (existsSync(candidate)) {
+      restrict(candidate, FILE_MODE);
+    }
+  }
+}
 
 export interface OpenDatabaseOptions {
   /** SQLite file path, or ":memory:" for an ephemeral database (tests). */
@@ -44,7 +77,20 @@ export async function openDatabase(options: OpenDatabaseOptions): Promise<Databa
   if (isFile) {
     // better-sqlite3 won't create missing parent directories; do it ourselves so
     // a fresh checkout (e.g. the default "data/app.db") works without manual setup.
-    mkdirSync(dirname(path), { recursive: true });
+    const createdDir = mkdirSync(dirname(path), { recursive: true, mode: DIR_MODE });
+    // mkdir's mode is masked by umask, so set it explicitly — but only on a directory
+    // we just created. Narrowing a pre-existing parent would lock other users out of
+    // an unrelated directory (DB_PATH=/tmp/app.db would chmod 0700 on /tmp).
+    if (createdDir !== undefined) {
+      restrict(createdDir, DIR_MODE);
+    }
+    // Create the file ourselves at 0600 before SQLite can create it at 0644: chmod
+    // after the fact leaves a window where the database is world-readable, and SQLite
+    // derives the -wal/-shm modes from the database file's own mode.
+    if (!existsSync(path)) {
+      closeSync(openSync(path, "a", FILE_MODE));
+    }
+    restrictDatabaseFiles(path);
   }
 
   const sqlite = new Database(path);
@@ -55,11 +101,18 @@ export async function openDatabase(options: OpenDatabaseOptions): Promise<Databa
 
   if (isFile && hasUserTables(sqlite) && countPendingMigrations(sqlite, migrationsFolder) > 0) {
     const timestamp = new Date().toISOString().replaceAll(":", "-");
-    await sqlite.backup(`${path}.${timestamp}.bak`);
+    const backupPath = `${path}.${timestamp}.bak`;
+    await sqlite.backup(backupPath);
+    restrict(backupPath, FILE_MODE);
   }
 
   const db = drizzle(sqlite, { schema });
   migrate(db, { migrationsFolder });
+
+  if (isFile) {
+    // Again after migrations: the sidecars only exist once the WAL has been written to.
+    restrictDatabaseFiles(path);
+  }
 
   return {
     db,
