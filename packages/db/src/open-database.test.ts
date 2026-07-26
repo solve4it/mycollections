@@ -1,4 +1,15 @@
-import { cpSync, existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  cpSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -37,6 +48,13 @@ function migrationsWithExtra(dir: string): string {
 function backupsIn(dir: string): string[] {
   return readdirSync(dir).filter((f) => f.endsWith(".bak"));
 }
+
+/** Permission bits as an octal string, e.g. "600". Windows has no POSIX modes, so these tests are POSIX-only. */
+function mode(path: string): string {
+  return (statSync(path).mode & 0o777).toString(8);
+}
+
+const posixOnly = process.platform === "win32" ? describe.skip : describe;
 
 describe("openDatabase", () => {
   it("runs migrations automatically so all phase-1 tables exist", async () => {
@@ -124,5 +142,68 @@ describe("openDatabase", () => {
     const restored = await openDatabase({ path: join(tmp, backup as string) });
     expect(await restored.collections.list()).toHaveLength(1);
     restored.close();
+  });
+});
+
+// The database holds every collection in plaintext. A world-readable file lets any
+// other local account read it directly, without the API or its bearer token (#242).
+posixOnly("file permissions", () => {
+  it("creates the database and its WAL sidecars readable only by the owner", async () => {
+    tmp = makeTmpDir();
+    const path = join(tmp, "app.db");
+    const handle = await openDatabase({ path });
+    try {
+      // Checked while open: SQLite removes -wal/-shm on a clean close.
+      expect(mode(path)).toBe("600");
+      expect(mode(`${path}-wal`)).toBe("600");
+      expect(mode(`${path}-shm`)).toBe("600");
+    } finally {
+      handle.close();
+    }
+  });
+
+  it("creates a missing data directory accessible only by the owner", async () => {
+    tmp = makeTmpDir();
+    const handle = await openDatabase({ path: join(tmp, "nested", "data", "app.db") });
+    handle.close();
+    expect(mode(join(tmp, "nested"))).toBe("700");
+    expect(mode(join(tmp, "nested", "data"))).toBe("700");
+  });
+
+  it("tightens an existing world-readable database on startup", async () => {
+    tmp = makeTmpDir();
+    const path = join(tmp, "app.db");
+    (await openDatabase({ path })).close();
+    chmodSync(path, 0o644);
+
+    const handle = await openDatabase({ path });
+    try {
+      expect(mode(path)).toBe("600");
+      expect(mode(`${path}-wal`)).toBe("600");
+    } finally {
+      handle.close();
+    }
+  });
+
+  it("leaves a pre-existing parent directory's permissions alone", async () => {
+    tmp = makeTmpDir();
+    const dir = join(tmp, "shared");
+    mkdirSync(dir);
+    // A DB_PATH inside a directory we did not create (say /tmp) must not be
+    // narrowed to 0700 — that would lock other users out of an unrelated directory.
+    chmodSync(dir, 0o755);
+    (await openDatabase({ path: join(dir, "app.db") })).close();
+    expect(mode(dir)).toBe("755");
+  });
+
+  it("writes the pre-migration backup readable only by the owner", async () => {
+    tmp = makeTmpDir();
+    const path = join(tmp, "app.db");
+    (await openDatabase({ path })).close();
+    (await openDatabase({ path, migrationsFolder: migrationsWithExtra(tmp) })).close();
+
+    const [backup] = backupsIn(tmp);
+    expect(backup).toBeDefined();
+    expect(mode(join(tmp, backup as string))).toBe("600");
   });
 });
