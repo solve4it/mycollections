@@ -26,6 +26,7 @@
     "lint": "biome check src"
   },
   "dependencies": {
+    "@fastify/bearer-auth": "^10.1.2",
     "@fastify/cors": "^11.3.0",
     "@fastify/helmet": "^13.1.0",
     "@fastify/sensible": "^6.0.4",
