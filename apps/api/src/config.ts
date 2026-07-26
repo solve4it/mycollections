@@ -23,6 +23,25 @@ export interface ServerConfig {
 }
 
 /**
+ * Conditions that are legal but likely to surprise, reported at startup. Kept here
+ * rather than inline in `server.ts` so they are unit-testable — the entrypoint uses
+ * top-level await and cannot be imported without starting a server.
+ *
+ * Never include the token: these go to stdout and to whatever collects it.
+ */
+export function startupWarnings(config: ServerConfig): string[] {
+  const warnings: string[] = [];
+
+  if (config.allowedHosts === false) {
+    warnings.push(
+      `bound to non-loopback host ${config.host}. The API is reachable from the network and Host header pinning is off.`,
+    );
+  }
+
+  return warnings;
+}
+
+/**
  * Reads the server's environment into a validated config, or throws with a message
  * naming the offending variable.
  *
@@ -32,6 +51,18 @@ export interface ServerConfig {
 export function resolveServerConfig(env: NodeJS.ProcessEnv = process.env): ServerConfig {
   const host = read(env.HOST) ?? "127.0.0.1";
   const explicitToken = read(env.API_TOKEN);
+  const isDev = env.NODE_ENV !== "production";
+
+  // The generated fallback token is only printed on a development startup. Outside
+  // development it would be known to nobody, so the server would bind, look healthy,
+  // and answer 401 to every authenticated request — unusable by construction, not
+  // merely misconfigured. Refuse rather than start something that cannot work (#241).
+  if (!isDev && explicitToken === undefined) {
+    throw new Error(
+      "API_TOKEN must be set outside development: the generated fallback is never printed there, " +
+        "so every authenticated request would fail with 401.",
+    );
+  }
 
   if (!isLoopbackHost(host)) {
     // Binding beyond loopback publishes every collection to the network. A token
@@ -56,7 +87,7 @@ export function resolveServerConfig(env: NodeJS.ProcessEnv = process.env): Serve
     port: parsePort(read(env.PORT)),
     host,
     token: explicitToken ?? randomUUID(),
-    isDev: env.NODE_ENV !== "production",
+    isDev,
     // Host pinning defends the loopback default against DNS rebinding. On a LAN bind
     // there is no way to know which name a client will use, so pin nothing rather than
     // 403 every legitimate request.

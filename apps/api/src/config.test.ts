@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { resolveServerConfig } from "./config.js";
+import { resolveServerConfig, startupWarnings } from "./config.js";
 
 /** Only the variables under test; everything else falls back to a default. */
 function resolve(env: Record<string, string | undefined> = {}) {
@@ -102,4 +102,58 @@ describe("resolveServerConfig", () => {
       expect(() => resolve({ HOST: host })).not.toThrow();
     },
   );
+
+  // Outside development the token is never printed, so a generated one is known to
+  // nobody: the server would bind, look healthy, and 401 everything (#241).
+  describe("outside development", () => {
+    it.each([
+      ["unset", {}],
+      ["empty", { API_TOKEN: "" }],
+    ])("refuses to start with an %s API_TOKEN", (_name, env) => {
+      expect(() => resolve({ NODE_ENV: "production", ...env })).toThrow(/API_TOKEN/);
+    });
+
+    it("starts with an explicit token", () => {
+      expect(resolve({ NODE_ENV: "production", API_TOKEN: "explicit-token" })).toMatchObject({
+        token: "explicit-token",
+        isDev: false,
+      });
+    });
+
+    // The 32-character floor guards network-reachable binds only; a short token on
+    // loopback is the operator's call.
+    it("does not impose the non-loopback length floor on a loopback production bind", () => {
+      expect(() => resolve({ NODE_ENV: "production", API_TOKEN: "short" })).not.toThrow();
+    });
+
+    it("still generates a token in development, where it is printed on startup", () => {
+      expect(resolve().token).toHaveLength(36);
+    });
+  });
+});
+
+describe("startupWarnings", () => {
+  const STRONG_TOKEN = "a".repeat(32);
+
+  it.each([
+    ["the default loopback development setup", {}],
+    ["a loopback production start with a token", { NODE_ENV: "production", API_TOKEN: "explicit-token" }],
+  ])("is silent for %s", (_name, env) => {
+    expect(startupWarnings(resolve(env))).toEqual([]);
+  });
+
+  it("warns about a non-loopback bind", () => {
+    const warnings = startupWarnings(resolve({ HOST: "0.0.0.0", API_TOKEN: STRONG_TOKEN }));
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]).toContain("0.0.0.0");
+  });
+
+  it("never includes the token itself", () => {
+    const config = resolve({ HOST: "0.0.0.0", API_TOKEN: STRONG_TOKEN });
+    const warnings = startupWarnings(config);
+    expect(warnings).not.toEqual([]);
+    for (const warning of warnings) {
+      expect(warning).not.toContain(config.token);
+    }
+  });
 });
