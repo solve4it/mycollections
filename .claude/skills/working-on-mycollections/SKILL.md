@@ -89,9 +89,12 @@ Tests passing is CI's evidence, not yours. Before "done" or "fixed":
 - **Skipping the a11y floor.** Labels tied to inputs, `role="alert"`/`role="status"` for
   feedback, 44px touch targets, visible focus, text contrast ≥ 4.5:1, non-text UI ≥ 3:1,
   animations behind `prefers-reduced-motion`. Biome enforces some of this; the rest is on you.
-- **Environment traps.** `source ~/.zshrc` before pnpm in scripted shells. If husky fails
-  with `pnpm: command not found`, the fnm node version lacks corepack shims — run
-  `corepack enable` from that version's bin. Kill dev servers by port
+- **Environment traps.** Don't `source ~/.zshrc` — the tool shell already inherits the fnm
+  PATH (`which pnpm node` proves it), and `source` evaluates its argument as shell code, so it
+  can never be auto-approved and costs a permission prompt every call. If a shell really is
+  missing `pnpm`, fix that shell (invoke the fnm-managed binary by its full path), don't
+  source a profile. If husky fails with `pnpm: command not found`, the fnm node version lacks
+  corepack shims — run `corepack enable` from that version's bin. Kill dev servers by port
   (`lsof -ti tcp:3111 | xargs kill`), not by job id — background shells don't share state,
   and a surviving server causes an address-already-in-use error that looks like your bug.
 - **Fastify v5 specifics.** `setErrorHandler` receives `unknown` (narrow it; use core's
