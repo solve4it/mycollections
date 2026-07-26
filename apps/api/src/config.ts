@@ -20,6 +20,36 @@ export interface ServerConfig {
    * bind needs — see `resolveServerConfig`.
    */
   allowedHosts?: string[] | false;
+  /** True when no `API_TOKEN` was given and a random one was generated for this run. */
+  tokenIsGenerated: boolean;
+}
+
+/**
+ * Conditions that are legal but likely to surprise, reported at startup. Kept here
+ * rather than inline in `server.ts` so they are unit-testable — the entrypoint uses
+ * top-level await and cannot be imported without starting a server.
+ *
+ * Never include the token: these go to stdout and to whatever collects it.
+ */
+export function startupWarnings(config: ServerConfig): string[] {
+  const warnings: string[] = [];
+
+  if (config.allowedHosts === false) {
+    warnings.push(
+      `bound to non-loopback host ${config.host}. The API is reachable from the network and Host header pinning is off.`,
+    );
+  }
+
+  // The token is only printed in development, so outside it a generated token is known
+  // to nobody: the server starts, looks healthy, and answers 401 to everything (#241).
+  if (!config.isDev && config.tokenIsGenerated) {
+    warnings.push(
+      "API_TOKEN is not set, so a token was generated for this run. It is not printed outside development, " +
+        "so every authenticated request will fail with 401 until API_TOKEN is set to a value clients know.",
+    );
+  }
+
+  return warnings;
 }
 
 /**
@@ -56,6 +86,7 @@ export function resolveServerConfig(env: NodeJS.ProcessEnv = process.env): Serve
     port: parsePort(read(env.PORT)),
     host,
     token: explicitToken ?? randomUUID(),
+    tokenIsGenerated: explicitToken === undefined,
     isDev: env.NODE_ENV !== "production",
     // Host pinning defends the loopback default against DNS rebinding. On a LAN bind
     // there is no way to know which name a client will use, so pin nothing rather than

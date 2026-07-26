@@ -1,6 +1,6 @@
 import { openDatabase } from "@mycollections/db";
 import { buildApp } from "./app.js";
-import { resolveServerConfig, type ServerConfig } from "./config.js";
+import { resolveServerConfig, type ServerConfig, startupWarnings } from "./config.js";
 import { buildLoggerOptions } from "./logger.js";
 
 function loadConfig(): ServerConfig {
@@ -28,10 +28,8 @@ const app = await buildApp({
 await app.listen({ port: config.port, host: config.host });
 
 console.log(`Database: ${config.dbPath}`);
-if (config.allowedHosts === false) {
-  console.warn(
-    `WARNING: bound to non-loopback host ${config.host}. The API is reachable from the network and Host header pinning is off.`,
-  );
+for (const warning of startupWarnings(config)) {
+  console.warn(`WARNING: ${warning}`);
 }
 if (config.isDev) {
   console.log(`API token: ${config.token}`);

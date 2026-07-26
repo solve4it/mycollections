@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { resolveServerConfig } from "./config.js";
+import { resolveServerConfig, startupWarnings } from "./config.js";
 
 /** Only the variables under test; everything else falls back to a default. */
 function resolve(env: Record<string, string | undefined> = {}) {
@@ -102,4 +102,58 @@ describe("resolveServerConfig", () => {
       expect(() => resolve({ HOST: host })).not.toThrow();
     },
   );
+
+  it.each([
+    ["unset", {}, true],
+    ["empty", { API_TOKEN: "" }, true],
+    ["provided", { API_TOKEN: "explicit-token" }, false],
+  ])("reports tokenIsGenerated for an %s API_TOKEN", (_name, env, expected) => {
+    expect(resolve(env).tokenIsGenerated).toBe(expected);
+  });
+});
+
+describe("startupWarnings", () => {
+  const STRONG_TOKEN = "a".repeat(32);
+
+  it("is silent for the default loopback development setup", () => {
+    expect(startupWarnings(resolve())).toEqual([]);
+  });
+
+  // In production the token is never printed, so a generated one is known to nobody
+  // and every request 401s — the server looks up but is unusable (#241).
+  it("warns when production falls back to a generated token", () => {
+    const [warning, ...rest] = startupWarnings(resolve({ NODE_ENV: "production" }));
+    expect(rest).toEqual([]);
+    expect(warning).toContain("API_TOKEN");
+    expect(warning).toContain("401");
+  });
+
+  it("stays silent when production is given an explicit token", () => {
+    expect(startupWarnings(resolve({ NODE_ENV: "production", API_TOKEN: "explicit-token" }))).toEqual([]);
+  });
+
+  // Development prints the token on startup, so a generated one is usable there.
+  it("does not warn about a generated token in development", () => {
+    expect(startupWarnings(resolve())).toEqual([]);
+  });
+
+  it("warns about a non-loopback bind", () => {
+    const warnings = startupWarnings(resolve({ HOST: "0.0.0.0", API_TOKEN: STRONG_TOKEN }));
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]).toContain("0.0.0.0");
+  });
+
+  it("reports both conditions when both apply", () => {
+    // A LAN bind needs an explicit token, so pair it with a production start whose
+    // token is explicit — the generated-token warning must not fire here.
+    const warnings = startupWarnings(resolve({ HOST: "0.0.0.0", API_TOKEN: STRONG_TOKEN, NODE_ENV: "production" }));
+    expect(warnings).toHaveLength(1);
+  });
+
+  it("never includes the token itself", () => {
+    const config = resolve({ NODE_ENV: "production" });
+    for (const warning of startupWarnings(config)) {
+      expect(warning).not.toContain(config.token);
+    }
+  });
 });
