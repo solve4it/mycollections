@@ -31,11 +31,11 @@
     "@fastify/helmet": "^13.1.0",
     "@fastify/sensible": "^6.0.4",
     "@fastify/swagger": "^9.8.1",
-    "@fastify/swagger-ui": "^6.1.0",
+    "@fastify/swagger-ui": "^6.1.1",
     "@mycollections/auth": "workspace:*",
     "@mycollections/core": "workspace:*",
     "@mycollections/db": "workspace:*",
-    "fastify": "^5.10.0"
+    "fastify": "^5.11.0"
   },
   "devDependencies": {
     "tsx": "^4.23.1",
