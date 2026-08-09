@@ -75,6 +75,7 @@ function CollectionDetailPage() {
           pending={createItem.isPending}
           onSubmit={(payload) => createItem.mutate(payload)}
         />
+        {createItem.isError && <p role="alert">{t("create_error")}</p>}
       </section>
     </div>
   );
@@ -136,44 +137,61 @@ function ItemRow({ collection, item }: ItemRowProps) {
   const deleteItem = useDeleteItem(collection.id);
   const [editing, setEditing] = useState(false);
 
+  // The failure message belongs to this row, so it lives inside this <li> —
+  // a page-level banner could not say *which* item failed. `.item-row` moves
+  // onto an inner wrapper because it is a flex row: an alert added beside the
+  // fields and actions would be squeezed into a third column, whereas the
+  // unstyled <li> stacks the card and the message. No CSS change needed.
   if (editing) {
     return (
-      <li className="item-row">
-        <DynamicItemForm
-          fields={collection.fields}
-          initialStatus={item.status}
-          initialValues={item.fields}
-          submitLabel={t("save")}
-          pending={updateItem.isPending}
-          onCancel={() => setEditing(false)}
-          onSubmit={(payload) =>
-            updateItem.mutate({ itemId: item.id, input: payload }, { onSuccess: () => setEditing(false) })
-          }
-        />
+      <li>
+        <div className="item-row">
+          <DynamicItemForm
+            fields={collection.fields}
+            initialStatus={item.status}
+            initialValues={item.fields}
+            submitLabel={t("save")}
+            pending={updateItem.isPending}
+            // Cancelling discards the whole editing session, the failed save
+            // included: without the reset, reopening the editor would show an
+            // error for an attempt the user has not made yet.
+            onCancel={() => {
+              updateItem.reset();
+              setEditing(false);
+            }}
+            onSubmit={(payload) =>
+              updateItem.mutate({ itemId: item.id, input: payload }, { onSuccess: () => setEditing(false) })
+            }
+          />
+        </div>
+        {updateItem.isError && <p role="alert">{t("update_error")}</p>}
       </li>
     );
   }
 
   return (
-    <li className="item-row">
-      <div className="item-fields">
-        <span className={`item-status item-status-${item.status}`}>{t(`status_${item.status}`)}</span>
-        {collection.fields.map((field) => (
-          <span key={field.id} className="item-field">
-            <span className="item-field-label">{field.label}:</span> <FieldValue value={item.fields[field.id]} />
-          </span>
-        ))}
+    <li>
+      <div className="item-row">
+        <div className="item-fields">
+          <span className={`item-status item-status-${item.status}`}>{t(`status_${item.status}`)}</span>
+          {collection.fields.map((field) => (
+            <span key={field.id} className="item-field">
+              <span className="item-field-label">{field.label}:</span> <FieldValue value={item.fields[field.id]} />
+            </span>
+          ))}
+        </div>
+        <div className="item-actions">
+          <button type="button" className="touch-target" onClick={() => setEditing(true)}>
+            <Icon name="edit" />
+            {t("edit")}
+          </button>
+          <button type="button" className="touch-target" onClick={() => deleteItem.mutate(item.id)}>
+            <Icon name="delete" />
+            {t("delete")}
+          </button>
+        </div>
       </div>
-      <div className="item-actions">
-        <button type="button" className="touch-target" onClick={() => setEditing(true)}>
-          <Icon name="edit" />
-          {t("edit")}
-        </button>
-        <button type="button" className="touch-target" onClick={() => deleteItem.mutate(item.id)}>
-          <Icon name="delete" />
-          {t("delete")}
-        </button>
-      </div>
+      {deleteItem.isError && <p role="alert">{t("delete_error")}</p>}
     </li>
   );
 }

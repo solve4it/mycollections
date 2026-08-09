@@ -58,6 +58,8 @@ The API token is the random UUID the server prints to stdout on startup; the use
 
 Every item also has a **status** (`owned` / `wanted` / `ordered`, default `owned`) from `ITEM_STATUSES`. On submit the form emits an `ItemInput` (`{ status, fields }`) where `fields` is keyed by field id and coerced to the right runtime type (numbers parsed, tags split, etc.). The same component is reused for editing by passing `initialStatus` / `initialValues`.
 
+**Failed mutations are never silent.** With `networkMode: "always"` a create, update or delete *fails* rather than pausing, so each one renders its own translated `role="alert"` naming the action that failed (`create_error` / `update_error` / `delete_error` in `locales/en/items.json`) — a shared "something went wrong" would leave the user guessing which attempt was lost. Save and delete messages belong to the row that failed, so `item-row` sits on a wrapper `<div>` inside each `<li>`: the class is a flex row, and an alert added beside the fields and actions would be squeezed into a third column. Retrying clears the message on its own (a mutation returns to `pending` before it runs again); cancelling an edit calls `updateItem.reset()`, otherwise reopening the editor would show an error for a save the user had not attempted.
+
 > Not yet implemented (follow-ups on #32): tag autocomplete from existing tags, and a dedicated item detail view.
 
 ## Icons
