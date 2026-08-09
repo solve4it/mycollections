@@ -71,18 +71,20 @@ const SHAPES: Record<IconName, ReactElement> = {
       <line x1="14" y1="11" x2="14" y2="17" />
     </>
   ),
-  // Import lands in the tray; export lifts out of it.
+  // The arrow follows the file, not the data: import lifts a chosen file up out
+  // of the device, export writes a backup down onto it. Matches the copy on both
+  // controls ("Download all your collections…") and the browser's own download UI.
   import: (
     <>
-      <line x1="12" y1="3" x2="12" y2="14" />
-      <polyline points="8 10 12 14 16 10" />
+      <line x1="12" y1="15" x2="12" y2="4" />
+      <polyline points="8 8 12 4 16 8" />
       {TRAY}
     </>
   ),
   export: (
     <>
-      <line x1="12" y1="15" x2="12" y2="4" />
-      <polyline points="8 8 12 4 16 8" />
+      <line x1="12" y1="3" x2="12" y2="14" />
+      <polyline points="8 10 12 14 16 10" />
       {TRAY}
     </>
   ),

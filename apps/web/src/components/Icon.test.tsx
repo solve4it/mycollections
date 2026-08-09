@@ -52,6 +52,38 @@ describe("Icon", () => {
     expect(container.querySelector("svg")).toHaveClass("icon");
   });
 
+  /**
+   * The arrow follows the file, not the data: export writes a backup down onto
+   * the device ("Download all your collections as a JSON backup file"), import
+   * lifts a chosen file up out of it. That is the direction every browser's own
+   * download UI uses, so the icons must not read as its opposite.
+   */
+  it("points the export arrow down and the import arrow up", () => {
+    const arrowhead = (name: "import" | "export") => {
+      const { container } = render(<Icon name={name} />);
+      const points = container.querySelector("polyline")?.getAttribute("points") ?? "";
+      const ys = points
+        .split(" ")
+        .map(Number)
+        .filter((_, index) => index % 2 === 1);
+      cleanup();
+      // left flank, tip, right flank — the middle y is the point of the arrow.
+      const [left = 0, tip = 0, right = 0] = ys;
+      expect(ys, `${name} must draw a three-point arrowhead`).toHaveLength(3);
+      return { tip, sides: [left, right] };
+    };
+
+    const exported = arrowhead("export");
+    expect(exported.tip, "export arrowhead must point down, toward the device").toBeGreaterThan(
+      Math.max(...exported.sides),
+    );
+
+    const imported = arrowhead("import");
+    expect(imported.tip, "import arrowhead must point up, away from the device").toBeLessThan(
+      Math.min(...imported.sides),
+    );
+  });
+
   it("keeps caller-supplied classes alongside the base class", () => {
     const { container } = render(<Icon name="logo" className="logo-mark" />);
     const svg = container.querySelector("svg");

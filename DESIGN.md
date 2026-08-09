@@ -67,6 +67,12 @@ relationship relative. Icons are `aria-hidden` by default — the surrounding li
 label owns the accessible name. Pass `label` only when the icon *is* the value (the boolean
 check/cross in an item row), never to restate adjacent text.
 
+Directional icons follow the file, not the data: `export` writes a backup **down** onto the
+device, `import` lifts a chosen file **up** off it — the same direction the browser's own
+download UI uses, and the direction the button copy promises ("Download all your collections
+as a JSON backup file"). `Icon.test.tsx` asserts both arrowheads so the pair cannot silently
+invert.
+
 No unicode glyphs are used as icons: they render in whatever face the platform supplies,
 ignore the stroke weight, land in accessible names uninvited, and get announced under names
 nobody chose. `icons.integration.test.ts` fails the build if one reappears in `apps/web/src`.
