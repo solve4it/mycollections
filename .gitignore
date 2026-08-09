@@ -51,3 +51,8 @@ src-tauri/target
 
 # Claude Code per-user permission allowlist (auto-managed, never committed)
 .claude/settings.local.json
+
+# Ephemeral git worktrees for parallel agent runs. These are full checkouts, so
+# leaving them untracked makes Biome (useIgnoreFile) treat each nested biome.json
+# as a second root config and refuse to run — `pnpm check` fails for everyone.
+.claude/worktrees/
