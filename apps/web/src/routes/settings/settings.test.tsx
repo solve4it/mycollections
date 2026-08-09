@@ -218,6 +218,46 @@ describe("SettingsPage data import", () => {
     await waitFor(() => expect(input).toBeEnabled());
   });
 
+  it("ignores a second file chosen while an import is already running", async () => {
+    const inFlight = deferred<ImportSummary>();
+    vi.mocked(importData).mockReturnValue(inFlight.promise);
+
+    renderSettings();
+    const input = await screen.findByLabelText(/choose backup file/i);
+    selectFile(input, JSON.stringify({ version: 1, exportedAt: "x", collections: [], items: [] }), "first.json");
+    await waitFor(() => expect(input).toBeDisabled());
+
+    selectFile(input, JSON.stringify({ version: 1, exportedAt: "y", collections: [], items: [] }), "second.json");
+    await waitFor(() => expect(importData).toHaveBeenCalledTimes(1));
+
+    inFlight.settle(IMPORT_SUMMARY);
+    await waitFor(() => expect(input).toBeEnabled());
+    expect(importData).toHaveBeenCalledTimes(1);
+  });
+
+  // Real browsers blur a control the instant it is disabled and never restore
+  // focus, so the picker re-enables with focus stranded on <body>; the route
+  // puts it back when the restore settles. jsdom does not implement blur-on-
+  // disable, so that half is verified in a real browser rather than here. What
+  // is testable here is the guard that keeps the restore from stealing focus.
+  it("leaves focus alone if the user moved on during the import", async () => {
+    const inFlight = deferred<ImportSummary>();
+    vi.mocked(importData).mockReturnValue(inFlight.promise);
+
+    renderSettings();
+    const input = await screen.findByLabelText(/choose backup file/i);
+    selectFile(input, JSON.stringify({ version: 1, exportedAt: "x", collections: [], items: [] }));
+    await waitFor(() => expect(input).toBeDisabled());
+
+    const disconnect = screen.getByRole("button", { name: /disconnect/i });
+    disconnect.focus();
+
+    inFlight.settle(IMPORT_SUMMARY);
+
+    await waitFor(() => expect(input).toBeEnabled());
+    expect(document.activeElement).toBe(disconnect);
+  });
+
   it("stops announcing progress when the import fails", async () => {
     const inFlight = deferred<ImportSummary>();
     vi.mocked(importData).mockReturnValue(inFlight.promise);

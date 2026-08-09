@@ -21,10 +21,11 @@ The **Data** section of Settings lets you back up and move your data:
 - **Import** restores from a backup file. Importing is additive and safe:
   collections and items already present are kept untouched and only new ones are
   added, so re-importing the same file does nothing. An invalid file is rejected
-  with a clear error and never partially corrupts your data. While a restore is
-  running, the app says so and the file picker is disabled, so a large backup
-  never looks like nothing is happening and a second file cannot be started on
-  top of the first.
+  with a clear error and never partially corrupts your data. From the moment you
+  choose a file until the restore finishes, the app says it is importing and the
+  file picker is disabled, so a large backup never looks like nothing is
+  happening and a second file cannot be started on top of the first. Keyboard
+  focus returns to the picker when the restore settles.
 
 ## Privacy
 

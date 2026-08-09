@@ -1,5 +1,5 @@
 import { createRoute, useNavigate } from "@tanstack/react-router";
-import { type ChangeEvent, useState } from "react";
+import { type ChangeEvent, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Icon } from "../../components/Icon.js";
 import { clearToken, exportData } from "../../lib/api-client.js";
@@ -21,7 +21,28 @@ function SettingsPage() {
   const importData = useImportData();
   const [exportError, setExportError] = useState(false);
   const [importInvalid, setImportInvalid] = useState(false);
+  const [importReading, setImportReading] = useState(false);
   const [errorReporting, setErrorReporting] = useState(isErrorReportingEnabled);
+  const importInput = useRef<HTMLInputElement>(null);
+
+  /**
+   * A restore is busy from the moment a file is picked, not from the moment the
+   * request goes out: reading and parsing a large backup happens on the main
+   * thread before `mutate`, and leaving the picker live during that window is
+   * how a second file could start a competing import.
+   */
+  const importBusy = importReading || importData.isPending;
+
+  const wasImportBusy = useRef(false);
+  useEffect(() => {
+    // Disabling the picker while it holds focus drops focus to <body>, and the
+    // browser does not put it back. Restore it when the restore settles, unless
+    // the user has since moved focus somewhere else themselves.
+    if (wasImportBusy.current && !importBusy && document.activeElement === document.body) {
+      importInput.current?.focus();
+    }
+    wasImportBusy.current = importBusy;
+  }, [importBusy]);
 
   function handleErrorReportingChange(event: ChangeEvent<HTMLInputElement>) {
     setErrorReportingEnabled(event.target.checked);
@@ -53,14 +74,20 @@ function SettingsPage() {
     // Reset the input so re-selecting the same file fires onChange again.
     event.target.value = "";
     if (!file) return;
+    // The picker is disabled while a restore runs, but a change event can still
+    // be delivered to a disabled control, so refuse the work here too.
+    if (importBusy) return;
 
     setImportInvalid(false);
     importData.reset();
+    setImportReading(true);
     try {
       const document = JSON.parse(await file.text());
       importData.mutate(document);
     } catch {
       setImportInvalid(true);
+    } finally {
+      setImportReading(false);
     }
   }
 
@@ -102,15 +129,16 @@ function SettingsPage() {
           <Icon name="import" />
           <input
             id="import-file"
+            ref={importInput}
             type="file"
             accept="application/json,.json"
             className="touch-target"
             aria-label={t("import_button")}
-            disabled={importData.isPending}
+            disabled={importBusy}
             onChange={handleImportFile}
           />
         </div>
-        {importData.isPending && <p role="status">{t("import_pending")}</p>}
+        {importBusy && <p role="status">{t("import_pending")}</p>}
         {importData.isSuccess && <p role="status">{t("import_success", { ...importData.data })}</p>}
         {importFailed && <p role="alert">{t("import_error")}</p>}
       </section>
