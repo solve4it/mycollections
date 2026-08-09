@@ -1,7 +1,7 @@
 import type { Collection, Item } from "@mycollections/core";
 import { type NetworkMode, onlineManager, QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createMemoryHistory, createRouter, RouterProvider } from "@tanstack/react-router";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { rootRoute } from "../__root.js";
 import { collectionDetailRoute } from "./$id.js";
@@ -108,6 +108,37 @@ describe("CollectionDetailPage", () => {
     await screen.findByText("Mario");
     // The year field has no value for this item, so its cell shows the placeholder.
     expect(screen.getByText("Year:").closest(".item-field")).toHaveTextContent("Year: —");
+  });
+
+  it("renders boolean values as a labelled icon, not a bare glyph (#221)", async () => {
+    // A screen reader announced the old ✓/✗ glyphs by their unicode names, or
+    // skipped them entirely. The icon carries the value, so it carries a label.
+    vi.mocked(getCollection).mockResolvedValue({
+      ...COLLECTION,
+      fields: [
+        { id: "title", label: "Title", type: "text", required: true },
+        { id: "boxed", label: "Boxed", type: "boolean", required: false },
+        { id: "sealed", label: "Sealed", type: "boolean", required: false },
+      ],
+    });
+    vi.mocked(listItems).mockResolvedValue([{ ...ITEM, fields: { title: "Zelda", boxed: true, sealed: false } }]);
+    renderDetail();
+    await screen.findByText("Zelda");
+
+    const boxed = screen.getByText("Boxed:").closest(".item-field");
+    expect(boxed?.querySelector("svg")).toBeInTheDocument();
+    expect(within(boxed as HTMLElement).getByRole("img")).toHaveAccessibleName("Yes");
+
+    const sealed = screen.getByText("Sealed:").closest(".item-field");
+    expect(within(sealed as HTMLElement).getByRole("img")).toHaveAccessibleName("No");
+  });
+
+  it("gives the back link an icon without changing its accessible name (#221)", async () => {
+    renderDetail();
+    const back = await screen.findByRole("link", { name: "All collections" });
+    const icon = back.querySelector("svg");
+    expect(icon).toHaveClass("icon");
+    expect(icon).toHaveAttribute("aria-hidden", "true");
   });
 
   it("creates an item from the dynamic form", async () => {

@@ -7,8 +7,8 @@ One signature element — every collection gets a deterministic **generated cove
 its id (lands with #223).
 
 Tokens live in `apps/web/src/styles/global.css` as CSS custom properties. Every contrast pair
-below is enforced by `apps/web/src/styles/tokens.test.ts` — changing a value that breaks
-WCAG AA fails CI.
+below is enforced by `apps/web/src/styles/tokens.integration.test.ts` — changing a value that
+breaks WCAG AA fails CI.
 
 ## Palette
 
@@ -53,6 +53,30 @@ Only upright styles ship; italics are browser-synthesized (deliberate — italic
 in the direction). Non-Latin locales need matching subsets plus `unicode-range` declarations.
 When the PWA service worker lands (#34/#64), the precache glob must include `**/*.woff2`.
 
+## Iconography
+
+Hand-rolled inline SVG in `apps/web/src/components/Icon.tsx` — no dependency, no sprite, no
+request to make offline. One 24px grid, 1.5px strokes, round caps and joins, `currentColor`
+only, so an icon takes the color of whatever text it sits in and inverts with the theme for
+free. Eleven icons: `collections`, `settings`, `add`, `back`, `edit`, `delete`, `import`,
+`export`, `logo` (the three-drawer mark), `check`, `cross`.
+
+Sizing is em-based (`.icon` = 1.25em), so icons track the type scale; a context that needs a
+different optical size sets `font-size` on the icon rather than a pixel width, keeping the
+relationship relative. Icons are `aria-hidden` by default — the surrounding link, button, or
+label owns the accessible name. Pass `label` only when the icon *is* the value (the boolean
+check/cross in an item row), never to restate adjacent text.
+
+Directional icons follow the file, not the data: `export` writes a backup **down** onto the
+device, `import` lifts a chosen file **up** off it — the same direction the browser's own
+download UI uses, and the direction the button copy promises ("Download all your collections
+as a JSON backup file"). `Icon.test.tsx` asserts both arrowheads so the pair cannot silently
+invert.
+
+No unicode glyphs are used as icons: they render in whatever face the platform supplies,
+ignore the stroke weight, land in accessible names uninvited, and get announced under names
+nobody chose. `icons.integration.test.ts` fails the build if one reappears in `apps/web/src`.
+
 ## Shape, elevation, rhythm
 
 `--radius` 10px (cards) / `--radius-sm` 8px (controls); `--shadow` resting, `--shadow-lift`
@@ -70,9 +94,9 @@ and scrollbars follow. Only **base tokens** are redefined per theme; aliases are
 ## Accessibility floor
 
 Text pairs ≥ 4.5:1 (status labels are small text — held to the strict bar), meaningful
-non-text UI ≥ 3:1, both themes, enforced by `tokens.test.ts`. Status and progress are never
-color-only: dots always carry text labels, bars always carry mono count labels. Touch targets
-stay 44px; focus rings are 2px `--focus`/`--focus-on-cabinet`.
+non-text UI ≥ 3:1, both themes, enforced by `tokens.integration.test.ts`. Status and progress
+are never color-only: dots always carry text labels, bars always carry mono count labels. Touch
+targets stay 44px; focus rings are 2px `--focus`/`--focus-on-cabinet`.
 
 ## Signature: generated covers (spec for #223)
 

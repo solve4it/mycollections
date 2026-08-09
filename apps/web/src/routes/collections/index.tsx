@@ -1,6 +1,7 @@
 import { createRoute, Link, redirect } from "@tanstack/react-router";
 import { useTranslation } from "react-i18next";
 import { CollectionCard } from "../../components/CollectionCard.js";
+import { Icon } from "../../components/Icon.js";
 import { getToken } from "../../lib/api-client.js";
 import { useCollections } from "../../lib/queries.js";
 import { rootRoute } from "../__root.js";
@@ -39,6 +40,7 @@ function CollectionsPage() {
         <h1>{t("empty_title")}</h1>
         <p>{t("empty_description")}</p>
         <Link to="/collections/new" className="touch-target">
+          <Icon name="add" />
           {t("create_cta")}
         </Link>
       </div>
@@ -49,6 +51,7 @@ function CollectionsPage() {
       <div className="page-header">
         <h1>{t("title")}</h1>
         <Link to="/collections/new" className="touch-target">
+          <Icon name="add" />
           {t("create_cta")}
         </Link>
       </div>

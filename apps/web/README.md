@@ -57,6 +57,16 @@ Every item also has a **status** (`owned` / `wanted` / `ordered`, default `owned
 
 > Not yet implemented (follow-ups on #32): tag autocomplete from existing tags, and a dedicated item detail view.
 
+## Icons
+
+`src/components/Icon.tsx` is the app's whole icon set: hand-rolled inline SVG on a 24px grid,
+1.5px strokes, `currentColor`, sized in em via the `.icon` class. `<Icon name="edit" />` is
+decorative and `aria-hidden`, so the button or link around it keeps its accessible name;
+`<Icon name="check" label={t("value_yes")} />` becomes an accessible image for the cases where
+the icon carries the value itself. Unicode glyphs are not used as icons — a guard test
+(`src/components/icons.integration.test.ts`) fails the build if one appears in `src/`. See
+[`DESIGN.md`](../../DESIGN.md#iconography).
+
 ## Internationalization (i18n)
 
 All UI strings use `react-i18next`. Translation files live in `src/locales/<lang>/<namespace>.json`:
@@ -107,7 +117,7 @@ pnpm lint       # Biome lint + format check
 dark), type roles (three self-hosted variable fonts in `src/styles/fonts/`), shape, elevation,
 and spacing. The palette table, usage rules, and theming mechanics are documented in
 [`DESIGN.md`](../../DESIGN.md) at the repo root; every contrast pair is enforced by
-`src/styles/tokens.test.ts`, so WCAG regressions fail CI.
+`src/styles/tokens.integration.test.ts`, so WCAG regressions fail CI.
 
 Layout constants on `:root`:
 

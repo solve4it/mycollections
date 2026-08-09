@@ -1,6 +1,7 @@
 import { createRoute, useNavigate } from "@tanstack/react-router";
 import { type ChangeEvent, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { Icon } from "../../components/Icon.js";
 import { clearToken, exportData } from "../../lib/api-client.js";
 import { isErrorReportingEnabled, setErrorReportingEnabled } from "../../lib/error-reporter.js";
 import { useImportData } from "../../lib/queries.js";
@@ -89,19 +90,25 @@ function SettingsPage() {
         <h2>{t("data_label")}</h2>
         <p>{t("export_description")}</p>
         <button type="button" className="touch-target" onClick={handleExport}>
+          <Icon name="export" />
           {t("export_button")}
         </button>
         {exportError && <p role="alert">{t("export_error")}</p>}
 
         <p>{t("import_description")}</p>
-        <input
-          id="import-file"
-          type="file"
-          accept="application/json,.json"
-          className="touch-target"
-          aria-label={t("import_button")}
-          onChange={handleImportFile}
-        />
+        {/* The icon sits beside the file input rather than inside a styled
+            label: restyling the picker itself belongs to the forms pass (#224). */}
+        <div className="import-row">
+          <Icon name="import" />
+          <input
+            id="import-file"
+            type="file"
+            accept="application/json,.json"
+            className="touch-target"
+            aria-label={t("import_button")}
+            onChange={handleImportFile}
+          />
+        </div>
         {importData.isSuccess && <p role="status">{t("import_success", { ...importData.data })}</p>}
         {importFailed && <p role="alert">{t("import_error")}</p>}
       </section>
