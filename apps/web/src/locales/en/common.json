@@ -5,6 +5,7 @@
   "skip_to_main": "Skip to main content",
   "aria_main_nav": "Main navigation",
   "aria_bottom_nav": "Bottom navigation",
+  "local_first_footer": "LOCAL-FIRST · v{{version}}",
   "error_title": "Something went wrong",
   "error_message": "An unexpected error occurred. Reloading the app usually fixes it. Your data is safe.",
   "error_reload": "Reload"

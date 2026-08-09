@@ -119,5 +119,20 @@ export function resolveColor(
     return base === undefined ? undefined : over(base, Number(mix[2]) / 100, backdrop);
   }
 
+  // rgb(255 255 255 / 0.08) and rgba(255, 255, 255, 0.08) — the cabinet's
+  // hover/active pills are white at low alpha over whatever the nav is painted.
+  const rgb = input.match(/^rgba?\(([^)]+)\)$/);
+  if (rgb?.[1]) {
+    const parts = rgb[1]
+      .split(/[\s,/]+/)
+      .filter(Boolean)
+      .map(Number);
+    const [r, g, b, alpha = 1] = parts;
+    if (r === undefined || g === undefined || b === undefined || parts.some(Number.isNaN)) return undefined;
+    const color = { r, g, b };
+    if (alpha === 1) return color;
+    return backdrop === undefined ? undefined : over(color, alpha, backdrop);
+  }
+
   return undefined;
 }
