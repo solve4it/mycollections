@@ -276,6 +276,26 @@ describe("CollectionDetailPage", () => {
       expect(within(marioRow as HTMLElement).queryByRole("alert")).not.toBeInTheDocument();
     });
 
+    it("does not show a stale save error when the editor is reopened", async () => {
+      // Cancelling leaves the mutation in its error state, so without an
+      // explicit reset the next Edit click greets the user with a failure
+      // message for a save they have not attempted yet.
+      vi.mocked(listItems).mockResolvedValue([ITEM]);
+      vi.mocked(updateItem).mockRejectedValue(new Error("API error 500"));
+      renderDetail();
+      await screen.findByText("Zelda");
+
+      fireEvent.click(screen.getByRole("button", { name: /edit/i }));
+      let row = screen.getAllByRole("listitem")[0] as HTMLElement;
+      fireEvent.click(within(row).getByRole("button", { name: "Save" }));
+      await waitFor(() => expect(within(row).getByRole("alert")).toHaveTextContent("Could not save your changes"));
+
+      fireEvent.click(within(row).getByRole("button", { name: "Cancel" }));
+      fireEvent.click(screen.getByRole("button", { name: /edit/i }));
+      row = screen.getAllByRole("listitem")[0] as HTMLElement;
+      expect(within(row).queryByRole("alert")).not.toBeInTheDocument();
+    });
+
     it("clears the add error once a later attempt succeeds", async () => {
       vi.mocked(createItem).mockRejectedValueOnce(new Error("API error 500"));
       renderDetail();
