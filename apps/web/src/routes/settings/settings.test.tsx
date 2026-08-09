@@ -13,7 +13,7 @@ vi.mock("../../lib/api-client.js", () => ({
   importData: vi.fn(),
 }));
 
-import { exportData, importData } from "../../lib/api-client.js";
+import { type ImportSummary, exportData, importData } from "../../lib/api-client.js";
 import { isErrorReportingEnabled, setErrorReportingEnabled } from "../../lib/error-reporter.js";
 
 const testRouteTree = rootRoute.addChildren([settingsRoute, setupRoute]);
@@ -35,16 +35,29 @@ function selectFile(input: HTMLElement, contents: string, name = "backup.json") 
   fireEvent.change(input, { target: { files: [file] } });
 }
 
+const IMPORT_SUMMARY: ImportSummary = {
+  collectionsImported: 2,
+  collectionsSkipped: 1,
+  itemsImported: 5,
+  itemsSkipped: 3,
+};
+
+/** A promise the test settles by hand, so the import can be held in flight. */
+function deferred<T>() {
+  let settle!: (value: T) => void;
+  let fail!: (reason: unknown) => void;
+  const promise = new Promise<T>((resolve, reject) => {
+    settle = resolve;
+    fail = reject;
+  });
+  return { promise, settle, fail };
+}
+
 beforeEach(() => {
   localStorage.clear();
   vi.resetAllMocks();
   vi.mocked(exportData).mockResolvedValue(new Blob(["{}"], { type: "application/json" }));
-  vi.mocked(importData).mockResolvedValue({
-    collectionsImported: 2,
-    collectionsSkipped: 1,
-    itemsImported: 5,
-    itemsSkipped: 3,
-  });
+  vi.mocked(importData).mockResolvedValue(IMPORT_SUMMARY);
 });
 
 afterEach(cleanup);
@@ -170,6 +183,58 @@ describe("SettingsPage data import", () => {
 
     expect(await screen.findByRole("alert")).toHaveTextContent(/import failed/i);
     expect(importData).not.toHaveBeenCalled();
+  });
+
+  it("announces progress while the import is in flight and stops once it succeeds", async () => {
+    const inFlight = deferred<ImportSummary>();
+    vi.mocked(importData).mockReturnValue(inFlight.promise);
+
+    renderSettings();
+    const input = await screen.findByLabelText(/choose backup file/i);
+    selectFile(input, JSON.stringify({ version: 1, exportedAt: "x", collections: [], items: [] }));
+
+    expect(await screen.findByRole("status")).toHaveTextContent("Importing your backup…");
+
+    inFlight.settle(IMPORT_SUMMARY);
+
+    await waitFor(() =>
+      expect(screen.getByRole("status")).toHaveTextContent(/imported 2 collections and 5 items/i),
+    );
+    expect(screen.queryByText("Importing your backup…")).not.toBeInTheDocument();
+  });
+
+  it("disables the file picker while the import is in flight and re-enables it afterwards", async () => {
+    const inFlight = deferred<ImportSummary>();
+    vi.mocked(importData).mockReturnValue(inFlight.promise);
+
+    renderSettings();
+    const input = await screen.findByLabelText(/choose backup file/i);
+    selectFile(input, JSON.stringify({ version: 1, exportedAt: "x", collections: [], items: [] }));
+
+    await waitFor(() => expect(input).toBeDisabled());
+    // A disabled control still has to say what it is.
+    expect(input).toHaveAccessibleName("Choose backup file");
+
+    inFlight.settle(IMPORT_SUMMARY);
+
+    await waitFor(() => expect(input).toBeEnabled());
+  });
+
+  it("stops announcing progress when the import fails", async () => {
+    const inFlight = deferred<ImportSummary>();
+    vi.mocked(importData).mockReturnValue(inFlight.promise);
+
+    renderSettings();
+    const input = await screen.findByLabelText(/choose backup file/i);
+    selectFile(input, JSON.stringify({ version: 1, exportedAt: "x", collections: [], items: [] }));
+
+    expect(await screen.findByRole("status")).toHaveTextContent("Importing your backup…");
+
+    inFlight.fail(new Error("500"));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(/import failed/i);
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+    expect(input).toBeEnabled();
   });
 
   it("shows an error when the server rejects the import", async () => {
