@@ -284,10 +284,17 @@ h2 {
   font-weight: 500;
 }
 
-/* Touch target — min 44×44px for all interactive nav elements */
+/* Touch target — min 44×44px for all interactive elements. SIZING ONLY: the
+   primary-action skin lives on .button-primary, because a utility that also
+   painted a background was how #259 turned the active nav item invisible.
+   Display/alignment stay here so the 44px minimum centers its content rather
+   than top-aligning it; anything decorative (gap, justify-content, padding,
+   background) belongs to the skin. */
 .touch-target {
   min-height: var(--touch-target-size);
   min-width: var(--touch-target-size);
+  display: inline-flex;
+  align-items: center;
 }
 
 /* Main content */
@@ -323,10 +330,18 @@ h2 {
   font-size: 0.75rem;
   flex: 1;
   justify-content: center;
+  /* Transparent from the start so the active notch costs no reflow, and so the
+     tab does not jump when it becomes current. */
+  border-top: 2px solid transparent;
 }
 
+/* The notch is a presence cue, not a hue cue: it survives Windows high-contrast
+   mode (borders keep currentColor there) and satisfies WCAG 1.4.1, which a
+   color-only active state would not. Weight is deliberately NOT used — the
+   variable body font would reflow the label on every navigation. */
 .bottom-nav-item[data-status="active"] {
   color: var(--accent-text);
+  border-top-color: var(--accent-text);
 }
 
 /* The label is deliberately small here; the icon is not. Scaling it by its own
@@ -344,17 +359,16 @@ h2 {
   margin-bottom: 16px;
 }
 
-/* Primary action links/buttons */
-.touch-target,
+/* Primary action links/buttons. Opt in with the class — never by element type
+   alone, and never via .touch-target, which every nav link also carries.
+   Submit buttons keep the skin implicitly: in this app a submit button is
+   always the primary action of its form. */
+.button-primary,
 button[type="submit"] {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 8px;
-}
-
-a.touch-target,
-button[type="submit"] {
   padding: 0 16px;
   border-radius: 6px;
   border: 1px solid var(--color-border);
@@ -365,7 +379,7 @@ button[type="submit"] {
   cursor: pointer;
 }
 
-a.touch-target:hover,
+.button-primary:hover,
 button[type="submit"]:hover {
   background: var(--color-primary-hover);
 }
@@ -566,6 +580,13 @@ button[type="submit"]:disabled {
   color: var(--color-text);
   font: inherit;
   cursor: pointer;
+}
+
+/* Settings: data buttons carry an icon beside their label, so they declare
+   their own gap. Icon spacing is a component's business, not .touch-target's —
+   the bottom nav wants 2px where a button wants 8px. */
+.settings-data button {
+  gap: 8px;
 }
 
 /* Settings: file picker row */

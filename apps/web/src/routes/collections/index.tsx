@@ -39,7 +39,7 @@ function CollectionsPage() {
       <div className="empty-state">
         <h1>{t("empty_title")}</h1>
         <p>{t("empty_description")}</p>
-        <Link to="/collections/new" className="touch-target">
+        <Link to="/collections/new" className="touch-target button-primary">
           <Icon name="add" />
           {t("create_cta")}
         </Link>
@@ -50,7 +50,7 @@ function CollectionsPage() {
     <div>
       <div className="page-header">
         <h1>{t("title")}</h1>
-        <Link to="/collections/new" className="touch-target">
+        <Link to="/collections/new" className="touch-target button-primary">
           <Icon name="add" />
           {t("create_cta")}
         </Link>
