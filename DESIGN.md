@@ -91,6 +91,27 @@ Light is the `:root` default. Dark ships via `@media (prefers-color-scheme: dark
 hook for the explicit theme switch (#25). `color-scheme` is declared so native form controls
 and scrollbars follow. Only **base tokens** are redefined per theme; aliases are declared once.
 
+## The shell (#222)
+
+The sidebar and bottom nav are the **cabinet**: `--cabinet` ground, dark in both themes, with a
+`--cabinet-line` seam against the paper (the mockup had no seam — in dark mode `--cabinet`
+`#0E120F` and `--paper` `#141816` are near-identical and the edge disappeared). Nav labels rest
+at `--cabinet-muted` and rise to `--cabinet-ink` on hover and when active; the pills are white
+at 5 % / 8 % rather than a token, so they lighten whatever the cabinet currently is. The active
+item carries a 3px `--manila` drawer-pull notch bleeding into the sidebar's padding, and the
+bottom nav's active tab is manila with a matching notch — presence, not just hue, so it survives
+forced-colors mode. Measured: `--cabinet-muted` 6.58/7.08, `--cabinet-ink` on the active pill
+9.52/13.02, `--manila` 7.35/9.54 (light/dark).
+
+Wordmark is `--font-display` at 700; the footer is `--font-mono`, letter-spaced, reading
+`LOCAL-FIRST · v<version>` — the version injected at build time from the release-please
+manifest, so the chrome always states what it is and what it is running.
+
+**Focus rings** are `:focus-visible` only (a mouse click should not ring a button), 2px with a
+2px offset: `--focus` on paper, `--focus-on-cabinet` on the sidebar and bottom nav. This split is not
+cosmetic — `--stamp` on `--cabinet` is **2.02:1** in light mode, under the 3:1 non-text floor,
+while `--focus-on-cabinet` gives 6.08:1.
+
 ## Class roles
 
 One class, one concern. `.touch-target` is **sizing** (the 44px minimum, plus the flex

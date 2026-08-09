@@ -61,6 +61,15 @@ describe("Shell layout", () => {
     expect(logo?.querySelector("svg.icon")).toBeInTheDocument();
   });
 
+  it("stamps the build version into the cabinet footer (#222)", async () => {
+    render(<RouterProvider router={makeRouter()} />);
+    const footer = (await screen.findByText(/LOCAL-FIRST/)).closest(".sidebar-foot");
+    // The version is injected at build time from the release-please manifest, so
+    // assert the real value rather than a loose "contains a v" pattern.
+    expect(footer).toHaveTextContent(`LOCAL-FIRST · v${__APP_VERSION__}`);
+    expect(__APP_VERSION__, "the injected version must look like a semver").toMatch(/^\d+\.\d+\.\d+/);
+  });
+
   it("Collections nav links point to /collections", async () => {
     render(<RouterProvider router={makeRouter()} />);
     await screen.findByRole("navigation", { name: /main navigation/i });

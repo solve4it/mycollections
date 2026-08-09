@@ -106,9 +106,11 @@ function SettingsPage() {
             accept="application/json,.json"
             className="touch-target"
             aria-label={t("import_button")}
+            disabled={importData.isPending}
             onChange={handleImportFile}
           />
         </div>
+        {importData.isPending && <p role="status">{t("import_pending")}</p>}
         {importData.isSuccess && <p role="status">{t("import_success", { ...importData.data })}</p>}
         {importFailed && <p role="alert">{t("import_error")}</p>}
       </section>

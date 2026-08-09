@@ -34,7 +34,7 @@
 
   /* Layout */
   --breakpoint-md: 768px;
-  --sidebar-width: 240px;
+  --sidebar-width: 216px;
   --bottom-nav-height: 64px;
   --touch-target-size: 44px;
 
@@ -209,8 +209,10 @@ h2 {
   top: -100%;
   left: 0;
   padding: 8px 16px;
-  background: var(--color-primary);
+  border-radius: 0 0 var(--radius-sm) 0;
+  background: var(--stamp);
   color: var(--stamp-ink);
+  font-weight: 500;
   text-decoration: none;
   z-index: 1000;
 }
@@ -219,33 +221,59 @@ h2 {
   top: 0;
 }
 
+/* Focus rings (#222). Two tokens, because the app has two surfaces: --stamp on
+   the cabinet measures 2.02:1 in light mode, under the 3:1 floor for non-text
+   UI, so cabinet chrome uses the lighter --focus-on-cabinet (6.08:1 / 7.90:1).
+   :focus-visible, not :focus — a mouse click on a button should not ring it. */
+:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.shell-sidebar :focus-visible,
+.shell-bottom-nav :focus-visible,
+.sidebar-nav a:focus-visible,
+.bottom-nav-item:focus-visible {
+  outline: 2px solid var(--focus-on-cabinet);
+  outline-offset: 2px;
+}
+
 /* Shell: full-height flex layout */
 .shell {
   display: flex;
   min-height: 100vh;
 }
 
-/* Sidebar — visible on desktop */
+/* Sidebar — the cabinet. Dark in BOTH themes (#222): the nav is the only dark
+   chrome in the app, so the eye always knows what is furniture and what is the
+   collection. Everything here is built from --cabinet-* tokens rather than the
+   --color-* aliases, which flip with the palette. */
 .shell-sidebar {
   width: var(--sidebar-width);
   flex-shrink: 0;
-  border-right: 1px solid var(--color-border);
-  background: var(--color-surface);
+  background: var(--cabinet);
+  color: var(--cabinet-ink);
+  /* Not in the mockup, but --cabinet (#0e120f) and --paper (#141816) are nearly
+     the same value in dark mode, so without a seam the sidebar edge vanishes.
+     Same treatment the bottom nav already uses for the same reason. */
+  border-right: 1px solid var(--cabinet-line);
   display: flex;
   flex-direction: column;
-  padding: 16px 0;
+  padding: 18px 12px;
 }
 
 .sidebar-logo {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 0 16px 16px;
-  font-size: 1.125rem;
-  font-weight: 600;
-  color: var(--color-primary);
-  border-bottom: 1px solid var(--color-border);
-  margin-bottom: 8px;
+  gap: 10px;
+  padding: 2px 10px 16px;
+  font-family: var(--font-display);
+  font-size: 1.05rem;
+  font-weight: 700;
+  letter-spacing: 0.005em;
+  color: var(--cabinet-ink);
+  border-bottom: 1px solid var(--cabinet-line);
+  margin-bottom: 12px;
 }
 
 .logo-mark {
@@ -257,31 +285,60 @@ h2 {
 .sidebar-nav {
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  padding: 0 8px;
+  gap: 4px;
 }
 
 .sidebar-nav a {
+  position: relative;
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 0 8px;
-  border-radius: 6px;
+  gap: 11px;
+  padding: 10px 12px;
+  border-radius: 8px;
   text-decoration: none;
-  color: var(--color-text);
+  color: var(--cabinet-muted);
   font-size: 0.9375rem;
-  transition: background 0.15s;
+  font-weight: 500;
+  transition:
+    background 0.15s,
+    color 0.15s;
 }
 
+/* The pills are white at low alpha rather than a token: they must lighten
+   whatever the cabinet currently is, in either theme, without a second token. */
 .sidebar-nav a:hover {
-  background: var(--color-border);
+  color: var(--cabinet-ink);
+  background: rgb(255 255 255 / 0.05);
 }
 
 .sidebar-nav a[data-status="active"] {
-  background: color-mix(in srgb, var(--color-primary) 12%, transparent);
-  /* accent-text, not color-primary: the button-fill blue is too dim as dark-mode text */
-  color: var(--accent-text);
-  font-weight: 500;
+  color: var(--cabinet-ink);
+  background: rgb(255 255 255 / 0.08);
+  font-weight: 600;
+}
+
+/* The drawer-pull notch. Manila only ever appears on the cabinet — on paper it
+   fails 3:1 (use --progress there). Bleeds into the sidebar's 12px padding so it
+   reads as a tab edge rather than a border. */
+.sidebar-nav a[data-status="active"]::before {
+  content: "";
+  position: absolute;
+  left: -12px;
+  top: 9px;
+  bottom: 9px;
+  width: 3px;
+  border-radius: 0 2px 2px 0;
+  background: var(--manila);
+}
+
+/* LOCAL-FIRST · v0.0.0 — the typewritten label voice, pinned to the bottom. */
+.sidebar-foot {
+  margin-top: auto;
+  padding: 12px 12px 2px;
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  letter-spacing: 0.1em;
+  color: var(--cabinet-muted);
 }
 
 /* Touch target — min 44×44px for all interactive elements. SIZING ONLY: the
@@ -311,12 +368,12 @@ h2 {
   left: 0;
   right: 0;
   height: var(--bottom-nav-height);
-  background: var(--color-bg);
-  border-top: 1px solid var(--color-border);
+  background: var(--cabinet);
+  border-top: 1px solid var(--cabinet-line);
   display: none; /* hidden by default (desktop) */
   align-items: center;
   justify-content: space-around;
-  padding: 0 8px;
+  padding: 0 6px;
   z-index: 100;
 }
 
@@ -324,10 +381,13 @@ h2 {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 2px;
+  gap: 3px;
   text-decoration: none;
-  color: var(--color-text-muted);
+  color: var(--cabinet-muted);
+  /* 0.75rem rather than the mockup's 0.68rem: ~11px is needlessly small on a
+     touch target, and the pair is held to the strict small-text bar either way. */
   font-size: 0.75rem;
+  font-weight: 500;
   flex: 1;
   justify-content: center;
   /* Transparent from the start so the active notch costs no reflow, and so the
@@ -335,13 +395,14 @@ h2 {
   border-top: 2px solid transparent;
 }
 
-/* The notch is a presence cue, not a hue cue: it survives Windows high-contrast
-   mode (borders keep currentColor there) and satisfies WCAG 1.4.1, which a
-   color-only active state would not. Weight is deliberately NOT used — the
-   variable body font would reflow the label on every navigation. */
+/* Manila carries the active tab on the cabinet, and the notch keeps it from
+   being a hue-only cue — it survives Windows high-contrast mode (borders keep
+   currentColor there), which a color change alone does not. Weight is
+   deliberately NOT used: the variable body font would reflow the label on
+   every navigation. */
 .bottom-nav-item[data-status="active"] {
-  color: var(--accent-text);
-  border-top-color: var(--accent-text);
+  color: var(--manila);
+  border-top-color: var(--manila);
 }
 
 /* The label is deliberately small here; the icon is not. Scaling it by its own

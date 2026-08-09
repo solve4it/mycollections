@@ -6,11 +6,13 @@ React 19 web application for MyCollections. Uses Vite for bundling, TanStack Rou
 
 The `Shell` component provides the full-height application frame:
 
-- **Desktop (≥768 px)**: sidebar navigation on the left (240 px), main content on the right.
-- **Mobile (<768 px)**: full-width main content, fixed bottom navigation bar (64 px).
+- **Desktop (≥768 px)**: the cabinet sidebar on the left (216 px), main content on the right.
+- **Mobile (<768 px)**: full-width main content, fixed bottom navigation bar (64 px) on the same cabinet surface.
+- **The cabinet**: both navigation bars sit on `--cabinet`, which is dark in *both* themes — the nav is the only dark chrome in the app, so the eye always knows what is furniture and what is the collection. Nav rules are built from `--cabinet-*` / `--manila`, never the `--color-*` aliases, which flip with the palette.
+- **Sidebar footer**: `LOCAL-FIRST · v<version>` in the mono face. The version is injected at build time by a `define` in `vite.config.ts`, read from `.release-please-manifest.json` (the root package is private and has no `version` field until the first release).
 - **Touch targets**: all nav links and buttons carry the `touch-target` CSS class, enforcing `min-height` and `min-width` of 44 px per WCAG 2.5.5. It is **sizing only** — the primary-action fill lives on the separate `button-primary` class, so an element opts into the blue button look explicitly (a class that did both is what made the active tab invisible in #259).
-- **Active nav item**: the router supplies `aria-current="page"`, the sidebar marks it with a tinted background and heavier label, and the bottom nav with a 2 px accent notch. The notch is deliberately a *presence* cue, not a hue one, so it satisfies WCAG 1.4.1 and survives forced-colors mode; its space is pre-reserved with a transparent border so navigating never shifts the layout.
-- **Keyboard / screen readers**: a visually hidden skip-to-content link (`<a href="#main-content">`) appears on focus. The sidebar and bottom nav both have descriptive `aria-label` values.
+- **Active nav item**: the router supplies `aria-current="page"`; the sidebar marks it with a white-8 % pill, a heavier label, and a 3 px `--manila` drawer-pull notch bleeding off the left edge; the bottom nav with a `--manila` label and a 2 px notch. The notch is deliberately a *presence* cue, not a hue one, so it satisfies WCAG 1.4.1 and survives forced-colors mode; its space is pre-reserved with a transparent border so navigating never shifts the layout.
+- **Keyboard / screen readers**: a visually hidden skip-to-content link (`<a href="#main-content">`) appears on focus. The sidebar and bottom nav both have descriptive `aria-label` values. Focus rings are 2 px `:focus-visible` outlines in `--focus`, or `--focus-on-cabinet` on the sidebar and bottom nav — `--focus` on the cabinet measures 2.02:1, under the 3:1 floor for non-text UI.
 
 ## Routing
 
