@@ -13,7 +13,7 @@ vi.mock("../../lib/api-client.js", () => ({
   importData: vi.fn(),
 }));
 
-import { type ImportSummary, exportData, importData } from "../../lib/api-client.js";
+import { exportData, type ImportSummary, importData } from "../../lib/api-client.js";
 import { isErrorReportingEnabled, setErrorReportingEnabled } from "../../lib/error-reporter.js";
 
 const testRouteTree = rootRoute.addChildren([settingsRoute, setupRoute]);
@@ -197,9 +197,7 @@ describe("SettingsPage data import", () => {
 
     inFlight.settle(IMPORT_SUMMARY);
 
-    await waitFor(() =>
-      expect(screen.getByRole("status")).toHaveTextContent(/imported 2 collections and 5 items/i),
-    );
+    await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent(/imported 2 collections and 5 items/i));
     expect(screen.queryByText("Importing your backup…")).not.toBeInTheDocument();
   });
 
