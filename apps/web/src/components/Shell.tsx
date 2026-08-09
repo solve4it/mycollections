@@ -34,6 +34,9 @@ export function Shell({ children }: ShellProps) {
               </Link>
             ))}
           </div>
+          {/* The version is build-time injected (see vite.config.ts), so it is
+              interpolated rather than translated; only the label is a key. */}
+          <div className="sidebar-foot">{t("local_first_footer", { version: __APP_VERSION__ })}</div>
         </nav>
 
         <main className="shell-main" id="main-content">

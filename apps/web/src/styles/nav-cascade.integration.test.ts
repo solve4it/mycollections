@@ -85,20 +85,25 @@ function declaration(body: string, property: string): string | undefined {
   return value;
 }
 
-/** The declaration that actually wins for `element`, or undefined if none applies. */
-function resolve_(element: Element, property: string, rules = RULES): string | undefined {
+/**
+ * The declaration that actually wins for `element`, or undefined if none applies.
+ * Pass `pseudo` (e.g. ":focus-visible") to ask what wins in that state: only rules
+ * declaring it are considered, matched against the element with it stripped —
+ * jsdom cannot focus an element, but the cascade question is still answerable.
+ */
+function resolve_(element: Element, property: string, rules = RULES, pseudo?: string): string | undefined {
   const candidates = rules.flatMap((rule, order) =>
     rule.selector
       .split(",")
       .map((part) => part.trim())
-      .filter((part) => {
-        try {
-          return element.matches(part);
-        } catch {
-          return false; // a selector jsdom cannot parse cannot match either
-        }
-      })
       .flatMap((part) => {
+        if (pseudo && !part.includes(pseudo)) return [];
+        const testable = pseudo ? part.split(pseudo).join("") : part;
+        try {
+          if (!element.matches(testable)) return [];
+        } catch {
+          return []; // a selector jsdom cannot parse cannot match either
+        }
         const value = declaration(rule.body, property);
         return value === undefined ? [] : [{ value, order, weight: specificity(part) }];
       }),
@@ -149,6 +154,8 @@ function renderShell() {
     bottomInactive: pick(".shell-bottom-nav a:not([data-status])"),
     settingsButton: pick(".settings-data button"),
     primaryCta: pick("a.button-primary"),
+    sidebar: pick(".shell-sidebar"),
+    bottomNav: pick(".shell-bottom-nav"),
   };
 }
 
@@ -218,18 +225,52 @@ describe("nav cascade", () => {
   it("emphasizes the active item, not the inactive one", () => {
     const nav = renderShell();
 
-    // Sidebar: the active item is the one carrying a background.
+    // Sidebar: the active item is the one carrying the pill.
     expect(resolve_(nav.sidebarActive, "background")).toBeDefined();
     expect(resolve_(nav.sidebarInactive, "background")).toBeUndefined();
+    expect(resolve_(nav.sidebarActive, "color")).toBe("var(--cabinet-ink)");
+    expect(resolve_(nav.sidebarInactive, "color")).toBe("var(--cabinet-muted)");
+    expect(Number(resolve_(nav.sidebarActive, "font-weight"))).toBeGreaterThan(
+      Number(resolve_(nav.sidebarInactive, "font-weight")),
+    );
 
-    // Bottom nav: no fill on either, so emphasis is carried by color + weight.
-    expect(resolve_(nav.bottomActive, "color")).toBe("var(--accent-text)");
-    expect(resolve_(nav.bottomInactive, "color")).toBe("var(--color-text-muted)");
-    // A hue change alone would fail WCAG 1.4.1 and disappear entirely in
-    // forced-colors mode, so the active tab also carries a notch — pre-reserved
-    // as a transparent border so becoming current costs no layout shift.
-    expect(resolve_(nav.bottomInactive, "border-top")).toBe("2px solid transparent");
-    expect(resolve_(nav.bottomActive, "border-top-color")).toBe("var(--accent-text)");
+    // Bottom nav: manila carries the active state on the cabinet surface.
+    expect(resolve_(nav.bottomActive, "color")).toBe("var(--manila)");
+    expect(resolve_(nav.bottomInactive, "color")).toBe("var(--cabinet-muted)");
+  });
+
+  it("puts the whole nav on the cabinet surface, in both themes", () => {
+    const nav = renderShell();
+    expect(resolve_(nav.sidebar, "background")).toBe("var(--cabinet)");
+    expect(resolve_(nav.bottomNav, "background")).toBe("var(--cabinet)");
+    // The cabinet is dark in BOTH themes, so it must not be built from an alias
+    // that flips with the palette.
+    for (const link of [nav.sidebarActive, nav.sidebarInactive, nav.bottomActive, nav.bottomInactive]) {
+      expect(resolve_(link, "color")).toMatch(/--cabinet-|--manila/);
+    }
+  });
+
+  it("marks the active sidebar item with a manila notch", () => {
+    renderShell();
+    // The notch is drawn on ::before, which no DOM query can see — assert on the
+    // rule itself, and on the fact that it is manila rather than a hue reused
+    // from the paper palette.
+    const notch = RULES.find((rule) => /\.sidebar-nav a\[data-status="active"\]::before/.test(rule.selector));
+    expect(notch, "the active sidebar item must draw a ::before notch").toBeDefined();
+    expect(notch?.body).toMatch(/background:\s*var\(--manila\)/);
+    expect(notch?.body).toMatch(/width:\s*3px/);
+  });
+
+  it("uses the on-cabinet focus ring, never the paper one, on cabinet surfaces", () => {
+    const nav = renderShell();
+    // --stamp on --cabinet measures 2.02:1 in light mode, under the 3:1 floor for
+    // non-text UI. --focus-on-cabinet exists for exactly this surface.
+    for (const link of [nav.sidebarActive, nav.sidebarInactive, nav.bottomActive, nav.bottomInactive]) {
+      const outline = resolve_(link, "outline", RULES, ":focus-visible");
+      expect(outline, "every cabinet nav link needs a visible focus ring").toBeDefined();
+      expect(outline).toContain("var(--focus-on-cabinet)");
+      expect(outline).not.toContain("var(--focus)");
+    }
   });
 
   it("lets the bottom nav keep its own small label size", () => {
@@ -244,9 +285,9 @@ describe("nav cascade", () => {
     // Moving `gap` onto the sizing utility is what made the bottom nav space its
     // icon like a button; moving it off is what silently closed the gap on the
     // settings buttons. Both directions are pinned here.
-    expect(resolve_(nav.bottomInactive, "gap")).toBe("2px");
+    expect(resolve_(nav.bottomInactive, "gap")).toBe("3px");
     expect(resolve_(nav.settingsButton, "gap")).toBe("8px");
-    expect(resolve_(nav.sidebarInactive, "gap")).toBe("10px");
+    expect(resolve_(nav.sidebarInactive, "gap")).toBe("11px");
   });
 
   it("still gives an opted-in primary action its fill", () => {
