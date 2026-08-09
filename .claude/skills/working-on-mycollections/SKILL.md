@@ -95,8 +95,11 @@ Tests passing is CI's evidence, not yours. Before "done" or "fixed":
   missing `pnpm`, fix that shell (invoke the fnm-managed binary by its full path), don't
   source a profile. If husky fails with `pnpm: command not found`, the fnm node version lacks
   corepack shims — run `corepack enable` from that version's bin. Kill dev servers by port
-  (`lsof -ti tcp:3111 | xargs kill`), not by job id — background shells don't share state,
-  and a surviving server causes an address-already-in-use error that looks like your bug.
+  (`lsof -ti tcp:3111 -sTCP:LISTEN | xargs kill`), not by job id — background shells don't
+  share state, and a surviving server causes an address-already-in-use error that looks like
+  your bug. `-sTCP:LISTEN` is not optional: `lsof -i tcp:<port>` matches *both* ends of a
+  connection, so without it you also kill the browser's socket to that port, the Chrome
+  renderer dies, the tab silently reloads, and the page looks like it lost your data.
 - **Fastify v5 specifics.** `setErrorHandler` receives `unknown` (narrow it; use core's
   `toReportableError`); the matched route pattern is `request.routeOptions.url` (undefined on
   unmatched routes), not `routerPath`.
