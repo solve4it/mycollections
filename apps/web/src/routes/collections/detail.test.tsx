@@ -10,11 +10,12 @@ vi.mock("../../lib/api-client.js", () => ({
   getCollection: vi.fn(),
   listItems: vi.fn(),
   createItem: vi.fn(),
+  updateItem: vi.fn(),
   deleteItem: vi.fn(),
   getToken: vi.fn(() => "test-token"),
 }));
 
-import { createItem, deleteItem, getCollection, listItems } from "../../lib/api-client.js";
+import { createItem, deleteItem, getCollection, listItems, updateItem } from "../../lib/api-client.js";
 
 const testRouteTree = rootRoute.addChildren([collectionDetailRoute]);
 
@@ -41,6 +42,12 @@ const ITEM: Item = {
   deletedAt: null,
 };
 
+const OTHER_ITEM: Item = {
+  ...ITEM,
+  id: "33333333-3333-3333-3333-333333333333",
+  fields: { title: "Mario", year: 1985 },
+};
+
 function makeQueryClient(networkMode?: NetworkMode) {
   return new QueryClient({
     defaultOptions: { queries: { retry: false, networkMode }, mutations: { retry: false } },
@@ -64,6 +71,7 @@ beforeEach(() => {
   vi.mocked(getCollection).mockResolvedValue(COLLECTION);
   vi.mocked(listItems).mockResolvedValue([]);
   vi.mocked(createItem).mockResolvedValue(ITEM);
+  vi.mocked(updateItem).mockResolvedValue(ITEM);
   vi.mocked(deleteItem).mockResolvedValue(undefined);
 });
 
@@ -201,5 +209,83 @@ describe("CollectionDetailPage", () => {
     await screen.findByText("Zelda");
     fireEvent.click(screen.getByRole("button", { name: /delete/i }));
     await waitFor(() => expect(deleteItem).toHaveBeenCalledWith(COLLECTION.id, ITEM.id));
+  });
+
+  // #237: `networkMode: "always"` (#228) turned these three mutations from a
+  // visible hang into a silent no-op. Each needs its own error surface, and each
+  // message has to name the action that failed — "something went wrong" leaves
+  // the user guessing which of the three attempts was lost.
+  describe("mutation failures (#237)", () => {
+    it("reports a failed add instead of silently discarding the form", async () => {
+      vi.mocked(createItem).mockRejectedValue(new Error("API error 500"));
+      renderDetail();
+      fireEvent.change(await screen.findByLabelText("Title"), { target: { value: "Mario" } });
+      fireEvent.click(screen.getByRole("button", { name: /save/i }));
+
+      await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent("Could not add this item"));
+      // The empty state must not be the only thing on screen after a failed add.
+      expect(screen.getByRole("alert")).toBeVisible();
+    });
+
+    it("reports a failed save and leaves the editor open with the entered value", async () => {
+      vi.mocked(listItems).mockResolvedValue([ITEM]);
+      vi.mocked(updateItem).mockRejectedValue(new Error("API error 500"));
+      renderDetail();
+      await screen.findByText("Zelda");
+      fireEvent.click(screen.getByRole("button", { name: /edit/i }));
+
+      const row = screen.getAllByRole("listitem")[0] as HTMLElement;
+      fireEvent.change(within(row).getByLabelText("Title"), { target: { value: "Ocarina" } });
+      fireEvent.click(within(row).getByRole("button", { name: "Save" }));
+
+      await waitFor(() =>
+        expect(within(row).getByRole("alert")).toHaveTextContent("Could not save your changes to this item"),
+      );
+      // The editor stays open holding the typed value — closing it would throw
+      // the edit away, which is exactly the silent loss this issue is about.
+      expect(within(row).getByLabelText("Title")).toHaveValue("Ocarina");
+      expect(within(row).getByRole("button", { name: "Cancel" })).toBeInTheDocument();
+    });
+
+    it("reports a failed delete instead of leaving the row unexplained", async () => {
+      vi.mocked(listItems).mockResolvedValue([ITEM]);
+      vi.mocked(deleteItem).mockRejectedValue(new Error("API error 500"));
+      renderDetail();
+      await screen.findByText("Zelda");
+      fireEvent.click(screen.getByRole("button", { name: /delete/i }));
+
+      const row = screen.getAllByRole("listitem")[0] as HTMLElement;
+      await waitFor(() => expect(within(row).getByRole("alert")).toHaveTextContent("Could not delete this item"));
+      expect(within(row).getByText("Zelda")).toBeInTheDocument();
+    });
+
+    it("attaches a delete error to the row that failed, not to its siblings", async () => {
+      vi.mocked(listItems).mockResolvedValue([ITEM, OTHER_ITEM]);
+      vi.mocked(deleteItem).mockImplementation((_collectionId: string, itemId: string) =>
+        itemId === ITEM.id ? Promise.reject(new Error("API error 500")) : Promise.resolve(),
+      );
+      renderDetail();
+      await screen.findByText("Zelda");
+
+      const [zeldaRow, marioRow] = screen.getAllByRole("listitem") as HTMLElement[];
+      fireEvent.click(within(zeldaRow as HTMLElement).getByRole("button", { name: /delete/i }));
+
+      await waitFor(() =>
+        expect(within(zeldaRow as HTMLElement).getByRole("alert")).toHaveTextContent("Could not delete this item"),
+      );
+      expect(within(marioRow as HTMLElement).queryByRole("alert")).not.toBeInTheDocument();
+    });
+
+    it("clears the add error once a later attempt succeeds", async () => {
+      vi.mocked(createItem).mockRejectedValueOnce(new Error("API error 500"));
+      renderDetail();
+      fireEvent.change(await screen.findByLabelText("Title"), { target: { value: "Mario" } });
+      fireEvent.click(screen.getByRole("button", { name: /save/i }));
+      await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent("Could not add this item"));
+
+      fireEvent.click(screen.getByRole("button", { name: /save/i }));
+      await waitFor(() => expect(createItem).toHaveBeenCalledTimes(2));
+      await waitFor(() => expect(screen.queryByRole("alert")).not.toBeInTheDocument());
+    });
   });
 });
