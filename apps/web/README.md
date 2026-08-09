@@ -8,7 +8,8 @@ The `Shell` component provides the full-height application frame:
 
 - **Desktop (≥768 px)**: sidebar navigation on the left (240 px), main content on the right.
 - **Mobile (<768 px)**: full-width main content, fixed bottom navigation bar (64 px).
-- **Touch targets**: all nav links carry the `touch-target` CSS class, enforcing `min-height` and `min-width` of 44 px per WCAG 2.5.5.
+- **Touch targets**: all nav links and buttons carry the `touch-target` CSS class, enforcing `min-height` and `min-width` of 44 px per WCAG 2.5.5. It is **sizing only** — the primary-action fill lives on the separate `button-primary` class, so an element opts into the blue button look explicitly (a class that did both is what made the active tab invisible in #259).
+- **Active nav item**: the router supplies `aria-current="page"`, the sidebar marks it with a tinted background and heavier label, and the bottom nav with a 2 px accent notch. The notch is deliberately a *presence* cue, not a hue one, so it satisfies WCAG 1.4.1 and survives forced-colors mode; its space is pre-reserved with a transparent border so navigating never shifts the layout.
 - **Keyboard / screen readers**: a visually hidden skip-to-content link (`<a href="#main-content">`) appears on focus. The sidebar and bottom nav both have descriptive `aria-label` values.
 
 ## Routing

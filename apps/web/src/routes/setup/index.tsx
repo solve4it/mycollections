@@ -40,7 +40,9 @@ function SetupPage() {
           autoComplete="off"
           required
         />
-        <button type="submit">{t("connect_button")}</button>
+        <button type="submit" className="touch-target">
+          {t("connect_button")}
+        </button>
       </form>
     </div>
   );

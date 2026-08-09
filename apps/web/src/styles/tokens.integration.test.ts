@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
+import { contrast, extractBlock, NON_TEXT, TEXT, tokensFromBlock } from "./wcag.js";
 
 /**
  * Guards the Cabinet & Paper palette against contrast regressions: every
@@ -16,55 +17,11 @@ import { describe, expect, it } from "vitest";
 // vitest runs with the package as cwd (same convention as api-client.integration.test.ts).
 const css = readFileSync(resolve("src/styles/global.css"), "utf8");
 
-function tokensFromBlock(block: string): Record<string, string> {
-  const tokens: Record<string, string> = {};
-  for (const match of block.matchAll(/--([a-z-]+):\s*(#[0-9a-fA-F]{6})\s*;/g)) {
-    const name = match[1];
-    const value = match[2];
-    if (name && value) tokens[name] = value;
-  }
-  return tokens;
-}
-
-function extractBlock(source: string, opener: string): string {
-  const start = source.indexOf(opener);
-  if (start === -1) throw new Error(`Block not found: ${opener}`);
-  const open = source.indexOf("{", start);
-  let depth = 0;
-  for (let i = open; i < source.length; i++) {
-    if (source[i] === "{") depth++;
-    if (source[i] === "}") depth--;
-    if (depth === 0) return source.slice(open, i + 1);
-  }
-  throw new Error(`Unbalanced block: ${opener}`);
-}
-
 const lightTokens = tokensFromBlock(extractBlock(css, ":root {"));
 const darkTokens = {
   ...lightTokens,
   ...tokensFromBlock(extractBlock(css, "@media (prefers-color-scheme: dark)")),
 };
-
-function srgbChannel(value: number): number {
-  const c = value / 255;
-  return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
-}
-
-function luminance(hex: string): number {
-  const n = Number.parseInt(hex.slice(1), 16);
-  const r = srgbChannel((n >> 16) & 0xff);
-  const g = srgbChannel((n >> 8) & 0xff);
-  const b = srgbChannel(n & 0xff);
-  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
-}
-
-function contrast(fgHex: string, bgHex: string): number {
-  const [hi, lo] = [luminance(fgHex), luminance(bgHex)].sort((a, b) => b - a) as [number, number];
-  return (hi + 0.05) / (lo + 0.05);
-}
-
-const TEXT = 4.5;
-const NON_TEXT = 3.0;
 
 /** [foreground token, background token, minimum ratio, what the pair is]. */
 const PAIRS: Array<[string, string, number, string]> = [

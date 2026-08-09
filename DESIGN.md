@@ -91,12 +91,24 @@ Light is the `:root` default. Dark ships via `@media (prefers-color-scheme: dark
 hook for the explicit theme switch (#25). `color-scheme` is declared so native form controls
 and scrollbars follow. Only **base tokens** are redefined per theme; aliases are declared once.
 
+## Class roles
+
+One class, one concern. `.touch-target` is **sizing** (the 44px minimum, plus the flex
+alignment that centers content inside it); `.button-primary` is the **skin** (fill, padding,
+radius, border, icon gap). Components own their own spacing — the bottom nav wants a 2px icon
+gap where a button wants 8px, so neither may inherit it from a utility. #259 is what this rule
+is for: `.touch-target` also painting a background made the active nav item resolve to
+`--color-primary` on `--color-primary`, an invisible tab that every palette test still passed.
+
 ## Accessibility floor
 
 Text pairs ≥ 4.5:1 (status labels are small text — held to the strict bar), meaningful
-non-text UI ≥ 3:1, both themes, enforced by `tokens.integration.test.ts`. Status and progress
-are never color-only: dots always carry text labels, bars always carry mono count labels. Touch
-targets stay 44px; focus rings are 2px `--focus`/`--focus-on-cabinet`.
+non-text UI ≥ 3:1, both themes, enforced by `tokens.integration.test.ts` for the palette and
+`nav-cascade.integration.test.ts` for what the cascade actually resolves to. Status and
+progress are never color-only: dots always carry text labels, bars always carry mono count
+labels, and the active nav tab carries a notch as well as a hue — a presence cue keeps working
+in forced-colors mode, where a background tint does not. Touch targets stay 44px; focus rings
+are 2px `--focus`/`--focus-on-cabinet`.
 
 ## Signature: generated covers (spec for #223)
 
