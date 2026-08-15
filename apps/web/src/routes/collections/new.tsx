@@ -175,7 +175,7 @@ function NewCollectionPage() {
 
                 <button
                   type="button"
-                  className="touch-target"
+                  className="touch-target button-quiet"
                   onClick={() => setFields((prev) => prev.filter((f) => f.key !== field.key))}
                 >
                   <Icon name="delete" />
@@ -184,7 +184,11 @@ function NewCollectionPage() {
               </div>
             );
           })}
-          <button type="button" className="touch-target" onClick={() => setFields((prev) => [...prev, emptyField()])}>
+          <button
+            type="button"
+            className="touch-target button-quiet"
+            onClick={() => setFields((prev) => [...prev, emptyField()])}
+          >
             <Icon name="add" />
             {t("add_field")}
           </button>

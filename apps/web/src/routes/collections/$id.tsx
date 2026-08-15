@@ -173,7 +173,12 @@ function ItemRow({ collection, item }: ItemRowProps) {
     <li>
       <div className="item-row">
         <div className="item-fields">
-          <span className={`item-status item-status-${item.status}`}>{t(`status_${item.status}`)}</span>
+          <span className={`item-status item-status-${item.status}`}>
+            {/* The dot is redundant with the label beside it, so it is hidden
+                rather than announced — status is never conveyed by color alone. */}
+            <span className="status-dot" aria-hidden="true" />
+            {t(`status_${item.status}`)}
+          </span>
           {collection.fields.map((field) => (
             <span key={field.id} className="item-field">
               <span className="item-field-label">{field.label}:</span> <FieldValue value={item.fields[field.id]} />
@@ -181,11 +186,11 @@ function ItemRow({ collection, item }: ItemRowProps) {
           ))}
         </div>
         <div className="item-actions">
-          <button type="button" className="touch-target" onClick={() => setEditing(true)}>
+          <button type="button" className="touch-target button-quiet" onClick={() => setEditing(true)}>
             <Icon name="edit" />
             {t("edit")}
           </button>
-          <button type="button" className="touch-target" onClick={() => deleteItem.mutate(item.id)}>
+          <button type="button" className="touch-target button-quiet" onClick={() => deleteItem.mutate(item.id)}>
             <Icon name="delete" />
             {t("delete")}
           </button>

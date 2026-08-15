@@ -49,6 +49,16 @@ describe("SetupPage", () => {
     expect(localStorage.getItem("api_token")).toBe("test-token-abc");
   });
 
+  it("puts the token field in a form row so the stylesheet reaches it", async () => {
+    // Every input rule in global.css is scoped to .form-row. This input sat
+    // outside one, so the first screen a new user sees rendered a bare UA
+    // control (#224). forms.integration.test.ts proves the rule; this proves
+    // the markup opts into it.
+    renderSetup();
+    const input = await screen.findByLabelText(/api token/i);
+    expect(input.closest(".form-row")).not.toBeNull();
+  });
+
   it("redirects to /collections if token already stored", async () => {
     localStorage.setItem("api_token", "existing-token");
     const qc = makeQueryClient();
