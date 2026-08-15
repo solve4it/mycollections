@@ -29,12 +29,19 @@ breaks WCAG AA fails CI.
 | `--manila` | `#D9B36C` | `#D9B36C` | Active notch and accents **on the cabinet only** |
 | `--progress` | `#9A7420` | `#D9B36C` | Progress-bar fills (manila-ink on light surfaces) |
 | `--owned` / `--wanted` / `--ordered` | `#2A7448` / `#9A6208` / `#3E46C8` | `#5CBF8A` / `#E0A33E` / `#97A0FF` | Status dots + labels |
+| `--danger` | `#B3261E` | `#F2857C` | Error text, and the border on an inline alert |
+| `--danger-surface` | `#F7EAE7` | `#2B201E` | Tint behind an inline alert (decoration only) |
 
 Rules the split tokens encode — don't collapse them:
 
 - **Fill vs. text**: `--stamp` is a *fill* (with `--stamp-ink` text on it); it is too dim as
   dark-mode text. Anything accent-colored that is *read* uses `--accent-text`.
 - **Manila never sits on paper**: as a fill on light surfaces it fails 3:1 — use `--progress`.
+- **Danger is not hue-separable from wanted.** Every red that clears contrast against paper and
+  card sits within 1.4:1 of `--wanted` under deuteranopia — red-vs-amber is the canonical
+  red-green confusion, and no palette choice fixes it. Failures are therefore marked
+  structurally (a border, and the words), never by color. Don't "fix" this by picking a
+  different red.
 - Legacy `--color-*` names are aliases onto these tokens; #221–#225 migrate consumers to the
   semantic names, then the aliases are removed.
 
@@ -117,6 +124,29 @@ manifest, so the chrome always states what it is and what it is running.
 2px offset: `--focus` on paper, `--focus-on-cabinet` on the sidebar and bottom nav. This split is not
 cosmetic — `--stamp` on `--cabinet` is **2.02:1** in light mode, under the 3:1 non-text floor,
 while `--focus-on-cabinet` gives 6.08:1.
+
+## Failure surfaces (#264)
+
+Error styling attaches to `[role="alert"]`, not to a class, so all eleven alert sites across
+five routes pick it up at once and a new route cannot forget it. `role="status"` is deliberately
+untouched — it carries loading and success messages, and danger styling there would be a lie.
+
+Two shapes exist, and they are styled differently on purpose:
+
+- **A standalone `<p role="alert">`** — the eight that appear beside working UI — gets a strip:
+  danger text, a 3px `--danger` left border, and a `--danger-surface` tint. The **border** is the
+  non-color cue that satisfies WCAG 1.4.1; the tint carries nothing (~1.05:1 against both
+  surfaces, by design — a tint readable enough to clear 3:1 would no longer be a tint).
+- **A `<div role="alert">`** — the three full-page states and the items region — gets no strip;
+  it already owns the screen. Its **title** keeps the danger ink and its **explanation** drops to
+  `--ink-muted` via `> p:last-of-type`, which picks the explanation out of both shapes (`<h1>` +
+  `<p>`, and the region's `<p>` + `<p>`) without either route needing a class. This was decided
+  by looking at the running app: the whole block in red made "Your collections are safe…" read
+  as an alarm.
+
+Measured: `--danger` 5.81:1 on paper / 6.25:1 on card (light), 7.19 / 6.41 (dark); on
+`--danger-surface` 5.56 / 6.34. All enforced by `tokens.integration.test.ts`;
+`alerts.integration.test.ts` pins the rules themselves.
 
 ## Class roles
 

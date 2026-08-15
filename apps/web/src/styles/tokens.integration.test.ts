@@ -47,6 +47,15 @@ const PAIRS: Array<[string, string, number, string]> = [
   ["manila", "cabinet", NON_TEXT, "active notch on the cabinet"],
   ["progress", "card", NON_TEXT, "progress fill on cards"],
   ["progress", "line", NON_TEXT, "progress fill against its track"],
+  ["danger", "paper", TEXT, "error text on page background"],
+  ["danger", "card", TEXT, "error text on cards"],
+  ["danger", "danger-surface", TEXT, "error text on its own tinted strip"],
+  ["ink", "danger-surface", TEXT, "body text inside a tinted strip"],
+  // The strip's border, not its tint, is what marks a failure without relying on
+  // hue: --danger-surface is ~1.05:1 against both surfaces by design (a tint
+  // readable enough to clear 3:1 would not be a tint), so it is decoration and
+  // deliberately absent from this list.
+  ["danger", "paper", NON_TEXT, "error strip border on page background"],
 ];
 
 describe.each([
