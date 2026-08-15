@@ -30,7 +30,7 @@ importers:
         specifier: ^17.3.0
         version: 17.3.0
       turbo:
-        specifier: ^2.10.9
+        specifier: ^2.10.10
         version: 2.10.10
       typescript:
         specifier: ^7.0.2
