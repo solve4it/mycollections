@@ -50,10 +50,46 @@ describe("collection card", () => {
     }
   });
 
+  it("declares the cover palette on the cover, never in :root", () => {
+    // Found by driving a real browser, and invisible to every other test here:
+    // a custom property that references another is substituted where it is
+    // *declared*. `--cover-bg: hsl(var(--cover-hue) ...)` in :root resolves
+    // against a --cover-hue that does not exist there, computes to an invalid
+    // color, and paints every cover black. jsdom resolves no var() at all, so a
+    // structural rule is the only guard available.
+    for (const block of [
+      ":root {",
+      "@media (prefers-color-scheme: dark)",
+      ':root[data-theme="dark"]',
+      ':root[data-theme="light"]',
+    ]) {
+      expect(extractBlock(css, block), `${block} must not declare the cover palette`).not.toMatch(
+        /--cover-(bg|ink|accent)\s*:/,
+      );
+    }
+
+    const base = rulesFor(RULES, ".collection-cover")[0];
+    for (const token of ["--cover-bg", "--cover-ink", "--cover-accent"]) {
+      expect(declaration(base?.body ?? "", token), `${token} belongs on .collection-cover`).toMatch(
+        /hsl\(var\(--cover-hue\)/,
+      );
+    }
+  });
+
+  it("takes the cover palette down with the paper in dark mode", () => {
+    // The dark override is a bare `.collection-cover` inside the media query;
+    // the explicit-theme ones are prefixed with :root[data-theme=…].
+    const overrides = RULES.filter((rule) => /\.collection-cover$/.test(rule.selector.trim())).slice(1);
+    expect(overrides.length, "dark and explicit-theme overrides must all exist").toBeGreaterThanOrEqual(3);
+    for (const rule of overrides) {
+      expect(declaration(rule.body, "--cover-bg")).toMatch(/hsl\(var\(--cover-hue\)/);
+    }
+  });
+
   it("reserves a 5:3 cover that cannot be squashed by its content", () => {
-    const cover = only(".collection-cover");
-    expect(declaration(cover.body, "aspect-ratio")).toBe("5 / 3");
-    expect(declaration(cover.body, "width")).toBe("100%");
+    const cover = rulesFor(RULES, ".collection-cover")[0];
+    expect(declaration(cover?.body ?? "", "aspect-ratio")).toBe("5 / 3");
+    expect(declaration(cover?.body ?? "", "width")).toBe("100%");
     // Without this the SVG paints over the card's rounded corners.
     expect(declaration(only(".collection-card").body, "overflow")).toBe("hidden");
   });

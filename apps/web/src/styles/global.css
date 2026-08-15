@@ -66,15 +66,6 @@
   --wanted: #9a6208;
   --ordered: #3e46c8;
 
-  /* Generated covers (#223). Tinted from the --cover-hue each cover sets on
-     itself, so one hue ladder drives every pattern and the theme still owns the
-     lightness. Deliberately not hex: covers are decorative and exempt from the
-     contrast floor (DESIGN.md), which is also why the palette test — which reads
-     only 6-digit hex — does not see them. */
-  --cover-bg: hsl(var(--cover-hue) 26% 90%);
-  --cover-accent: hsl(var(--cover-hue) 30% 79%);
-  --cover-ink: hsl(var(--cover-hue) 32% 55%);
-
   /* Type roles */
   --font-display: "Bricolage Grotesque", system-ui, sans-serif;
   --font-body: "Instrument Sans", system-ui, sans-serif;
@@ -126,9 +117,6 @@
     --ordered: #97a0ff;
     --shadow: 0 1px 2px rgb(0 0 0 / 0.3), 0 4px 12px rgb(0 0 0 / 0.3);
     --shadow-lift: 0 2px 4px rgb(0 0 0 / 0.4), 0 10px 24px rgb(0 0 0 / 0.5);
-    --cover-bg: hsl(var(--cover-hue) 20% 18%);
-    --cover-accent: hsl(var(--cover-hue) 18% 27%);
-    --cover-ink: hsl(var(--cover-hue) 28% 45%);
   }
 }
 
@@ -156,9 +144,6 @@
   --ordered: #97a0ff;
   --shadow: 0 1px 2px rgb(0 0 0 / 0.3), 0 4px 12px rgb(0 0 0 / 0.3);
   --shadow-lift: 0 2px 4px rgb(0 0 0 / 0.4), 0 10px 24px rgb(0 0 0 / 0.5);
-  --cover-bg: hsl(var(--cover-hue) 20% 18%);
-  --cover-accent: hsl(var(--cover-hue) 18% 27%);
-  --cover-ink: hsl(var(--cover-hue) 28% 45%);
 }
 
 :root[data-theme="light"] {
@@ -185,9 +170,6 @@
   --ordered: #3e46c8;
   --shadow: 0 1px 2px rgb(29 35 31 / 0.06), 0 4px 12px rgb(29 35 31 / 0.06);
   --shadow-lift: 0 2px 4px rgb(29 35 31 / 0.08), 0 10px 24px rgb(29 35 31 / 0.12);
-  --cover-bg: hsl(var(--cover-hue) 26% 90%);
-  --cover-accent: hsl(var(--cover-hue) 30% 79%);
-  --cover-ink: hsl(var(--cover-hue) 32% 55%);
 }
 
 *,
@@ -512,6 +494,16 @@ button[type="submit"]:disabled {
 }
 
 .collection-cover {
+  /* The cover's palette is declared HERE, on the element that carries
+     --cover-hue, and never in :root. A custom property that references another
+     is substituted where it is *declared*, not where it is used: the same three
+     lines in :root resolve against a --cover-hue that does not exist there,
+     compute to an invalid color, and paint every cover black. Covers are
+     decorative and exempt from the contrast floor (DESIGN.md), which is also
+     why the palette test — it reads only 6-digit hex — does not see them. */
+  --cover-bg: hsl(var(--cover-hue) 26% 90%);
+  --cover-accent: hsl(var(--cover-hue) 30% 79%);
+  --cover-ink: hsl(var(--cover-hue) 32% 55%);
   display: block;
   width: 100%;
   /* Reserved rather than measured: the cover occupies its 5:3 box before the
@@ -519,6 +511,28 @@ button[type="submit"]:disabled {
      pointer. */
   aspect-ratio: 5 / 3;
   border-bottom: 1px solid var(--line);
+}
+
+/* Covers go darker with the paper. Written out per theme rather than through
+   light-dark(), matching how every other token in this file switches. */
+@media (prefers-color-scheme: dark) {
+  .collection-cover {
+    --cover-bg: hsl(var(--cover-hue) 20% 18%);
+    --cover-accent: hsl(var(--cover-hue) 18% 27%);
+    --cover-ink: hsl(var(--cover-hue) 28% 45%);
+  }
+}
+
+:root[data-theme="dark"] .collection-cover {
+  --cover-bg: hsl(var(--cover-hue) 20% 18%);
+  --cover-accent: hsl(var(--cover-hue) 18% 27%);
+  --cover-ink: hsl(var(--cover-hue) 28% 45%);
+}
+
+:root[data-theme="light"] .collection-cover {
+  --cover-bg: hsl(var(--cover-hue) 26% 90%);
+  --cover-accent: hsl(var(--cover-hue) 30% 79%);
+  --cover-ink: hsl(var(--cover-hue) 32% 55%);
 }
 
 .collection-card-body {
