@@ -695,14 +695,27 @@ p[role="alert"] {
 }
 
 /* The label wraps the box, so the row carries the 44px target — a checkbox
-   stretched to 44px is just a 44px-wide box, not a bigger place to click. */
+   stretched to 44px is just a 44px-wide box, not a bigger place to click.
+   `display: flex` is load-bearing and was missing: a <label> is inline by
+   default, so the flex-direction and gap declared here did nothing and the box
+   sat flush against its text. */
 .form-row .checkbox-row {
+  display: flex;
   flex-direction: row;
   align-items: center;
   gap: var(--space-2);
   min-height: var(--touch-target-size);
   color: var(--ink);
   font-size: 1rem;
+}
+
+/* The native box, themed rather than replaced: the platform control is already
+   focusable, announced and keyboard-operable, and nothing here needs more. */
+.form-row input[type="checkbox"] {
+  accent-color: var(--stamp);
+  inline-size: 1.125rem;
+  block-size: 1.125rem;
+  margin: 0;
 }
 
 .fields-builder {

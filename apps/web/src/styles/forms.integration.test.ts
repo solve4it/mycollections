@@ -64,6 +64,25 @@ describe("form controls", () => {
     );
   });
 
+  it("actually lays the checkbox row out as a row", () => {
+    // A <label> is inline by default, so the flex-direction and gap this rule
+    // has always declared did nothing until `display: flex` joined them — the
+    // box rendered flush against its text.
+    const row = mount('<div class="form-row"><label class="checkbox-row"><input type="checkbox">Yes</label></div>');
+    const label = row.querySelector(".checkbox-row");
+    if (!label) throw new Error("fixture is missing the checkbox row");
+    expect(paints(label, "display")).toBe("flex");
+    expect(paints(label, "gap")).toBe("var(--space-2)");
+    expect(paints(label, "min-height")).toBe("var(--touch-target-size)");
+  });
+
+  it("themes the native checkbox rather than replacing it", () => {
+    const row = mount('<div class="form-row"><label class="checkbox-row"><input type="checkbox">Yes</label></div>');
+    const box = row.querySelector('input[type="checkbox"]');
+    if (!box) throw new Error("fixture is missing the checkbox");
+    expect(paints(box, "accent-color")).toBe("var(--stamp)");
+  });
+
   it("does not stretch checkboxes to the touch-target height", () => {
     // A 44px-tall checkbox is a 44px-wide box, not a bigger hit area. The row
     // that wraps it carries the target instead.
