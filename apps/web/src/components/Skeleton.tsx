@@ -26,10 +26,11 @@ interface SkeletonProps {
 }
 
 /**
- * Placeholder collection cards, in the grid the real cards use. Six by default:
- * enough to fill the first row on a wide screen without implying a count.
+ * Placeholder collection cards, in the grid the real cards use. Four by default
+ * rather than a full screen of them: enough to show the shape of the grid — one
+ * row at a typical desktop width — without implying how many are coming.
  */
-export function CollectionGridSkeleton({ label, count = 6 }: SkeletonProps) {
+export function CollectionGridSkeleton({ label, count = 4 }: SkeletonProps) {
   return (
     <div role="status">
       <span className="visually-hidden">{label}</span>
