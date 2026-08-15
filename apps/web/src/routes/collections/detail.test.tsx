@@ -188,6 +188,38 @@ describe("CollectionDetailPage", () => {
     expect(screen.queryByText(/no items yet/i)).not.toBeInTheDocument();
   });
 
+  it("draws placeholder rows while the items load, not a line of text (#225)", async () => {
+    vi.mocked(listItems).mockReturnValue(new Promise(() => {}));
+    renderDetail();
+
+    await screen.findByRole("heading", { name: "Games" });
+    expect(document.querySelectorAll(".skeleton-row").length).toBeGreaterThan(0);
+    expect(screen.getByRole("status")).toHaveTextContent(/loading items/i);
+  });
+
+  it("keeps the way back on screen while the collection loads (#225)", async () => {
+    // A slow load must never be a screen with no way off it: the back link does
+    // not depend on the collection, so it renders beside the skeleton.
+    vi.mocked(getCollection).mockReturnValue(new Promise(() => {}));
+    renderDetail();
+
+    expect(await screen.findByRole("link", { name: "All collections" })).toBeInTheDocument();
+    expect(document.querySelectorAll(".skeleton-row").length).toBeGreaterThan(0);
+  });
+
+  it("gives an empty item list the open-drawer mark (#225)", async () => {
+    vi.mocked(listItems).mockResolvedValue([]);
+    renderDetail();
+
+    await screen.findByText(/no items yet/i);
+    const mark = document.querySelector("svg.empty-mark");
+    expect(mark).not.toBeNull();
+    expect(mark).toHaveAttribute("aria-hidden", "true");
+    // The add-item form is the action here, so the empty state adds no second
+    // call to action of its own — and must not claim a heading level either.
+    expect(screen.getAllByRole("heading").map((h) => h.textContent)).toEqual(["Games", "Items", "Add item"]);
+  });
+
   it("keeps showing loaded items when a later reload fails", async () => {
     vi.mocked(listItems).mockResolvedValueOnce([ITEM]);
     const { qc } = renderDetail();

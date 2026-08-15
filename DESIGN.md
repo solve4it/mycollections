@@ -257,3 +257,60 @@ that widget verbatim. There is no target total in the model — `isFiniteSet` is
 nothing records how many items the set should have — and `status` defaults to `owned` on create,
 so "owned of entered" would read 100% for essentially every collection. #42 adds the target
 count first.
+
+## Waiting and emptiness (#225)
+
+**Empty states** are the cabinet with a drawer pulled open and nothing in it: the mark, a title
+in `--ink`, an explanation in `--ink-muted`, and — where the screen has one — the action that
+fills it. The dashboard's empty state owns the page, so its title is the page's `<h1>`; the
+items one sits under two headings already and its title is a `<p>`, because a third heading
+would claim an outline level it does not own (`EmptyState`'s `titleAs` prop, `"p"` by default).
+The illustration is the **one exception** to the icon rules above: it lives in `EmptyState.tsx`
+rather than `ICON_NAMES`, on a 72×64 canvas at 2px strokes — nothing else wants it at 1.25em.
+It keeps every other rule (`fill="none"`, `currentColor`, round caps, `aria-hidden`), so it
+takes the empty state's muted ink for free and survives forced-colors mode.
+
+**Skeletons** replace the text-only "Loading…" screens on both collection routes. A skeleton is
+a picture of the content that is coming, so it is drawn *inside the real containers* —
+`.collection-grid`, `.item-list` — and reserves the real boxes, including the cover's 5:3. When
+the data lands, nothing moves. `.skeleton-card` deliberately does **not** reuse
+`.collection-card`: that class carries the hover lift, and a placeholder is not a target.
+
+Three rules make the skeletons accessible rather than decorative noise:
+
+- The blocks are `aria-hidden` and the wait is said once, in words, by a `.visually-hidden`
+  label inside a `role="status"` wrapper. A dozen empty boxes is not a loading message — and
+  keeping the words in the DOM is what lets the #228 guards keep telling "still loading" apart
+  from "there is nothing here".
+- **One `role="status"` per screen**, never one per block. A page that is loading is loading
+  once, however many placeholders it draws; two live regions also break the singular
+  `getByRole("status")` the route tests use.
+- Anything that does not depend on the pending data renders beside the skeleton, not after it:
+  the dashboard's `<h1>` and Create action, the detail route's back link. Otherwise the route
+  has no heading to navigate to while it loads, and the header pops in when data arrives.
+
+The shimmer sweeps between `--line` and `--card` rather than under a white overlay. The nav
+pills' white-at-low-alpha trick does not transfer: they sit on `--cabinet`, dark in both themes,
+while a skeleton sits on paper, which flips. It rests with the highlight parked off-canvas
+(`background-position: -150% 0`), and that resting state — not the last keyframe — is what a
+reduced-motion user sees: `animation-fill-mode` is `none`, so zeroing the duration drops the
+element straight back to its own declaration. Forced-colors mode discards `background-image`
+entirely, so `@media (forced-colors: active)` gives each block a `CanvasText` border; presence,
+not paint, as everywhere else here.
+
+**Screen transitions** are a 150ms fade-and-rise on `.screen`, the wrapper `__root.tsx` puts
+around the `<Outlet>` keyed by pathname — a CSS animation does not replay by itself, and keying
+inside the shell keeps the cabinet still while the drawer opens. No `animation-fill-mode`, on
+purpose: before and after the animation the element uses its own style, so an entrance that is
+cut short leaves a painted page rather than an invisible one. One consequence worth knowing:
+same-route param navigation now remounts the screen, discarding in-route state such as an open
+item editor.
+
+A pending **action** gets text, not a skeleton — Settings' import keeps its `role="status"`
+line, because a running import has no content shape to preview. Skeletons are for content that
+is arriving.
+
+Both accessibility overrides — `@media (forced-colors: active)` and the reduced-motion block —
+live at the end of global.css, and **the reduced-motion block stays last**: the style tests read
+the stylesheet up to it (`css.split(REDUCED_MOTION)[0]`), so a rule added below it is invisible
+to every one of them.

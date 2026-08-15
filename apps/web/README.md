@@ -62,13 +62,37 @@ Every item also has a **status** (`owned` / `wanted` / `ordered`, default `owned
 
 > Not yet implemented (follow-ups on #32): tag autocomplete from existing tags, and a dedicated item detail view.
 
+## Loading and empty states
+
+Two components cover every wait and every "there is nothing here yet" on the collection routes
+(#225); see [`DESIGN.md`](../../DESIGN.md#waiting-and-emptiness-225) for the reasoning.
+
+- **`src/components/EmptyState.tsx`** — the open-drawer mark, a title, an explanation, and
+  optional `children` for the action that fills it. `titleAs="h1"` when the empty state *is* the
+  page (the empty dashboard); the default `"p"` inside a region that already sits under headings
+  (the item list), where a third heading would claim an outline level it does not own.
+- **`src/components/Skeleton.tsx`** — `CollectionGridSkeleton`, `ItemListSkeleton` and
+  `CollectionDetailSkeleton`, drawn inside the real `.collection-grid` / `.item-list` containers
+  so the boxes they reserve are the boxes the data will fill. The placeholder blocks are
+  `aria-hidden`; each **screen** wraps exactly one `role="status"` holding a `.visually-hidden`
+  label (`t("loading")`), which is what a screen reader hears and what the #228 "still loading,
+  never empty" guards match on.
+
+Anything that does not depend on the pending data renders beside the skeleton rather than after
+it — the dashboard's `<h1>` and Create action, the detail route's back link — so a loading route
+still has a heading to navigate to and nothing pops in when the data lands. A pending *action*
+(Settings' import) keeps a plain `role="status"` line: there is no content shape to preview.
+
 ## Icons
 
 `src/components/Icon.tsx` is the app's whole icon set: hand-rolled inline SVG on a 24px grid,
 1.5px strokes, `currentColor`, sized in em via the `.icon` class. `<Icon name="edit" />` is
 decorative and `aria-hidden`, so the button or link around it keeps its accessible name;
 `<Icon name="check" label={t("value_yes")} />` becomes an accessible image for the cases where
-the icon carries the value itself. Unicode glyphs are not used as icons — a guard test
+the icon carries the value itself. The one drawing that lives outside this file is the
+empty-state mark in `EmptyState.tsx`: it is an illustration on its own 72×64 canvas, not a
+1.25em UI icon, and it keeps every other rule (`fill="none"`, `currentColor`, round caps,
+`aria-hidden`). Unicode glyphs are not used as icons — a guard test
 (`src/components/icons.integration.test.ts`) fails the build if one appears in `src/`. See
 [`DESIGN.md`](../../DESIGN.md#iconography).
 
