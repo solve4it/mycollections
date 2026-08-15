@@ -4,7 +4,9 @@ import { createRoute, Link, redirect } from "@tanstack/react-router";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { DynamicItemForm } from "../../components/DynamicItemForm.js";
+import { EmptyState } from "../../components/EmptyState.js";
 import { Icon } from "../../components/Icon.js";
+import { CollectionDetailSkeleton, ItemListSkeleton } from "../../components/Skeleton.js";
 import { getToken } from "../../lib/api-client.js";
 import { useCollection, useCreateItem, useDeleteItem, useItems, useUpdateItem } from "../../lib/queries.js";
 import { rootRoute } from "../__root.js";
@@ -53,7 +55,17 @@ function CollectionDetailPage() {
           <p>{t("error_description")}</p>
         </div>
       );
-    return <p role="status">{t("loading")}</p>;
+    // The way back does not depend on the collection, so it does not wait for
+    // it: a slow load must never be a screen with no way off it.
+    return (
+      <div className="collection-detail">
+        <Link to="/collections" className="back-link">
+          <Icon name="back" />
+          {t("back_to_collections")}
+        </Link>
+        <CollectionDetailSkeleton label={t("loading")} />
+      </div>
+    );
   }
 
   return (
@@ -103,16 +115,10 @@ function ItemList({ collection, query }: ItemListProps) {
           <p>{t("items_error_description")}</p>
         </div>
       );
-    return <p role="status">{t("loading_items")}</p>;
+    return <ItemListSkeleton label={t("loading_items")} />;
   }
 
-  if (items.length === 0)
-    return (
-      <div className="empty-state">
-        <p>{t("empty_items")}</p>
-        <p>{t("empty_items_description")}</p>
-      </div>
-    );
+  if (items.length === 0) return <EmptyState title={t("empty_items")} description={t("empty_items_description")} />;
 
   return (
     <>

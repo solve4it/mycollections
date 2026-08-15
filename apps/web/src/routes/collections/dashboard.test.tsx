@@ -127,6 +127,40 @@ describe("CollectionsPage", () => {
     expect(archetypes).toEqual(["coins", "spines"]);
   });
 
+  it("draws placeholder cards while the collections load, not a line of text (#225)", async () => {
+    vi.mocked(listCollections).mockReturnValue(new Promise(() => {}));
+    renderCollections();
+
+    await waitFor(() => expect(document.querySelectorAll(".skeleton-card").length).toBeGreaterThan(0));
+    // The wait is still announced — the skeleton is the picture, the clipped
+    // label is the words. Losing the words is how a skeleton silences a screen
+    // reader, and it is what the #228 guards below depend on.
+    expect(screen.getByRole("status")).toHaveTextContent(/loading collections/i);
+  });
+
+  it("keeps the page heading and its action on screen while the grid loads (#225)", async () => {
+    // The header is not waiting on anything. Replacing the whole page with a
+    // skeleton would leave the route with no <h1> to navigate to, and would pop
+    // the header in over the grid the moment data landed.
+    vi.mocked(listCollections).mockReturnValue(new Promise(() => {}));
+    renderCollections();
+
+    expect(await screen.findByRole("heading", { level: 1, name: "Collections" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /create collection/i })).toBeInTheDocument();
+  });
+
+  it("gives the empty dashboard the open-drawer mark (#225)", async () => {
+    vi.mocked(listCollections).mockResolvedValue([]);
+    renderCollections();
+
+    await screen.findByText(/no collections yet/i);
+    const mark = document.querySelector("svg.empty-mark");
+    expect(mark).not.toBeNull();
+    expect(mark).toHaveAttribute("aria-hidden", "true");
+    // The action that fills the cabinet stays part of the empty state.
+    expect(screen.getByRole("link", { name: /create collection/i })).toBeInTheDocument();
+  });
+
   it("shows an error state when the API fails", async () => {
     vi.mocked(listCollections).mockRejectedValue(new Error("Network error"));
     renderCollections();

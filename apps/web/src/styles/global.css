@@ -233,6 +233,24 @@ h2 {
   top: 0;
 }
 
+/* Announced, never shown (#225). `display: none` and `visibility: hidden` would
+   take the text out of the accessibility tree along with the layout, which is
+   exactly wrong for a loading message: the skeleton is the picture, this is the
+   words. Clipping a 1px box is the technique that leaves it readable to a screen
+   reader — and leaves it in the DOM, which is what keeps the "still loading, not
+   empty" guards (#228) able to see it. */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
 /* Focus rings (#222). Two tokens, because the app has two surfaces: --stamp on
    the cabinet measures 2.02:1 in light mode, under the 3:1 floor for non-text
    UI, so cabinet chrome uses the lighter --focus-on-cabinet (6.08:1 / 7.90:1).
@@ -494,15 +512,45 @@ button[type="submit"]:disabled {
   cursor: not-allowed;
 }
 
-/* Empty state */
+/* Empty state (#225) — "the cabinet is empty". The mark sits above a title in
+   body ink and an explanation in muted ink, so the block reads as calm
+   information rather than as a failure; the failure surfaces are the only thing
+   in the app that speaks in --danger. */
 .empty-state {
   text-align: center;
-  padding: 48px 16px;
-  color: var(--color-text-muted);
+  padding: var(--space-6) var(--space-4);
+  color: var(--ink-muted);
 }
 
-.empty-state h1 {
-  color: var(--color-text);
+/* The mark inherits the empty state's muted ink through currentColor, so it has
+   no color of its own to keep in step with the theme. */
+.empty-mark {
+  inline-size: 72px;
+  block-size: 64px;
+  margin-bottom: var(--space-3);
+}
+
+/* Either an <h1> (the empty dashboard, which is the whole page) or a <p> (the
+   items region, which sits under two headings already). One rule for both: the
+   type role is the same wherever it lands. */
+.empty-state-title {
+  margin: 0 0 var(--space-2);
+  font-family: var(--font-display);
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+/* Measured copy, centered, with air under it for the CTA that follows on the
+   dashboard. The items empty state has no CTA — its action is the add-item form
+   below — so its explanation is the last thing in the block and drops the gap. */
+.empty-state p {
+  margin: 0 auto var(--space-4);
+  max-width: 42ch;
+}
+
+.empty-state p:last-child {
+  margin-bottom: 0;
 }
 
 /* Failure surfaces (#264). Attached to the role rather than to a class, so all
@@ -651,6 +699,126 @@ p[role="alert"] {
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
+}
+
+/* Skeletons (#225). A skeleton is a picture of what is coming, so it is drawn
+   inside the real containers (.collection-grid, .item-list) and reserves the
+   real boxes — when the data lands, nothing moves. */
+.skeleton {
+  display: block;
+  background-color: var(--line);
+  /* The pass sweeps toward the surface the placeholder sits on rather than
+     toward white: --card is lighter than --line on paper and darker than it in
+     dark mode, so one gradient reads as the block briefly thinning in both
+     themes. White at an alpha — the nav-pill trick — does not transfer here:
+     the pills sit on --cabinet, which is dark in both themes, while these sit
+     on paper, which flips. Ends on --line so the sweep has no seam. */
+  background-image: linear-gradient(90deg, var(--line), var(--card), var(--line));
+  background-size: 60% 100%;
+  background-repeat: no-repeat;
+  /* Parked off the left edge — the resting state, and the one a reduced-motion
+     user actually sees. `animation-fill-mode` is `none`, so when the global
+     opt-out zeroes the duration the element falls straight back to THIS, not to
+     the last keyframe: a flat placeholder, never a streak frozen mid-block. */
+  background-position: -150% 0;
+  border-radius: var(--radius-sm);
+  animation: skeleton-shimmer 1.6s linear infinite;
+}
+
+/* The pass takes the first 60% of the cycle and the rest is a hold, so the loop
+   reads as a repeated sweep rather than a pulse. */
+@keyframes skeleton-shimmer {
+  0% {
+    background-position: -150% 0;
+  }
+  60%,
+  100% {
+    background-position: 250% 0;
+  }
+}
+
+/* The card box without the card's behavior: no hover lift, because a
+   placeholder is not a target. */
+.skeleton-card {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--card);
+  overflow: hidden;
+}
+
+.skeleton-cover {
+  width: 100%;
+  aspect-ratio: 5 / 3;
+  /* Square, and separated by the same hairline: this block stands where the
+     full-bleed cover will stand, so it must not round its own corners inside
+     the card's. */
+  border-radius: 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.skeleton-line {
+  block-size: 0.75rem;
+}
+
+/* Stands where the collection's <h1> will stand, with the same air under it. */
+.skeleton-line-title {
+  inline-size: min(320px, 60%);
+  block-size: 1.75rem;
+  margin-bottom: var(--space-5);
+}
+
+.skeleton-line-eyebrow {
+  inline-size: 40%;
+  block-size: 0.6875rem;
+  margin-bottom: var(--space-2);
+}
+
+.skeleton-line-name {
+  inline-size: 70%;
+  block-size: 1.0625rem;
+}
+
+.skeleton-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--card);
+  /* A real row is a 44px action button inside 12px padding. Matching that here
+     keeps the list from collapsing when the placeholders are replaced. */
+  min-height: calc(var(--touch-target-size) + var(--space-3) * 2);
+}
+
+.skeleton-line-status {
+  inline-size: 72px;
+  block-size: 0.6875rem;
+}
+
+.skeleton-line-field {
+  inline-size: 40%;
+  block-size: 0.8125rem;
+}
+
+/* Screen entrance (#225). The wrapper in __root.tsx is keyed by pathname, so it
+   remounts on navigation and this replays — a CSS animation does not restart on
+   its own. No fill mode on purpose: before the animation runs and after it ends
+   the element uses its own style, so an entrance that never starts (or is cut
+   short) leaves a fully painted page rather than an invisible one. */
+.screen {
+  animation: screen-in 150ms ease-out;
+}
+
+@keyframes screen-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
 }
 
 /* Forms: setup + new collection */
@@ -881,7 +1049,20 @@ p[role="alert"] {
   }
 }
 
+/* Forced colors drops every background-image and repaints background-color as a
+   system color, so a placeholder built from fills alone becomes blank space and
+   the loading screen turns into an empty page. Presence, not paint — the same
+   call the status dot and the active nav notch already make. */
+@media (forced-colors: active) {
+  .skeleton {
+    border: 1px solid CanvasText;
+  }
+}
+
 /* Motion is opt-out for anyone who asks for it (#223; #225 inherits this block
+   for its skeletons and screen transitions). KEEP THIS BLOCK LAST: the style
+   tests read this file only up to it (`css.split(REDUCED_MOTION)[0]`), so a rule
+   added below is invisible to every one of them.
    for its skeletons and screen transitions). A near-zero duration rather than
    `none` keeps transitionend/animationend handlers firing, so anything waiting
    on one does not hang. */
