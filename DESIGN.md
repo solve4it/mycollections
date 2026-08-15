@@ -148,11 +148,53 @@ Measured: `--danger` 5.81:1 on paper / 6.25:1 on card (light), 7.19 / 6.41 (dark
 `--danger-surface` 5.56 / 6.34. All enforced by `tokens.integration.test.ts`;
 `alerts.integration.test.ts` pins the rules themselves.
 
+## Forms, buttons and status (#224)
+
+**Controls.** The text-like control rule is written as *exclusions*
+(`input:not([type="checkbox"]):not([type="radio"]):not([type="file"])`), never as a list of
+types. An enumerated list is what left `number`, `currency`, `date`, `url`, `image` and `email`
+fields — half the built-in types — rendering as bare UA controls: the rule named only `text` and
+`password`. Exclusions mean a new field type is styled by default rather than forgotten, and
+`forms.integration.test.ts` renders one control of every `BUILT_IN_FIELD_TYPES` value and
+resolves what the cascade actually paints for it. Everything sits on `--card` with a `--line`
+border at the 44px target.
+
+A `.checkbox-row` is a `<label>` wrapping its box, so the **row** carries the 44px target — a
+checkbox stretched to 44px is a 44px-wide box, not a bigger place to click. It also needs an
+explicit `display: flex`: a `<label>` is inline by default, so the `flex-direction` and `gap`
+the rule had always declared did nothing until that landed. The native box is themed with
+`accent-color`, not replaced; the platform control is already focusable, announced and
+keyboard-operable.
+
+**Buttons.** Two skins, both opted into by class: `.button-primary` (stamp fill, `--stamp-ink`
+label) and `.button-quiet` (paper ground, `--line` border, body ink). A submit button keeps the
+primary skin implicitly — in this app a submit button is always the primary action of its form.
+The primary skin's border is `transparent` rather than `--line`, which was a dark hairline
+around a bright fill in dark mode, and is kept only so the two variants share a box model and
+line up side by side.
+
+`.button-quiet` replaced three near-duplicate rules that styled secondary buttons by **where
+they sat** (`.field-row button`, `.item-actions button`, `.settings-data button`). That is why
+the Cancel button in item edit mode — which matched none of them — rendered as a bare UA button.
+Style by role, never by position.
+
+**Status** is a sticker tag: a `--font-mono` uppercase label with a dot in the status token.
+Deliberately flat, with **no tint behind it** — `--wanted` on a 10% wanted tint over `--card`
+measures 4.28:1, under the 4.5 floor for small text, so a chip would make one of the three
+statuses illegible in light mode. The dot is drawn as a `border` in `currentColor` rather than a
+`background` fill, so it survives forced-colors mode where background paint is dropped — the
+same reasoning as the nav's active notch. It is `aria-hidden`: it repeats the label beside it,
+and status is never conveyed by color alone.
+
+Measured on `--card` / `--paper`: `--owned` 5.44 / 5.06, `--wanted` 4.87 / 4.53, `--ordered`
+6.89 / 6.41 (light); 7.06 / 7.91, 7.22 / 8.09, 6.69 / 7.50 (dark). The markup has always emitted
+`item-status-<status>`; until #224 no rule matched it, so all three rendered the same indigo.
+
 ## Class roles
 
 One class, one concern. `.touch-target` is **sizing** (the 44px minimum, plus the flex
-alignment that centers content inside it); `.button-primary` is the **skin** (fill, padding,
-radius, border, icon gap). Components own their own spacing — the bottom nav wants a 2px icon
+alignment that centers content inside it); `.button-primary` and `.button-quiet` are the
+**skins** (fill, padding, radius, border, icon gap). Components own their own spacing — the bottom nav wants a 2px icon
 gap where a button wants 8px, so neither may inherit it from a utility. #259 is what this rule
 is for: `.touch-target` also painting a background made the active nav item resolve to
 `--color-primary` on `--color-primary`, an invisible tab that every palette test still passed.
