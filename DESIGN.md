@@ -4,7 +4,7 @@ The design direction for the app (epic #199): the navigation is a dark museum **
 cabinet**; everything the collector owns sits on light **archival paper**. Actions are
 ink-stamp blue, progress is manila-tag gold, and item statuses are collectors' sticker dots.
 One signature element — every collection gets a deterministic **generated cover** derived from
-its id (lands with #223).
+its id.
 
 Tokens live in `apps/web/src/styles/global.css` as CSS custom properties. Every contrast pair
 below is enforced by `apps/web/src/styles/tokens.integration.test.ts` — changing a value that
@@ -81,8 +81,14 @@ nobody chose. `icons.integration.test.ts` fails the build if one reappears in `a
 
 `--radius` 10px (cards) / `--radius-sm` 8px (controls); `--shadow` resting, `--shadow-lift`
 hover; spacing scale `--space-1..6` = 4/8/12/16/24/32px. Motion is one gesture: 2px card
-lift, 150ms transitions, skeleton shimmer — all gated by `prefers-reduced-motion` (#225).
-The one orchestrated moment is reserved for set completion (#42).
+lift, 150ms transitions, skeleton shimmer — all gated by `prefers-reduced-motion`.
+
+That gate is a single `@media (prefers-reduced-motion: reduce)` block at the end of global.css
+(landed with #223; #225 inherits it), never a per-rule opt-out. It sets near-zero durations
+rather than `none` so `transitionend`/`animationend` handlers still fire, and it cancels the
+card's hover *displacement* as well — zeroing the duration alone leaves a 2px jump under the
+pointer, which is motion, just faster. The one orchestrated moment is reserved for set
+completion (#42).
 
 ## Theming mechanics
 
@@ -131,9 +137,51 @@ labels, and the active nav tab carries a notch as well as a hue — a presence c
 in forced-colors mode, where a background tint does not. Touch targets stay 44px; focus rings
 are 2px `--focus`/`--focus-on-cabinet`.
 
-## Signature: generated covers (spec for #223)
+## Signature: generated covers (#223)
 
-`hash(collection.id)` → one of six SVG pattern archetypes (rings, studs, fan, dials, coins,
-spines) + a hue. Pure and deterministic: same collection, same cover, every device, zero
-network. When real imagery lands (#37) the pattern becomes the fallback and empty-state
-texture. Cover art is decorative (`aria-hidden`) and exempt from contrast requirements.
+Every collection gets a cover derived from its id alone — pure, deterministic, identical on
+every device, no network request to make. `apps/web/src/lib/cover.ts` hashes the id and picks
+one of six archetypes plus a hue; `GeneratedCover.tsx` draws it. When real imagery lands (#37)
+the pattern becomes the fallback and empty-state texture.
+
+- **Archetypes** (order is load-bearing — reordering the array repaints every existing cover):
+  `rings`, `studs`, `fan`, `dials`, `coins`, `spines`. Pictures of the things people collect,
+  not abstract hash art — which is why this is hand-rolled rather than an identicon dependency
+  (jdenticon, minidenticons, boring-avatars, geopattern and dicebear all score clean on
+  `depscore`; none of them produce these six). Same call as `Icon.tsx`.
+- **Hash**: FNV-1a 32-bit, integer-only. `Math.imul` for the multiply (past 2³ the plain
+  operator silently drops low bits) and `>>> 0` before every modulo (JS bitwise ops are signed,
+  and `negative % 6` indexes the archetype array out of bounds). Ids are lowercased first:
+  `z.uuid()` accepts uppercase, so a restored backup could otherwise repaint the whole
+  dashboard. Nothing in the hash path may touch `Intl`, `toLocaleString` or `localeCompare`.
+- **Hue** is a hand-picked ladder — 22, 40, 74, 150, 190, 214, 262, 344 — read from different
+  bits than the archetype, so a "coins" cover is not always the same color. Muted archival
+  hues, deliberately clear of the `--stamp` indigo (236) that paints every primary action.
+- **Color** is not decided in the component: it sets `--cover-hue` and the shapes reference
+  `--cover-bg` / `--cover-ink` / `--cover-accent`, which global.css derives per theme. Those
+  three are the only non-hex tokens in the palette, and so the only ones the contrast test
+  cannot see — deliberate, because cover art is decorative (`aria-hidden`) and exempt from
+  contrast requirements. The card's `<h2>` is the accessible content.
+- **`cover.test.ts` freezes the output**: eight hard-coded id → `{archetype, hue}` + catalog
+  code rows, the archetype order, the hue band, and a distribution check. Updating that table
+  is a decision to reshuffle every existing collection's cover, never a rubber stamp.
+
+## The collection card (#223)
+
+Cover at 5:3, then a `--font-mono` eyebrow (`C-DZ · 3 ITEMS`), the name, and a description
+clamped to two lines. The eyebrow's **catalog code is derived from the same hash, not from list
+position** — `CollectionsRepository.list()` issues no `ORDER BY`, so a sequence number would
+renumber itself on every create, delete and re-query. Codes may collide; it is a label in the
+typewritten voice, never an identifier.
+
+Code and count are sibling elements with the separator drawn in CSS `::before`, and the
+uppercase is a `text-transform`: the DOM keeps the real translated, correctly pluralized string,
+so `getByText("3 items")` — the guard that the card shows item counts rather than field counts
+(#191) — still matches. The grid is `minmax(260px, 1fr)`: at 240px the covers pack into a wall
+of pattern on a wide screen.
+
+The finite-set progress bar named in the original #223 scope was **moved to #42**, which owns
+that widget verbatim. There is no target total in the model — `isFiniteSet` is a boolean and
+nothing records how many items the set should have — and `status` defaults to `owned` on create,
+so "owned of entered" would read 100% for essentially every collection. #42 adds the target
+count first.
