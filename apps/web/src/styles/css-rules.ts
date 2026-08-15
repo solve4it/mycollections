@@ -67,6 +67,48 @@ export function declaration(body: string, property: string): string | undefined 
   return value;
 }
 
+/**
+ * The declaration that actually wins for `element`, or undefined if none applies.
+ * Pass `pseudo` (e.g. ":focus-visible") to ask what wins in that state: only rules
+ * declaring it are considered, matched against the element with it stripped —
+ * jsdom cannot focus an element, but the cascade question is still answerable.
+ *
+ * Resolving the cascade rather than matching selector strings is the whole point:
+ * #259 shipped an invisible nav tab where every selector looked right and the
+ * later rule quietly won.
+ */
+export function winningDeclaration(
+  element: Element,
+  property: string,
+  rules: Rule[],
+  pseudo?: string,
+): string | undefined {
+  const candidates = rules.flatMap((rule, order) =>
+    rule.selector
+      .split(",")
+      .map((part) => part.trim())
+      .flatMap((part) => {
+        if (pseudo && !part.includes(pseudo)) return [];
+        const testable = pseudo ? part.split(pseudo).join("") : part;
+        try {
+          if (!element.matches(testable)) return [];
+        } catch {
+          return []; // a selector jsdom cannot parse cannot match either
+        }
+        const value = declaration(rule.body, property);
+        return value === undefined ? [] : [{ value, order, weight: specificity(part) }];
+      }),
+  );
+
+  return candidates.sort((a, b) => {
+    for (let i = 0; i < 3; i++) {
+      const diff = (a.weight[i] ?? 0) - (b.weight[i] ?? 0);
+      if (diff !== 0) return diff;
+    }
+    return a.order - b.order;
+  })[candidates.length - 1]?.value;
+}
+
 /** Every rule whose selector list contains `selector` exactly. */
 export function rulesFor(rules: Rule[], selector: string): Rule[] {
   return rules.filter((rule) =>
