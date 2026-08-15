@@ -441,22 +441,54 @@ button[type="submit"] {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  padding: 0 16px;
-  border-radius: 6px;
-  border: 1px solid var(--color-border);
-  background: var(--color-primary);
+  gap: var(--space-2);
+  padding: 0 var(--space-4);
+  min-height: var(--touch-target-size);
+  border-radius: var(--radius-sm);
+  /* Transparent, not --line: a paper-palette hairline around a saturated fill
+     reads as a dark ring in dark mode. The border stays so the box model
+     matches the quiet variant and the two line up when they sit side by side. */
+  border: 1px solid transparent;
+  background: var(--stamp);
   color: var(--stamp-ink);
   text-decoration: none;
   font: inherit;
+  font-weight: 500;
   cursor: pointer;
 }
 
 .button-primary:hover,
 button[type="submit"]:hover {
-  background: var(--color-primary-hover);
+  background: var(--stamp-hover);
 }
 
+/* The quiet variant — every secondary action in the app. It replaces three
+   near-duplicate rules that styled secondary buttons by where they sat
+   (.field-row button, .item-actions button, .settings-data button), which is
+   why the Cancel button in item edit mode, matching none of them, rendered as
+   a bare UA button. One skin, opted into by class, per the class-roles rule. */
+.button-quiet {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  padding: 0 var(--space-3);
+  min-height: var(--touch-target-size);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--paper);
+  color: var(--ink);
+  font: inherit;
+  cursor: pointer;
+}
+
+.button-quiet:hover {
+  background: var(--card);
+  border-color: var(--ink-muted);
+}
+
+.button-primary:disabled,
+.button-quiet:disabled,
 button[type="submit"]:disabled {
   opacity: 0.6;
   cursor: not-allowed;
@@ -630,17 +662,20 @@ p[role="alert"] {
 .form-row {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  margin-bottom: 16px;
+  gap: var(--space-1);
+  margin-bottom: var(--space-4);
 }
 
-.form-row input[type="text"],
-.form-row input[type="password"],
+/* Every text-like control, whatever its input type. Written as exclusions rather
+   than an enumerated list: naming only text and password is how number, date,
+   url and email fields — half the built-in field types — ended up rendering as
+   bare UA controls, and the next field type added would have joined them. */
+.form-row input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
 .form-row select,
 .form-row textarea {
-  padding: 8px 10px;
-  border: 1px solid var(--color-border);
-  border-radius: 6px;
+  padding: 0 var(--space-3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
   font: inherit;
   /* Explicit surface colors — UA defaults would render light inputs in dark mode. */
   background: var(--card);
@@ -648,53 +683,64 @@ p[role="alert"] {
   min-height: var(--touch-target-size);
 }
 
+.form-row textarea {
+  padding: var(--space-2) var(--space-3);
+  min-height: calc(var(--touch-target-size) * 2);
+  resize: vertical;
+}
+
+.form-row > label {
+  font-size: 0.875rem;
+  color: var(--ink-muted);
+}
+
+/* The label wraps the box, so the row carries the 44px target — a checkbox
+   stretched to 44px is just a 44px-wide box, not a bigger place to click. */
 .form-row .checkbox-row {
   flex-direction: row;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-2);
+  min-height: var(--touch-target-size);
+  color: var(--ink);
+  font-size: 1rem;
 }
 
 .fields-builder {
-  border: 1px solid var(--color-border);
-  border-radius: 8px;
-  padding: 16px;
-  margin-bottom: 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: var(--space-4);
+  margin-bottom: var(--space-4);
+}
+
+.fields-builder > legend {
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+  padding: 0 var(--space-2);
 }
 
 .field-row {
-  border: 1px solid var(--color-border);
-  border-radius: 6px;
-  padding: 12px;
-  margin-bottom: 12px;
-  background: var(--color-surface);
-}
-
-.field-row button,
-.fields-builder > button {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 0 12px;
-  border: 1px solid var(--color-border);
-  border-radius: 6px;
-  background: var(--color-bg);
-  color: var(--color-text);
-  font: inherit;
-  cursor: pointer;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: var(--space-3);
+  margin-bottom: var(--space-3);
+  background: var(--card);
 }
 
 .form-actions {
   display: flex;
-  gap: 12px;
+  gap: var(--space-3);
 }
 
 /* Collection detail + items */
 .back-link {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  margin-bottom: 8px;
-  color: var(--color-text-muted);
+  gap: var(--space-1);
+  margin-bottom: var(--space-2);
+  color: var(--ink-muted);
   text-decoration: none;
   font-size: 0.875rem;
 }
@@ -705,29 +751,29 @@ p[role="alert"] {
 
 .item-list {
   list-style: none;
-  margin: 0 0 24px;
+  margin: 0 0 var(--space-5);
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--space-2);
 }
 
 .item-row {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 12px;
-  padding: 12px;
-  border: 1px solid var(--color-border);
-  border-radius: 8px;
-  background: var(--color-surface);
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--card);
 }
 
 .item-fields {
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
-  gap: 4px 16px;
+  gap: var(--space-1) var(--space-4);
   min-width: 0;
 }
 
@@ -738,58 +784,71 @@ p[role="alert"] {
 }
 
 .item-field-label {
-  color: var(--color-text-muted);
+  color: var(--ink-muted);
   font-size: 0.8125rem;
 }
 
+/* Status is a sticker tag: a mono uppercase label with a dot in the status
+   color. Deliberately flat — no tint behind it. --wanted on a 10% wanted tint
+   over --card measures 4.28:1, under the 4.5 floor for small text, so a chip
+   would make one of the three statuses illegible in light mode. The pill this
+   replaces painted every status the same indigo: the markup has always emitted
+   .item-status-<status>, and until now no rule matched it. */
 .item-status {
-  display: inline-block;
-  padding: 2px 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+/* Drawn as a border rather than a fill: forced-colors mode drops background
+   paint but keeps currentColor on borders, the same reason the active nav item
+   carries a notch as well as a hue. */
+.status-dot {
+  inline-size: 0;
+  block-size: 0;
+  border: 0.3em solid currentColor;
   border-radius: 999px;
-  font-size: 0.75rem;
-  font-weight: 600;
-  background: color-mix(in srgb, var(--color-primary) 14%, transparent);
-  color: var(--accent-text);
+  flex-shrink: 0;
+}
+
+.item-status-owned {
+  color: var(--owned);
+}
+
+.item-status-wanted {
+  color: var(--wanted);
+}
+
+.item-status-ordered {
+  color: var(--ordered);
 }
 
 .item-actions {
   display: flex;
-  gap: 8px;
+  gap: var(--space-2);
   flex-shrink: 0;
-}
-
-.item-actions button,
-.add-item .form-actions button[type="button"] {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 0 12px;
-  border: 1px solid var(--color-border);
-  border-radius: 6px;
-  background: var(--color-bg);
-  color: var(--color-text);
-  font: inherit;
-  cursor: pointer;
-}
-
-/* Settings: data buttons carry an icon beside their label, so they declare
-   their own gap. Icon spacing is a component's business, not .touch-target's —
-   the bottom nav wants 2px where a button wants 8px. */
-.settings-data button {
-  gap: 8px;
 }
 
 /* Settings: file picker row */
 .import-row {
   display: flex;
   align-items: center;
-  gap: 8px;
-  color: var(--color-text-muted);
+  gap: var(--space-2);
+  color: var(--ink-muted);
+}
+
+.import-row input[type="file"] {
+  font: inherit;
+  color: var(--ink);
 }
 
 .add-item {
-  border-top: 1px solid var(--color-border);
-  padding-top: 16px;
+  border-top: 1px solid var(--line);
+  padding-top: var(--space-4);
   max-width: 640px;
 }
 

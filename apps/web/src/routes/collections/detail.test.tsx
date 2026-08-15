@@ -108,6 +108,14 @@ describe("CollectionDetailPage", () => {
     // <option> with the same text doesn't satisfy the assertion.
     const statusBadge = titleField?.closest(".item-row")?.querySelector(".item-status");
     expect(statusBadge).toHaveTextContent("Owned");
+
+    // The tag carries its status as a modifier class, which is what colors it
+    // (#224). Before that rule existed the class was emitted and matched
+    // nothing, so owned, wanted and ordered all rendered the same indigo.
+    expect(statusBadge).toHaveClass("item-status-owned");
+    // The dot repeats the label, so it is hidden rather than announced.
+    const dot = statusBadge?.querySelector(".status-dot");
+    expect(dot).toHaveAttribute("aria-hidden", "true");
   });
 
   it("renders an empty placeholder for a missing field value", async () => {

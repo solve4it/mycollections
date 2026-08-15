@@ -30,16 +30,21 @@ function SetupPage() {
       <h1>{t("title")}</h1>
       <p>{t("description")}</p>
       <form onSubmit={handleSubmit}>
-        <label htmlFor="api-token">{t("token_label")}</label>
-        <input
-          id="api-token"
-          type="password"
-          value={token}
-          onChange={(e) => setTokenInput(e.target.value)}
-          placeholder={t("token_placeholder")}
-          autoComplete="off"
-          required
-        />
+        {/* The row wrapper is not decoration: every input rule in the stylesheet
+            is scoped to .form-row, so without it the first screen a new user
+            sees renders a bare UA control (#224). */}
+        <div className="form-row">
+          <label htmlFor="api-token">{t("token_label")}</label>
+          <input
+            id="api-token"
+            type="password"
+            value={token}
+            onChange={(e) => setTokenInput(e.target.value)}
+            placeholder={t("token_placeholder")}
+            autoComplete="off"
+            required
+          />
+        </div>
         <button type="submit" className="touch-target">
           {t("connect_button")}
         </button>

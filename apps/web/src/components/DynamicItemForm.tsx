@@ -97,7 +97,7 @@ export function DynamicItemForm({
           {submitLabel ?? t("save")}
         </button>
         {onCancel && (
-          <button type="button" className="touch-target" onClick={onCancel}>
+          <button type="button" className="touch-target button-quiet" onClick={onCancel}>
             {t("cancel")}
           </button>
         )}

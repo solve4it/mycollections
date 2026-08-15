@@ -89,7 +89,7 @@ function SettingsPage() {
       <section className="settings-data">
         <h2>{t("data_label")}</h2>
         <p>{t("export_description")}</p>
-        <button type="button" className="touch-target" onClick={handleExport}>
+        <button type="button" className="touch-target button-quiet" onClick={handleExport}>
           <Icon name="export" />
           {t("export_button")}
         </button>
@@ -134,7 +134,7 @@ function SettingsPage() {
       <section className="settings-connection">
         <h2>{t("connection_label")}</h2>
         <p>{t("disconnect_description")}</p>
-        <button type="button" className="touch-target" onClick={handleDisconnect}>
+        <button type="button" className="touch-target button-quiet" onClick={handleDisconnect}>
           {t("disconnect_button")}
         </button>
       </section>

@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
-import { declaration, parseRules, specificity } from "./css-rules.js";
+import { parseRules, type Rule, winningDeclaration } from "./css-rules.js";
 import { contrast, declarationsFromBlock, extractBlock, type Rgb, resolveColor, TEXT, toHex } from "./wcag.js";
 
 /**
@@ -27,37 +27,9 @@ const css = readFileSync(resolve("src/styles/global.css"), "utf8");
 
 const RULES = parseRules(css);
 
-/**
- * The declaration that actually wins for `element`, or undefined if none applies.
- * Pass `pseudo` (e.g. ":focus-visible") to ask what wins in that state: only rules
- * declaring it are considered, matched against the element with it stripped —
- * jsdom cannot focus an element, but the cascade question is still answerable.
- */
-function resolve_(element: Element, property: string, rules = RULES, pseudo?: string): string | undefined {
-  const candidates = rules.flatMap((rule, order) =>
-    rule.selector
-      .split(",")
-      .map((part) => part.trim())
-      .flatMap((part) => {
-        if (pseudo && !part.includes(pseudo)) return [];
-        const testable = pseudo ? part.split(pseudo).join("") : part;
-        try {
-          if (!element.matches(testable)) return [];
-        } catch {
-          return []; // a selector jsdom cannot parse cannot match either
-        }
-        const value = declaration(rule.body, property);
-        return value === undefined ? [] : [{ value, order, weight: specificity(part) }];
-      }),
-  );
-
-  return candidates.sort((a, b) => {
-    for (let i = 0; i < 3; i++) {
-      const diff = (a.weight[i] ?? 0) - (b.weight[i] ?? 0);
-      if (diff !== 0) return diff;
-    }
-    return a.order - b.order;
-  })[candidates.length - 1]?.value;
+/** Thin wrapper so the existing assertions keep reading against the full sheet. */
+function resolve_(element: Element, property: string, rules: Rule[] = RULES, pseudo?: string): string | undefined {
+  return winningDeclaration(element, property, rules, pseudo);
 }
 
 /** The shell, as Shell.tsx renders it. */
@@ -77,7 +49,7 @@ function renderShell() {
       <a class="bottom-nav-item touch-target" href="/settings"><span>Settings</span></a>
     </nav>
     <section class="settings-data">
-      <button type="button" class="touch-target">Export data</button>
+      <button type="button" class="touch-target button-quiet">Export data</button>
     </section>
     <div class="page-header">
       <a class="touch-target button-primary" href="/collections/new">Create collection</a>
@@ -228,13 +200,21 @@ describe("nav cascade", () => {
     // icon like a button; moving it off is what silently closed the gap on the
     // settings buttons. Both directions are pinned here.
     expect(resolve_(nav.bottomInactive, "gap")).toBe("3px");
-    expect(resolve_(nav.settingsButton, "gap")).toBe("8px");
+    // The settings button's gap moved from a .settings-data positional rule onto
+    // the .button-quiet skin it now opts into (#224). Same principle, one owner:
+    // the gap belongs to the button, not to where the button happens to sit.
+    expect(resolve_(nav.settingsButton, "gap")).toBe("var(--space-2)");
     expect(resolve_(nav.sidebarInactive, "gap")).toBe("11px");
   });
 
   it("still gives an opted-in primary action its fill", () => {
     const nav = renderShell();
-    expect(resolve_(nav.primaryCta, "background")).toBe("var(--color-primary)");
+    // Matched rather than compared to one spelling: #224 migrates the skin off
+    // the --color-primary alias onto --stamp, and both are the same fill. What
+    // this test is actually for is that the fill reaches the opted-in CTA and
+    // nothing else — PRIMARY_FILL accepts either name and the nav assertions
+    // above still prove it stays out of the navigation.
+    expect(resolve_(nav.primaryCta, "background")).toMatch(PRIMARY_FILL);
     expect(resolve_(nav.primaryCta, "color")).toBe("var(--stamp-ink)");
   });
 
