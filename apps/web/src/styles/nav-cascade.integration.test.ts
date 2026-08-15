@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
+import { declaration, parseRules, type Rule, specificity } from "./css-rules.js";
 import { contrast, declarationsFromBlock, extractBlock, type Rgb, resolveColor, TEXT, toHex } from "./wcag.js";
 
 /**
@@ -24,66 +25,7 @@ import { contrast, declarationsFromBlock, extractBlock, type Rgb, resolveColor, 
 
 const css = readFileSync(resolve("src/styles/global.css"), "utf8");
 
-interface Rule {
-  selector: string;
-  body: string;
-}
-
-/** Flatten a stylesheet to its style rules, in source order. */
-function parseRules(source: string): Rule[] {
-  const text = source.replace(/\/\*[\s\S]*?\*\//g, "");
-  const out: Rule[] = [];
-  let index = 0;
-
-  while (index < text.length) {
-    const open = text.indexOf("{", index);
-    if (open === -1) break;
-
-    let depth = 0;
-    let close = -1;
-    for (let i = open; i < text.length; i++) {
-      if (text[i] === "{") depth++;
-      if (text[i] === "}" && --depth === 0) {
-        close = i;
-        break;
-      }
-    }
-    if (close === -1) break;
-
-    const prelude = text.slice(index, open).trim();
-    const body = text.slice(open + 1, close);
-    if (prelude.startsWith("@")) {
-      // Conditional groups contribute their children; @font-face and @keyframes
-      // hold declarations rather than rules, so they contribute nothing.
-      if (/^@(media|supports|layer)\b/.test(prelude)) out.push(...parseRules(body));
-    } else {
-      out.push({ selector: prelude, body });
-    }
-    index = close + 1;
-  }
-  return out;
-}
-
 const RULES = parseRules(css);
-
-/** Selector specificity as [ids, classes/attrs/pseudo-classes, elements]. */
-function specificity(selector: string): [number, number, number] {
-  const withoutPseudoElements = selector.replace(/::[\w-]+/g, " ");
-  const ids = withoutPseudoElements.match(/#[\w-]+/g)?.length ?? 0;
-  const classes =
-    (withoutPseudoElements.match(/\.[\w-]+/g)?.length ?? 0) +
-    (withoutPseudoElements.match(/\[[^\]]*\]/g)?.length ?? 0) +
-    (withoutPseudoElements.match(/(^|[^:]):[\w-]+/g)?.length ?? 0);
-  const elements = withoutPseudoElements.match(/(?:^|[\s>+~])([a-z][\w-]*)/g)?.length ?? 0;
-  return [ids, classes, elements];
-}
-
-function declaration(body: string, property: string): string | undefined {
-  const pattern = new RegExp(`(?:^|[;{])\\s*${property}\\s*:\\s*([^;]+?)\\s*(?:;|$)`, "g");
-  let value: string | undefined;
-  for (const match of body.matchAll(pattern)) value = match[1];
-  return value;
-}
 
 /**
  * The declaration that actually wins for `element`, or undefined if none applies.

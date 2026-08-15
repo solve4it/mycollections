@@ -94,6 +94,39 @@ describe("CollectionsPage", () => {
     expect(await screen.findByText("0 items")).toBeInTheDocument();
   });
 
+  it("stamps the card with the collection's catalog code", async () => {
+    vi.mocked(listCollections).mockResolvedValue([SAMPLE_COLLECTION]);
+    renderCollections();
+    // C-DZ is what catalogCode() pins for this id. The code is derived from the
+    // id, never from list position — the repository issues no ORDER BY, so a
+    // sequence number would renumber itself on every create and delete.
+    expect(await screen.findByText("C-DZ")).toBeInTheDocument();
+  });
+
+  it("gives the collection the cover its id generates", async () => {
+    vi.mocked(listCollections).mockResolvedValue([SAMPLE_COLLECTION]);
+    renderCollections();
+    await screen.findByText("Books");
+
+    const cover = document.querySelector("svg.collection-cover");
+    expect(cover?.getAttribute("data-archetype")).toBe("coins");
+    expect(cover?.getAttribute("aria-hidden")).toBe("true");
+  });
+
+  it("gives two collections two different covers", async () => {
+    vi.mocked(listCollections).mockResolvedValue([
+      SAMPLE_COLLECTION,
+      { ...SAMPLE_COLLECTION, id: "00000000-0000-0000-0000-000000000002", name: "Movies" },
+    ]);
+    renderCollections();
+    await screen.findByText("Movies");
+
+    const archetypes = [...document.querySelectorAll("svg.collection-cover")].map((c) =>
+      c.getAttribute("data-archetype"),
+    );
+    expect(archetypes).toEqual(["coins", "spines"]);
+  });
+
   it("shows an error state when the API fails", async () => {
     vi.mocked(listCollections).mockRejectedValue(new Error("Network error"));
     renderCollections();

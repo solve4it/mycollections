@@ -461,35 +461,121 @@ button[type="submit"]:disabled {
   color: var(--color-text);
 }
 
-/* Collection grid + cards */
+/* Collection grid + cards (#223). A card is a catalog entry: generated cover on
+   top, then the typewritten eyebrow, then the name. 260px rather than 240px
+   because the 5:3 cover gives every card real height — at 240 the grid packs
+   into a wall of pattern on a wide screen. */
 .collection-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
-  gap: 16px;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: var(--space-4);
 }
 
 .collection-card {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--card);
+  color: var(--ink);
+  text-decoration: none;
+  box-shadow: var(--shadow);
+  /* The cover is a full-bleed rectangle; without this it paints over the
+     card's rounded corners. */
+  overflow: hidden;
+  transition:
+    transform 0.15s,
+    box-shadow 0.15s;
+}
+
+.collection-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-lift);
+}
+
+.collection-cover {
+  /* The cover's palette is declared HERE, on the element that carries
+     --cover-hue, and never in :root. A custom property that references another
+     is substituted where it is *declared*, not where it is used: the same three
+     lines in :root resolve against a --cover-hue that does not exist there,
+     compute to an invalid color, and paint every cover black. Covers are
+     decorative and exempt from the contrast floor (DESIGN.md), which is also
+     why the palette test — it reads only 6-digit hex — does not see them. */
+  --cover-bg: hsl(var(--cover-hue) 26% 90%);
+  --cover-accent: hsl(var(--cover-hue) 30% 79%);
+  --cover-ink: hsl(var(--cover-hue) 32% 55%);
   display: block;
-  padding: 16px;
-  border: 1px solid var(--color-border);
-  border-radius: 8px;
-  background: var(--color-surface);
+  width: 100%;
+  /* Reserved rather than measured: the cover occupies its 5:3 box before the
+     SVG paints, so a slow first render never reflows the grid under the
+     pointer. */
+  aspect-ratio: 5 / 3;
+  border-bottom: 1px solid var(--line);
+}
+
+/* Covers go darker with the paper. Written out per theme rather than through
+   light-dark(), matching how every other token in this file switches. */
+@media (prefers-color-scheme: dark) {
+  .collection-cover {
+    --cover-bg: hsl(var(--cover-hue) 20% 18%);
+    --cover-accent: hsl(var(--cover-hue) 18% 27%);
+    --cover-ink: hsl(var(--cover-hue) 28% 45%);
+  }
+}
+
+:root[data-theme="dark"] .collection-cover {
+  --cover-bg: hsl(var(--cover-hue) 20% 18%);
+  --cover-accent: hsl(var(--cover-hue) 18% 27%);
+  --cover-ink: hsl(var(--cover-hue) 28% 45%);
+}
+
+:root[data-theme="light"] .collection-cover {
+  --cover-bg: hsl(var(--cover-hue) 26% 90%);
+  --cover-accent: hsl(var(--cover-hue) 30% 79%);
+  --cover-ink: hsl(var(--cover-hue) 32% 55%);
+}
+
+.collection-card-body {
+  padding: var(--space-4);
+}
+
+.collection-card-eyebrow {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  margin: 0 0 var(--space-2);
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+}
+
+/* The separator is decorative punctuation, so it is drawn rather than written:
+   keeping it out of the DOM leaves `getByText("3 items")` — the guard that the
+   card shows item counts, not field counts (#191) — matching a real text node. */
+.collection-card-count::before {
+  content: "·";
+  margin-right: var(--space-2);
 }
 
 .collection-card-name {
-  margin: 0 0 4px;
+  margin: 0 0 var(--space-1);
   font-size: 1.0625rem;
+  color: var(--ink);
 }
 
 .collection-card-description {
-  margin: 0 0 8px;
-  color: var(--color-text-muted);
+  margin: 0;
+  color: var(--ink-muted);
   font-size: 0.875rem;
-}
-
-.collection-card-meta {
-  font-size: 0.8125rem;
-  color: var(--color-text-muted);
+  /* Two lines, then ellipsis: a long description must not set the height of
+     every card in its grid row. The -webkit- prefixed triple is still the
+     interoperable spelling. */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
 /* Forms: setup + new collection */
@@ -677,5 +763,26 @@ button[type="submit"]:disabled {
   .shell-main {
     padding: 16px;
     padding-bottom: calc(var(--bottom-nav-height) + 16px);
+  }
+}
+
+/* Motion is opt-out for anyone who asks for it (#223; #225 inherits this block
+   for its skeletons and screen transitions). A near-zero duration rather than
+   `none` keeps transitionend/animationend handlers firing, so anything waiting
+   on one does not hang. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+  }
+
+  /* Zeroing the duration alone would still leave a 2px jump under the pointer:
+     the displacement itself has to go, not just its animation. */
+  .collection-card:hover {
+    transform: none;
   }
 }
