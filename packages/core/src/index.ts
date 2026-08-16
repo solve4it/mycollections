@@ -19,7 +19,7 @@ export {
   type FieldDefinition,
   FieldDefinitionSchema,
 } from "./field.js";
-export { type Item, ItemFieldValueSchema, ItemSchema } from "./item.js";
+export { type DeletedItem, type Item, ItemFieldValueSchema, ItemSchema } from "./item.js";
 export {
   MEDIA_KINDS,
   type Media,

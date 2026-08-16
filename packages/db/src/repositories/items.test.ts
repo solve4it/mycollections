@@ -1,5 +1,5 @@
 import type { Collection, FieldDefinition } from "@mycollections/core";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { type DatabaseHandle, openDatabase } from "../open-database.js";
 
 const fields: FieldDefinition[] = [
@@ -109,6 +109,62 @@ describe("ItemsRepository", () => {
     expect(await handle.items.getById(created.id)).not.toBeNull();
     expect(await handle.items.hardDelete(created.id)).toBe(true);
     expect(await handle.items.getById(created.id, { includeDeleted: true })).toBeNull();
+  });
+
+  describe("listDeleted", () => {
+    it("returns soft-deleted items with their collection name, most recently deleted first", async () => {
+      await handle.items.create({ collectionId: collection.id, fields: { title: "Live" } });
+      const first = await handle.items.create({ collectionId: collection.id, fields: { title: "Dune" } });
+      const second = await handle.items.create({ collectionId: collection.id, fields: { title: "Emma" } });
+
+      // Same-millisecond deletes would tie on deleted_at and leave the order to the
+      // query planner. Fake Date only — real timers and promises stay untouched.
+      vi.useFakeTimers({ toFake: ["Date"] });
+      try {
+        vi.setSystemTime(new Date("2026-08-16T10:00:00.000Z"));
+        await handle.items.softDelete(first.id);
+        vi.setSystemTime(new Date("2026-08-16T10:00:01.000Z"));
+        await handle.items.softDelete(second.id);
+      } finally {
+        vi.useRealTimers();
+      }
+
+      const deleted = await handle.items.listDeleted();
+      expect(deleted.map((i) => i.fields.title)).toEqual(["Emma", "Dune"]);
+      expect(deleted.map((i) => i.collectionName)).toEqual(["Books", "Books"]);
+      expect(deleted[0]?.deletedAt).toBe("2026-08-16T10:00:01.000Z");
+    });
+
+    it("omits items whose collection is itself deleted — they are restored with their parent", async () => {
+      const orphan = await handle.items.create({ collectionId: collection.id, fields: { title: "Hidden" } });
+      await handle.items.softDelete(orphan.id);
+      const other = await handle.collections.create({ name: "Movies", fields, isFiniteSet: false });
+      const visible = await handle.items.create({ collectionId: other.id, fields: { title: "Shown" } });
+      await handle.items.softDelete(visible.id);
+
+      await handle.collections.softDelete(collection.id);
+
+      const deleted = await handle.items.listDeleted();
+      expect(deleted.map((i) => i.id)).toEqual([visible.id]);
+    });
+
+    it("purges only trashed items, in a single conditional statement", async () => {
+      const live = await handle.items.create({ collectionId: collection.id, fields: { title: "Live" } });
+      const trashed = await handle.items.create({ collectionId: collection.id, fields: { title: "Gone" } });
+      await handle.items.softDelete(trashed.id);
+
+      expect(await handle.items.purge(live.id)).toBe(false);
+      expect(await handle.items.getById(live.id)).not.toBeNull();
+
+      expect(await handle.items.purge(trashed.id)).toBe(true);
+      expect(await handle.items.getById(trashed.id, { includeDeleted: true })).toBeNull();
+      expect(await handle.items.purge(trashed.id)).toBe(false);
+    });
+
+    it("returns an empty list when nothing is deleted", async () => {
+      await handle.items.create({ collectionId: collection.id, fields: { title: "Live" } });
+      expect(await handle.items.listDeleted()).toEqual([]);
+    });
   });
 
   it("hard delete cascades to media", async () => {

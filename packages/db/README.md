@@ -16,6 +16,7 @@ An earlier draft of this package called for an in-memory SQLite mirror in front 
 Later phases add their own tables via new migrations: `share_links` (#48), `plugin_data` (#54/#55), `licenses` (#57), `mutations`/`sync_state` (#49), and the `items_fts` FTS5 table (#41).
 
 - **Soft delete**: `collections`, `items`, and `media` carry a nullable `deleted_at`; repositories exclude soft-deleted rows unless asked (`includeDeleted`), and offer `restore()`. Hard deletes cascade (collection → items → media) via foreign keys.
+- **Trash**: `listDeleted()` on collections and items returns what soft delete has hidden, most recently deleted first (ties break on id, so the order is stable). `purge()` permanently removes a row, carrying the `deleted_at` test inside the `DELETE` so a concurrent restore cannot lose the row; it is a no-op on anything live. Deleting a collection stamps no child row — its items are hidden with it and return with it, so `items.listDeleted()` omits items whose collection is itself deleted.
 - **Timestamps** are ISO 8601 strings, matching the core Zod schemas.
 
 ## Migrations
@@ -53,8 +54,8 @@ handle.close();
 | Export | Purpose |
 |---|---|
 | `openDatabase` / `DatabaseHandle` | Open + migrate the database; returns repositories, the Drizzle instance (`db`), and the raw connection (`sqlite`) |
-| `CollectionsRepository` | CRUD, soft delete/restore, hard delete |
-| `ItemsRepository` | CRUD, list/filter by status, `findByFieldValue()` via `json_extract()` |
+| `CollectionsRepository` | CRUD, soft delete/restore, `listDeleted()`/`purge()` for the trash, hard delete |
+| `ItemsRepository` | CRUD, list/filter by status, `listDeleted()`/`purge()` for the trash, `findByFieldValue()` via `json_extract()` |
 | `MediaRepository` | CRUD plus `setPrimary()` (demotes the previous primary in the same transaction) |
 | `UserProfileRepository` | `get()` / `upsert()` keyed by the auth layer's account key |
 | `schema` | The Drizzle table definitions, for callers needing custom queries |

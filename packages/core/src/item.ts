@@ -16,3 +16,10 @@ export const ItemSchema = z.object({
 });
 
 export type Item = z.infer<typeof ItemSchema>;
+
+/**
+ * A soft-deleted item as the trash presents it. The collection name travels with
+ * the row so a trash listing can say what each item belonged to without the
+ * caller fetching every collection back.
+ */
+export type DeletedItem = Item & { collectionName: string };

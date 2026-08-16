@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { type Collection, CollectionSchema, type FieldDefinition } from "@mycollections/core";
-import { and, eq, isNotNull, isNull } from "drizzle-orm";
+import { and, asc, desc, eq, isNotNull, isNull } from "drizzle-orm";
 import type { BetterSQLite3Database } from "drizzle-orm/better-sqlite3";
 import * as schema from "../schema.js";
 import { stripUndefined } from "./strip-undefined.js";
@@ -93,6 +93,21 @@ export class CollectionsRepository {
     return rows.map(rowToCollection);
   }
 
+  /**
+   * Lists soft-deleted collections for the trash, most recently deleted first.
+   * Ties on `deletedAt` (two deletes within the same millisecond) break on id, so
+   * the order is stable rather than left to the query planner.
+   */
+  async listDeleted(): Promise<Collection[]> {
+    const rows = this.#db
+      .select()
+      .from(schema.collections)
+      .where(isNotNull(schema.collections.deletedAt))
+      .orderBy(desc(schema.collections.deletedAt), asc(schema.collections.id))
+      .all();
+    return rows.map(rowToCollection);
+  }
+
   async update(id: string, patch: UpdateCollectionInput): Promise<Collection | null> {
     const existing = await this.getById(id, { includeDeleted: true });
     if (!existing) {
@@ -128,6 +143,20 @@ export class CollectionsRepository {
 
   async hardDelete(id: string): Promise<boolean> {
     const result = this.#db.delete(schema.collections).where(eq(schema.collections.id, id)).run();
+    return result.changes > 0;
+  }
+
+  /**
+   * Permanently removes a collection and, by foreign key cascade, everything it
+   * contains — but only while it is in the trash. The `deletedAt` guard is part
+   * of the DELETE rather than a separate read, so a restore racing a purge
+   * cannot destroy a collection the user has just recovered.
+   */
+  async purge(id: string): Promise<boolean> {
+    const result = this.#db
+      .delete(schema.collections)
+      .where(and(eq(schema.collections.id, id), isNotNull(schema.collections.deletedAt)))
+      .run();
     return result.changes > 0;
   }
 }
