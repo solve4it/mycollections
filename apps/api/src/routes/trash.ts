@@ -1,4 +1,4 @@
-import type { DatabaseHandle } from "@mycollections/db";
+import { type DatabaseHandle, emptyTrash } from "@mycollections/db";
 import type { FastifyInstance } from "fastify";
 
 /**
@@ -14,6 +14,11 @@ export async function registerTrashRoutes(app: FastifyInstance, db: DatabaseHand
     const [collections, items] = await Promise.all([db.collections.listDeleted(), db.items.listDeleted()]);
     return { collections, items };
   });
+
+  // Emptying the trash is the one action in the app that nothing can undo, so it
+  // answers with what it removed rather than a bare 204 — the caller needs those
+  // counts to tell the user what just happened.
+  app.delete("/api/trash", async () => emptyTrash(db));
 
   app.delete("/api/trash/items/:itemId", async (request, reply) => {
     const { itemId } = request.params as { itemId: string };

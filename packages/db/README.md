@@ -58,6 +58,7 @@ handle.close();
 | `ItemsRepository` | CRUD, list/filter by status, `listDeleted()`/`purge()` for the trash, `findByFieldValue()` via `json_extract()` |
 | `MediaRepository` | CRUD plus `setPrimary()` (demotes the previous primary in the same transaction) |
 | `UserProfileRepository` | `get()` / `upsert()` keyed by the auth layer's account key |
+| `emptyTrash` | Permanently removes every trashed collection (cascading to its items) and every trashed item, in one transaction |
 | `schema` | The Drizzle table definitions, for callers needing custom queries |
 
 Repositories validate reads and writes with the core Zod schemas, so malformed rows fail loudly at the boundary. All tests run against real SQLite (no mocks).
