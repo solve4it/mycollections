@@ -125,6 +125,53 @@ describe("api-client ↔ Fastify (real HTTP)", () => {
     expect(await client.listItems(collection.id)).toEqual([restored]);
   });
 
+  it("edits a collection's field schema over real HTTP, keeping values under a removed field", async () => {
+    const collection = await client.createCollection({
+      name: "Vinyl",
+      fields: [
+        { id: "title", label: "Title", type: "text", required: true },
+        { id: "pressing", label: "Pressing", type: "text", required: false },
+      ],
+      isFiniteSet: false,
+    });
+    const item = await client.createItem(collection.id, {
+      fields: { title: "Kind of Blue", pressing: "1959 mono" },
+    });
+
+    // What the editor sends: an existing field relabelled under its own id, a
+    // removed field simply absent, and a new field carrying a fresh id.
+    const edited = await client.updateCollection(collection.id, {
+      name: "Records",
+      fields: [
+        { id: "title", label: "Album", type: "text", required: true },
+        { id: "year", label: "Year", type: "number", required: false },
+      ],
+    });
+    expect(edited.name).toBe("Records");
+    expect(edited.fields).toEqual([
+      { id: "title", label: "Album", type: "text", required: true },
+      { id: "year", label: "Year", type: "number", required: false },
+    ]);
+
+    // The value filed under the removed field is still on the item.
+    const [stored] = await client.listItems(collection.id);
+    expect(stored?.fields).toEqual({ title: "Kind of Blue", pressing: "1959 mono" });
+
+    // The guard the editor's disabled type control mirrors: the server refuses a
+    // retype while the collection holds items, and nothing else in the body lands.
+    await expect(
+      client.updateCollection(collection.id, {
+        name: "Should not stick",
+        fields: [{ id: "title", label: "Album", type: "number", required: true }],
+      }),
+    ).rejects.toBeInstanceOf(client.ApiError);
+    const unchanged = await client.getCollection(collection.id);
+    expect(unchanged.name).toBe("Records");
+    expect(unchanged.fields[0]).toEqual({ id: "title", label: "Album", type: "text", required: true });
+
+    await client.deleteItem(collection.id, item.id);
+  });
+
   it("surfaces a 401 as UnauthorizedError when the token is wrong", async () => {
     localStorage.setItem("api_token", "wrong");
     await expect(client.listCollections()).rejects.toBeInstanceOf(client.UnauthorizedError);

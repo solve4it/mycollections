@@ -70,6 +70,20 @@ export async function createCollection(input: CreateCollectionInput): Promise<Co
   return res.json() as Promise<Collection>;
 }
 
+/**
+ * A collection edit. `fields` replaces the whole schema rather than describing a
+ * delta, so send the field list you want to end up with. The server keeps values
+ * stored under a field id that leaves the schema, and refuses to change an
+ * existing field's type while the collection holds items.
+ */
+export type UpdateCollectionInput = Partial<CreateCollectionInput>;
+
+export async function updateCollection(id: string, input: UpdateCollectionInput): Promise<Collection> {
+  const res = await request(`/api/collections/${id}`, { method: "PATCH", body: JSON.stringify(input) });
+  if (!res.ok) throw new ApiError(res.status);
+  return res.json() as Promise<Collection>;
+}
+
 export async function getCollection(id: string): Promise<Collection> {
   const res = await request(`/api/collections/${id}`);
   if (!res.ok) throw new ApiError(res.status);

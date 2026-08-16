@@ -846,9 +846,10 @@ p[role="alert"] {
   }
 }
 
-/* Forms: setup + new collection */
+/* Forms: setup + new collection + collection editor */
 .setup-page,
-.new-collection-page {
+.new-collection-page,
+.edit-collection-page {
   max-width: 640px;
 }
 
@@ -935,12 +936,46 @@ p[role="alert"] {
   background: var(--card);
 }
 
+/* Consequence notes: why a control is locked, or what an edit costs. Muted so
+   they read as annotation rather than as an error — the same weight as a field
+   label, which they sit beside. */
+.field-hint,
+.form-hint {
+  margin: var(--space-1) 0 0;
+  font-size: 0.875rem;
+  color: var(--ink-muted);
+}
+
+.form-hint {
+  margin-bottom: var(--space-4);
+}
+
+/* A locked control still has to be readable: it explains a rule rather than
+   being merely unavailable, so it keeps the normal ink and marks itself with the
+   surface and cursor instead of fading out. */
+.form-row select:disabled {
+  background: var(--paper);
+  color: var(--ink-muted);
+  cursor: not-allowed;
+}
+
 .form-actions {
   display: flex;
   gap: var(--space-3);
 }
 
 /* Collection detail + items */
+/* The title and its editor link share a line on wide screens and stack on
+   narrow ones — wrapping rather than a media query, so the break happens when
+   the name actually needs the room. */
+.collection-detail-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
 .back-link {
   display: inline-flex;
   align-items: center;
