@@ -5,6 +5,7 @@ import { Icon } from "../../components/Icon.js";
 import { clearToken, exportData } from "../../lib/api-client.js";
 import { isErrorReportingEnabled, setErrorReportingEnabled } from "../../lib/error-reporter.js";
 import { useImportData } from "../../lib/queries.js";
+import { getThemePreference, isThemePreference, setThemePreference } from "../../lib/theme.js";
 import { rootRoute } from "../__root.js";
 
 export const settingsRoute = createRoute({
@@ -15,6 +16,13 @@ export const settingsRoute = createRoute({
 
 const SUPPORTED_LANGUAGES = [{ code: "en", labelKey: "language_en" }] as const;
 
+/** System first: it is the default, and the explicit picks read as overrides of it. */
+const THEME_OPTIONS = [
+  { value: "system", labelKey: "theme_system" },
+  { value: "light", labelKey: "theme_light" },
+  { value: "dark", labelKey: "theme_dark" },
+] as const;
+
 function SettingsPage() {
   const { t, i18n } = useTranslation("settings");
   const navigate = useNavigate();
@@ -22,6 +30,14 @@ function SettingsPage() {
   const [exportError, setExportError] = useState(false);
   const [importInvalid, setImportInvalid] = useState(false);
   const [errorReporting, setErrorReporting] = useState(isErrorReportingEnabled);
+  const [theme, setTheme] = useState(getThemePreference);
+
+  function handleThemeChange(event: ChangeEvent<HTMLSelectElement>) {
+    const next = event.target.value;
+    if (!isThemePreference(next)) return;
+    setThemePreference(next);
+    setTheme(next);
+  }
 
   function handleErrorReportingChange(event: ChangeEvent<HTMLInputElement>) {
     setErrorReportingEnabled(event.target.checked);
@@ -80,6 +96,17 @@ function SettingsPage() {
         >
           {SUPPORTED_LANGUAGES.map(({ code, labelKey }) => (
             <option key={code} value={code}>
+              {t(labelKey)}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      <div className="form-row">
+        <label htmlFor="theme-select">{t("theme_label")}</label>
+        <select id="theme-select" value={theme} onChange={handleThemeChange}>
+          {THEME_OPTIONS.map(({ value, labelKey }) => (
+            <option key={value} value={value}>
               {t(labelKey)}
             </option>
           ))}
