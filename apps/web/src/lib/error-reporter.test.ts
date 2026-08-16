@@ -17,7 +17,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  consoleSpy.mockRestore();
+  vi.restoreAllMocks();
 });
 
 function lastReportJson(): string {
@@ -43,6 +43,35 @@ describe("error reporting opt-out", () => {
     setErrorReportingEnabled(false);
     errorReporter.capture(new Error("after opt-out"));
     expect(consoleSpy).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("opt-out when storage is denied", () => {
+  /** Safari private browsing, blocked cookies and partitioned storage all throw here. */
+  function denyStorage() {
+    const denied = () => {
+      throw new DOMException("denied", "SecurityError");
+    };
+    vi.spyOn(Storage.prototype, "getItem").mockImplementation(denied);
+    vi.spyOn(Storage.prototype, "setItem").mockImplementation(denied);
+  }
+
+  it("reads as enabled rather than throwing — Settings must still render", () => {
+    denyStorage();
+    expect(() => isErrorReportingEnabled()).not.toThrow();
+    expect(isErrorReportingEnabled()).toBe(true);
+  });
+
+  it("keeps reporting rather than throwing while reporting", () => {
+    denyStorage();
+    expect(() => errorReporter.capture(new Error("denied storage boom"))).not.toThrow();
+    expect(consoleSpy).toHaveBeenCalledTimes(1);
+    expect(lastReportJson()).toContain("denied storage boom");
+  });
+
+  it("accepts an opt-out that cannot be persisted", () => {
+    denyStorage();
+    expect(() => setErrorReportingEnabled(false)).not.toThrow();
   });
 });
 
