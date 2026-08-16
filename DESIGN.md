@@ -101,8 +101,23 @@ completion (#42).
 
 Light is the `:root` default. Dark ships via `@media (prefers-color-scheme: dark)`, and
 `:root[data-theme="dark"|"light"]` overrides win in both directions — that attribute is the
-hook for the explicit theme switch (#25). `color-scheme` is declared so native form controls
+hook the explicit theme switch (#25) writes. `color-scheme` is declared so native form controls
 and scrollbars follow. Only **base tokens** are redefined per theme; aliases are declared once.
+
+The switch itself is glue, deliberately: `src/lib/theme.ts` stamps the attribute for an explicit
+choice and **removes** it for "Match system", handing the decision back to the media query — so
+the app follows an OS change live with no `matchMedia` listener and no state to keep in sync.
+`next-themes` was considered and rejected: it is provider-shaped and React-coupled, and the only
+hard part — applying the theme before the first paint — is a render-blocking script in
+`index.html` either way. The CSS `light-dark()` function would collapse the three near-identical
+token blocks into one, but it is not Baseline-widely-available yet and `wcag.ts` parses literal
+hex out of those blocks to compute contrast, so adopting it means rewriting the palette guard
+(#275).
+
+Browser chrome is themed by two `theme-color` meta tags, one per `prefers-color-scheme`. A UA uses
+the **first** whose media matches, so an extra media-less meta would never be reached; an
+explicit choice instead overwrites both, and "Match system" restores each to its own. Their hex
+values are `--paper`, asserted against `global.css` by `theme-boot.integration.test.ts`.
 
 ## The shell (#222)
 

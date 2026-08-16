@@ -112,6 +112,23 @@ pnpm --filter @mycollections/web dev   # web → http://localhost:5173
 pnpm --filter @mycollections/docs dev  # docs → http://localhost:4321/mycollections/
 ```
 
+### The theme boot script and CSP
+
+`apps/web/index.html` carries a small **inline** `<script>` that applies the saved theme before
+the first paint (#25) — it has to be inline and render-blocking, because a module script cannot
+run before the stylesheet is discovered and the page would flash the wrong theme. Nothing serves
+this HTML today (`@fastify/helmet` guards the API's own routes only), but the moment the API — or
+any other server — starts serving the built `index.html` under a Content-Security-Policy, that
+script needs a `'sha256-…'` entry in `scriptSrc`. Adding static serving without it produces a
+white flash on every load and no error anywhere obvious. Do not "fix" it with `'unsafe-inline'`.
+
+Verifying the no-flash behavior needs a **build**, not the dev server: in dev, `global.css`
+arrives through the module graph, so the page is unstyled until the bundle runs regardless.
+
+```bash
+pnpm --filter @mycollections/web build && pnpm --filter @mycollections/web exec vite preview
+```
+
 ### Connecting the web app to the API (the API token)
 
 The API protects every route (except `GET /api/health`) with a bearer token. On startup in dev mode it **prints the token to stdout**:
