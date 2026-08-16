@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
-import { type Item, ItemSchema, type ItemStatus } from "@mycollections/core";
-import { and, eq, isNotNull, isNull, sql } from "drizzle-orm";
+import { type DeletedItem, type Item, ItemSchema, type ItemStatus } from "@mycollections/core";
+import { and, asc, desc, eq, isNotNull, isNull, sql } from "drizzle-orm";
 import type { BetterSQLite3Database } from "drizzle-orm/better-sqlite3";
 import * as schema from "../schema.js";
 import type { ReadOptions } from "./collections.js";
@@ -143,6 +143,27 @@ export class ItemsRepository {
       )
       .all();
     return rows.map(rowToItem);
+  }
+
+  /**
+   * Lists soft-deleted items for the trash, most recently deleted first, each
+   * carrying the name of the collection it belongs to.
+   *
+   * Items of a soft-deleted collection are deliberately excluded: a trashed
+   * collection takes its contents down with it without stamping a single child
+   * row, and restoring the collection brings them all back. Listing them here
+   * would offer a restore that could only put the item back inside a collection
+   * the user cannot see. Ties on `deletedAt` break on id so the order is stable.
+   */
+  async listDeleted(): Promise<DeletedItem[]> {
+    const rows = this.#db
+      .select({ item: schema.items, collectionName: schema.collections.name })
+      .from(schema.items)
+      .innerJoin(schema.collections, eq(schema.items.collectionId, schema.collections.id))
+      .where(and(isNotNull(schema.items.deletedAt), isNull(schema.collections.deletedAt)))
+      .orderBy(desc(schema.items.deletedAt), asc(schema.items.id))
+      .all();
+    return rows.map((row) => ({ ...rowToItem(row.item), collectionName: row.collectionName }));
   }
 
   async update(id: string, patch: UpdateItemInput): Promise<Item | null> {

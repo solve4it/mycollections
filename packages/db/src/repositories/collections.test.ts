@@ -1,5 +1,5 @@
 import type { FieldDefinition } from "@mycollections/core";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { type DatabaseHandle, openDatabase } from "../open-database.js";
 
 const fields: FieldDefinition[] = [
@@ -86,6 +86,30 @@ describe("CollectionsRepository", () => {
     expect(await handle.collections.softDelete(created.id)).toBe(true);
     expect(await handle.collections.softDelete(created.id)).toBe(false);
     expect(await handle.collections.softDelete("00000000-0000-4000-8000-000000000000")).toBe(false);
+  });
+
+  it("lists soft-deleted collections, most recently deleted first", async () => {
+    const live = await handle.collections.create({ name: "Books", fields, isFiniteSet: false });
+    const first = await handle.collections.create({ name: "Movies", fields, isFiniteSet: false });
+    const second = await handle.collections.create({ name: "Coins", fields, isFiniteSet: false });
+
+    // Two deletes in the same millisecond would tie on deleted_at and leave the
+    // order to the query planner, so fake the clock (Date only — real timers and
+    // promises are untouched) and give them distinct, ordered timestamps.
+    vi.useFakeTimers({ toFake: ["Date"] });
+    try {
+      vi.setSystemTime(new Date("2026-08-16T10:00:00.000Z"));
+      await handle.collections.softDelete(first.id);
+      vi.setSystemTime(new Date("2026-08-16T10:00:01.000Z"));
+      await handle.collections.softDelete(second.id);
+    } finally {
+      vi.useRealTimers();
+    }
+
+    const deleted = await handle.collections.listDeleted();
+    expect(deleted.map((c) => c.name)).toEqual(["Coins", "Movies"]);
+    expect(deleted.map((c) => c.id)).not.toContain(live.id);
+    expect(deleted.every((c) => c.deletedAt !== null)).toBe(true);
   });
 
   it("hard delete removes the row and cascades to items and media", async () => {

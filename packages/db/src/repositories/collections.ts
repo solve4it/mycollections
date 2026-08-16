@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { type Collection, CollectionSchema, type FieldDefinition } from "@mycollections/core";
-import { and, eq, isNotNull, isNull } from "drizzle-orm";
+import { and, asc, desc, eq, isNotNull, isNull } from "drizzle-orm";
 import type { BetterSQLite3Database } from "drizzle-orm/better-sqlite3";
 import * as schema from "../schema.js";
 import { stripUndefined } from "./strip-undefined.js";
@@ -90,6 +90,21 @@ export class CollectionsRepository {
   async list(options: ReadOptions = {}): Promise<Collection[]> {
     const query = this.#db.select().from(schema.collections);
     const rows = options.includeDeleted ? query.all() : query.where(isNull(schema.collections.deletedAt)).all();
+    return rows.map(rowToCollection);
+  }
+
+  /**
+   * Lists soft-deleted collections for the trash, most recently deleted first.
+   * Ties on `deletedAt` (two deletes within the same millisecond) break on id, so
+   * the order is stable rather than left to the query planner.
+   */
+  async listDeleted(): Promise<Collection[]> {
+    const rows = this.#db
+      .select()
+      .from(schema.collections)
+      .where(isNotNull(schema.collections.deletedAt))
+      .orderBy(desc(schema.collections.deletedAt), asc(schema.collections.id))
+      .all();
     return rows.map(rowToCollection);
   }
 
