@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { createItem, deleteItem, listCollections } from "./api-client.js";
+import { createItem, deleteItem, listCollections, restoreItem } from "./api-client.js";
 
 function mockFetch(status = 200, body: unknown = []) {
   const fetchMock = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => ({
@@ -49,6 +49,18 @@ describe("api-client request headers", () => {
     await createItem("c1", { fields: { title: "Dune" } });
     expect(headerOf(fetchMock, "Content-Type")).toBe("application/json");
     expect(initOf(fetchMock).body).toBeTypeOf("string");
+  });
+
+  it("does not send a JSON Content-Type on a restore POST, which has no body", async () => {
+    // Same trap as #202, on a POST: a Content-Type with no body makes the server
+    // answer 400 "Body cannot be empty".
+    const fetchMock = mockFetch(200, { id: "i1", deletedAt: null });
+    await restoreItem("c1", "i1");
+    const init = initOf(fetchMock);
+    expect(init.method).toBe("POST");
+    expect(init.body).toBeUndefined();
+    expect(headerOf(fetchMock, "Content-Type")).toBeNull();
+    expect(fetchMock.mock.calls[0]?.[0]).toContain("/api/collections/c1/items/i1/restore");
   });
 
   it("always sends the Authorization header when a token is stored", async () => {

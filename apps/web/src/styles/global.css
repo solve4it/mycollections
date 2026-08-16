@@ -1049,6 +1049,92 @@ p[role="alert"] {
   }
 }
 
+/* Undo toast (#33). A drawer label slid out over the page: the cabinet surface,
+   so it reads as the app speaking rather than as part of the paper it covers.
+   Fixed to the bottom because that is where the thumb already is on mobile, and
+   clear of the bottom nav so it never covers navigation. */
+.undo-toast-region {
+  position: fixed;
+  left: var(--space-4);
+  right: var(--space-4);
+  /* Above the bottom nav on mobile; the nav is hidden from 768px up, where the
+     extra offset is harmless and keeps the toast off the viewport edge. */
+  bottom: calc(var(--bottom-nav-height) + var(--space-4));
+  /* Over the page, under the bottom nav (z-index 100) — a message must never
+     cover the way out of the screen it is on. */
+  z-index: 90;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.undo-toast {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  max-width: 480px;
+  padding: var(--space-2) var(--space-2) var(--space-2) var(--space-4);
+  background: var(--cabinet);
+  color: var(--cabinet-ink);
+  border: 1px solid var(--cabinet-line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-lift);
+  animation: toast-in 150ms ease-out;
+}
+
+.undo-toast-message {
+  flex: 1;
+  min-width: 0;
+}
+
+/* The action is the point of the toast, so it takes the manila accent — the same
+   ink the active nav item uses on this surface, and 4.5:1 against it. */
+.undo-toast-action {
+  background: none;
+  border: none;
+  color: var(--manila);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+}
+
+.undo-toast-dismiss {
+  background: none;
+  border: none;
+  color: var(--cabinet-muted);
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.undo-toast-action:hover,
+.undo-toast-dismiss:hover {
+  background: var(--cabinet-line);
+}
+
+/* The page's default focus ring is tuned for paper and disappears on the
+   cabinet, which is why the nav has its own — the toast lands on that surface
+   too and needs the same treatment. */
+.undo-toast :focus-visible {
+  outline: 2px solid var(--focus-on-cabinet);
+  outline-offset: 2px;
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
 /* Forced colors drops every background-image and repaints background-color as a
    system color, so a placeholder built from fills alone becomes blank space and
    the loading screen turns into an empty page. Presence, not paint — the same

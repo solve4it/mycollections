@@ -115,6 +115,14 @@ describe("api-client ↔ Fastify (real HTTP)", () => {
     // rejected by the server. It resolves (no throw) and the item is gone.
     await expect(client.deleteItem(collection.id, item.id)).resolves.toBeUndefined();
     expect(await client.listItems(collection.id)).toEqual([]);
+
+    // Undo: restore is a POST with no body, so it hits the same #202 trap as the
+    // DELETE above — a JSON Content-Type here would be rejected by the server.
+    const restored = await client.restoreItem(collection.id, item.id);
+    expect(restored.id).toBe(item.id);
+    expect(restored.deletedAt).toBeNull();
+    expect(restored.fields.title).toBe("Dune Messiah");
+    expect(await client.listItems(collection.id)).toEqual([restored]);
   });
 
   it("surfaces a 401 as UnauthorizedError when the token is wrong", async () => {

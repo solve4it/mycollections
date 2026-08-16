@@ -8,6 +8,7 @@ import {
   importData,
   listCollections,
   listItems,
+  restoreItem,
   updateItem,
 } from "./api-client.js";
 
@@ -59,6 +60,17 @@ export function useDeleteItem(collectionId: string) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (itemId: string) => deleteItem(collectionId, itemId),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["collections", collectionId, "items"] }),
+  });
+}
+
+export function useRestoreItem(collectionId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (itemId: string) => restoreItem(collectionId, itemId),
+    // Same key as useDeleteItem: an undo has to put back exactly what the delete
+    // took away. The dashboard's itemCount needs no invalidation here — that
+    // query reloads when it mounts, and it never mounts beside this one.
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["collections", collectionId, "items"] }),
   });
 }

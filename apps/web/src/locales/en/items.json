@@ -24,5 +24,9 @@
   "items_heading": "Items",
   "value_yes": "Yes",
   "value_no": "No",
-  "untitled": "(untitled)"
+  "untitled": "(untitled)",
+  "deleted_toast": "Deleted “{{name}}”",
+  "undo": "Undo",
+  "dismiss_undo": "Dismiss",
+  "restore_error": "Could not restore this item. It is still in the trash — check that the app's server is running, then try again."
 }

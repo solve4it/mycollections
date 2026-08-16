@@ -12,10 +12,11 @@ vi.mock("../../lib/api-client.js", () => ({
   createItem: vi.fn(),
   updateItem: vi.fn(),
   deleteItem: vi.fn(),
+  restoreItem: vi.fn(),
   getToken: vi.fn(() => "test-token"),
 }));
 
-import { createItem, deleteItem, getCollection, listItems, updateItem } from "../../lib/api-client.js";
+import { createItem, deleteItem, getCollection, listItems, restoreItem, updateItem } from "../../lib/api-client.js";
 
 const testRouteTree = rootRoute.addChildren([collectionDetailRoute]);
 
@@ -249,6 +250,81 @@ describe("CollectionDetailPage", () => {
     await screen.findByText("Zelda");
     fireEvent.click(screen.getByRole("button", { name: /delete/i }));
     await waitFor(() => expect(deleteItem).toHaveBeenCalledWith(COLLECTION.id, ITEM.id));
+  });
+
+  // #33: a delete is soft, and the toast is the shortcut back. It has to survive
+  // the row that spawned it disappearing from the list, which is why it is owned
+  // by the page rather than by the <li>.
+  describe("undo toast", () => {
+    it("offers undo naming the deleted item, after the row is gone", async () => {
+      vi.mocked(listItems).mockResolvedValueOnce([ITEM]).mockResolvedValue([]);
+      renderDetail();
+      await screen.findByText("Zelda");
+
+      fireEvent.click(screen.getByRole("button", { name: /delete/i }));
+
+      const toast = await screen.findByRole("status");
+      expect(toast).toHaveTextContent(/deleted/i);
+      expect(toast).toHaveTextContent("Zelda");
+      await waitFor(() => expect(screen.queryByText("Zelda")).not.toBeInTheDocument());
+      expect(within(toast).getByRole("button", { name: "Undo" })).toBeInTheDocument();
+    });
+
+    it("restores the item when undo is pressed, and takes the toast away", async () => {
+      vi.mocked(listItems).mockResolvedValueOnce([ITEM]).mockResolvedValueOnce([]).mockResolvedValue([ITEM]);
+      vi.mocked(restoreItem).mockResolvedValue(ITEM);
+      renderDetail();
+      await screen.findByText("Zelda");
+      fireEvent.click(screen.getByRole("button", { name: /delete/i }));
+
+      fireEvent.click(within(await screen.findByRole("status")).getByRole("button", { name: "Undo" }));
+
+      await waitFor(() => expect(restoreItem).toHaveBeenCalledWith(COLLECTION.id, ITEM.id));
+      await waitFor(() => expect(screen.queryByRole("status")).not.toBeInTheDocument());
+      expect(await screen.findByText("Zelda")).toBeInTheDocument();
+    });
+
+    it("names the newest deletion when a second item is deleted", async () => {
+      // The list is held still (both rows stay mounted) so this tests only what
+      // it claims: a second toast replaces the first rather than stacking.
+      vi.mocked(listItems).mockResolvedValue([ITEM, OTHER_ITEM]);
+      renderDetail();
+      await screen.findByText("Zelda");
+
+      const deleteButtons = () => screen.getAllByRole("button", { name: /delete/i });
+      fireEvent.click(deleteButtons()[0] as HTMLElement);
+      expect(await screen.findByRole("status")).toHaveTextContent("Zelda");
+
+      fireEvent.click(deleteButtons()[1] as HTMLElement);
+
+      await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("Mario"));
+      expect(screen.getAllByRole("status")).toHaveLength(1);
+    });
+
+    it("says so and keeps the toast when the undo itself fails", async () => {
+      vi.mocked(listItems).mockResolvedValueOnce([ITEM]).mockResolvedValue([]);
+      vi.mocked(restoreItem).mockRejectedValue(new Error("API error 500"));
+      renderDetail();
+      await screen.findByText("Zelda");
+      fireEvent.click(screen.getByRole("button", { name: /delete/i }));
+
+      fireEvent.click(within(await screen.findByRole("status")).getByRole("button", { name: "Undo" }));
+
+      await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent("Could not restore this item"));
+      expect(screen.getByRole("button", { name: "Undo" })).toBeInTheDocument();
+    });
+
+    it("shows no toast when the delete failed — there is nothing to undo", async () => {
+      vi.mocked(listItems).mockResolvedValue([ITEM]);
+      vi.mocked(deleteItem).mockRejectedValue(new Error("API error 500"));
+      renderDetail();
+      await screen.findByText("Zelda");
+
+      fireEvent.click(screen.getByRole("button", { name: /delete/i }));
+
+      await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent("Could not delete this item"));
+      expect(screen.queryByRole("button", { name: "Undo" })).not.toBeInTheDocument();
+    });
   });
 
   // #237: `networkMode: "always"` (#228) turned these three mutations from a

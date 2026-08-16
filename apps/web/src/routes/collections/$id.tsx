@@ -7,8 +7,16 @@ import { DynamicItemForm } from "../../components/DynamicItemForm.js";
 import { EmptyState } from "../../components/EmptyState.js";
 import { Icon } from "../../components/Icon.js";
 import { CollectionDetailSkeleton, ItemListSkeleton } from "../../components/Skeleton.js";
+import { UndoToast } from "../../components/UndoToast.js";
 import { getToken } from "../../lib/api-client.js";
-import { useCollection, useCreateItem, useDeleteItem, useItems, useUpdateItem } from "../../lib/queries.js";
+import {
+  useCollection,
+  useCreateItem,
+  useDeleteItem,
+  useItems,
+  useRestoreItem,
+  useUpdateItem,
+} from "../../lib/queries.js";
 import { rootRoute } from "../__root.js";
 
 export const collectionDetailRoute = createRoute({
@@ -35,12 +43,29 @@ function FieldValue({ value }: { value: unknown }) {
   return <>{String(value)}</>;
 }
 
+/**
+ * What to call an item in a message about it. The first field carrying a value
+ * is the item's name in practice — collections put the title-ish field first —
+ * and an item with nothing filled in still has to be nameable.
+ */
+function itemLabel(collection: Collection, item: Item, untitled: string): string {
+  for (const field of collection.fields) {
+    const value = item.fields[field.id];
+    if (value != null && value !== "" && !Array.isArray(value)) return String(value);
+  }
+  return untitled;
+}
+
 function CollectionDetailPage() {
   const { id } = collectionDetailRoute.useParams();
   const { t } = useTranslation("items");
   const collectionQuery = useCollection(id);
   const itemsQuery = useItems(id);
   const createItem = useCreateItem(id);
+  const restoreItem = useRestoreItem(id);
+  // The undo shortcut outlives the row that spawned it: once the delete lands and
+  // the list reloads, that <li> is gone, so the toast is owned by the page.
+  const [undo, setUndo] = useState<{ itemId: string; name: string } | null>(null);
 
   const collection = collectionQuery.data;
 
@@ -78,7 +103,32 @@ function CollectionDetailPage() {
       {collection.description && <p>{collection.description}</p>}
 
       <h2>{t("items_heading")}</h2>
-      <ItemList collection={collection} query={itemsQuery} />
+      <ItemList
+        collection={collection}
+        query={itemsQuery}
+        onDeleted={(item) => {
+          // Drop any failure from a previous undo: the new toast is about a new
+          // deletion, and must not open carrying the last one's error.
+          restoreItem.reset();
+          setUndo({ itemId: item.id, name: itemLabel(collection, item, t("untitled")) });
+        }}
+      />
+
+      {undo && (
+        <div className="undo-toast-region">
+          <UndoToast
+            message={t("deleted_toast", { name: undo.name })}
+            actionLabel={t("undo")}
+            dismissLabel={t("dismiss_undo")}
+            onAction={() => restoreItem.mutate(undo.itemId, { onSuccess: () => setUndo(null) })}
+            onDismiss={() => setUndo(null)}
+          />
+          {/* A failed undo keeps the toast up: the shortcut is the only thing
+              that failed, and taking it away would leave the user nothing to
+              retry with. */}
+          {restoreItem.isError && <p role="alert">{t("restore_error")}</p>}
+        </div>
+      )}
 
       <section className="add-item">
         <h2>{t("add_item")}</h2>
@@ -96,6 +146,7 @@ function CollectionDetailPage() {
 interface ItemListProps {
   collection: Collection;
   query: UseQueryResult<Item[]>;
+  onDeleted: (item: Item) => void;
 }
 
 /**
@@ -103,7 +154,7 @@ interface ItemListProps {
  * and there are none" as distinct outcomes — collapsing the two is what made a
  * failed load read as an empty collection (#228).
  */
-function ItemList({ collection, query }: ItemListProps) {
+function ItemList({ collection, query, onDeleted }: ItemListProps) {
   const { t } = useTranslation("items");
   const items = query.data;
 
@@ -125,7 +176,7 @@ function ItemList({ collection, query }: ItemListProps) {
       {query.error && <p role="alert">{t("items_reload_error")}</p>}
       <ul className="item-list">
         {items.map((item) => (
-          <ItemRow key={item.id} collection={collection} item={item} />
+          <ItemRow key={item.id} collection={collection} item={item} onDeleted={onDeleted} />
         ))}
       </ul>
     </>
@@ -135,9 +186,10 @@ function ItemList({ collection, query }: ItemListProps) {
 interface ItemRowProps {
   collection: Collection;
   item: Item;
+  onDeleted: (item: Item) => void;
 }
 
-function ItemRow({ collection, item }: ItemRowProps) {
+function ItemRow({ collection, item, onDeleted }: ItemRowProps) {
   const { t } = useTranslation("items");
   const updateItem = useUpdateItem(collection.id);
   const deleteItem = useDeleteItem(collection.id);
@@ -196,7 +248,11 @@ function ItemRow({ collection, item }: ItemRowProps) {
             <Icon name="edit" />
             {t("edit")}
           </button>
-          <button type="button" className="touch-target button-quiet" onClick={() => deleteItem.mutate(item.id)}>
+          <button
+            type="button"
+            className="touch-target button-quiet"
+            onClick={() => deleteItem.mutate(item.id, { onSuccess: () => onDeleted(item) })}
+          >
             <Icon name="delete" />
             {t("delete")}
           </button>
