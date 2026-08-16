@@ -4,6 +4,7 @@ export {
   type ImportSummary,
   importBackup,
 } from "./backup.js";
+export { type EmptyTrashResult, emptyTrash } from "./empty-trash.js";
 export { type DatabaseHandle, type OpenDatabaseOptions, openDatabase } from "./open-database.js";
 export {
   CollectionsRepository,

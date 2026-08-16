@@ -30,6 +30,7 @@ All routes require `Authorization: Bearer <token>` except `GET /api/health`.
 | `DELETE` | `/api/collections/:id/items/:itemId` | Soft-delete an item |
 | `POST` | `/api/collections/:id/items/:itemId/restore` | Restore a soft-deleted item |
 | `GET` | `/api/trash` | List what soft delete has hidden: `{ collections, items }` |
+| `DELETE` | `/api/trash` | Empty the trash — permanently delete everything in it; returns `{ items, collections }` counts |
 | `DELETE` | `/api/trash/items/:itemId` | Permanently delete a trashed item |
 | `DELETE` | `/api/trash/collections/:id` | Permanently delete a trashed collection and its items |
 | `GET` | `/api/export` | Download a JSON backup of all collections and items |
@@ -46,6 +47,11 @@ routes carry the "is it actually in the trash?" test inside the `DELETE` stateme
 restore racing a purge cannot destroy a row the user has just recovered, and a live
 resource answers `404` without being touched.
 
+Nothing is purged on a timer: the trash keeps what it holds until the user empties it,
+either one entry at a time or all at once with `DELETE /api/trash`. Emptying is the one
+action in the app that nothing can undo, so it runs in a single transaction (it either
+happens or does not) and answers with what it removed rather than a bare `204`.
+
 **Deleting a collection does not touch its items.** No child row is stamped: a trashed
 collection simply takes its contents down with it, and restoring the collection brings
 back everything it held. Consequently:
@@ -55,7 +61,9 @@ back everything it held. Consequently:
   restoring one could only put it back somewhere the user cannot see.
 - `POST /api/collections/:id/items/:itemId/restore` answers `404` while the parent
   collection is in the trash. Restore the collection instead.
-- Purging a collection removes its items too, via the foreign key cascade.
+- Purging a collection removes its items too, via the foreign key cascade. Emptying the
+  trash removes trashed collections first for the same reason, so an item that was deleted
+  individually *and* whose collection was later deleted is removed once, not counted twice.
 
 ### Backup format
 

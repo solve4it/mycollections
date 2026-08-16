@@ -135,3 +135,58 @@ describe("DELETE /api/trash/collections/:id", () => {
     expect(res.statusCode).toBe(404);
   });
 });
+
+describe("DELETE /api/trash", () => {
+  it("empties the trash and reports what it removed", async () => {
+    const item = await handle.items.create({ collectionId: collection.id, fields: { title: "Dune" } });
+    await handle.items.softDelete(item.id);
+    const movies = await handle.collections.create({ name: "Movies", fields: baseFields, isFiniteSet: false });
+    const inside = await handle.items.create({ collectionId: movies.id, fields: { title: "Alien" } });
+    await handle.collections.softDelete(movies.id);
+    const app = await makeApp();
+
+    const res = await app.inject({ method: "DELETE", url: "/api/trash", headers: auth });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ items: 1, collections: 1 });
+    expect(await handle.items.getById(item.id, { includeDeleted: true })).toBeNull();
+    expect(await handle.collections.getById(movies.id, { includeDeleted: true })).toBeNull();
+    expect(await handle.items.getById(inside.id, { includeDeleted: true })).toBeNull();
+  });
+
+  it("leaves live collections and items untouched", async () => {
+    const live = await handle.items.create({ collectionId: collection.id, fields: { title: "Kept" } });
+    const app = await makeApp();
+
+    const res = await app.inject({ method: "DELETE", url: "/api/trash", headers: auth });
+
+    expect(res.json()).toEqual({ items: 0, collections: 0 });
+    expect(await handle.items.getById(live.id)).not.toBeNull();
+    expect(await handle.collections.getById(collection.id)).not.toBeNull();
+  });
+
+  it("succeeds on an already-empty trash, so a second press is harmless", async () => {
+    const item = await handle.items.create({ collectionId: collection.id, fields: {} });
+    await handle.items.softDelete(item.id);
+    const app = await makeApp();
+
+    expect((await app.inject({ method: "DELETE", url: "/api/trash", headers: auth })).json()).toEqual({
+      items: 1,
+      collections: 0,
+    });
+    const second = await app.inject({ method: "DELETE", url: "/api/trash", headers: auth });
+    expect(second.statusCode).toBe(200);
+    expect(second.json()).toEqual({ items: 0, collections: 0 });
+  });
+
+  it("requires authentication — this is the one action nothing can undo", async () => {
+    const item = await handle.items.create({ collectionId: collection.id, fields: {} });
+    await handle.items.softDelete(item.id);
+    const app = await makeApp();
+
+    const res = await app.inject({ method: "DELETE", url: "/api/trash" });
+
+    expect(res.statusCode).toBe(401);
+    expect(await handle.items.getById(item.id, { includeDeleted: true })).not.toBeNull();
+  });
+});
