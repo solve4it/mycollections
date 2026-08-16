@@ -183,7 +183,7 @@ describe("PATCH /api/collections/:id", () => {
     });
 
     expect(res.statusCode).toBe(200);
-    expect(res.json<Collection>().fields[0].type).toBe("number");
+    expect(res.json<Collection>().fields).toEqual([{ id: "title", type: "number", label: "Title", required: true }]);
   });
 
   it("rejects a type change once the collection holds items, persisting nothing", async () => {

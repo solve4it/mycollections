@@ -20,7 +20,7 @@ All routes require `Authorization: Bearer <token>` except `GET /api/health`.
 | `GET` | `/api/collections` | List all collections (each includes `itemCount`, the number of non-deleted items) |
 | `POST` | `/api/collections` | Create a collection |
 | `GET` | `/api/collections/:id` | Get a collection |
-| `PATCH` | `/api/collections/:id` | Update a collection |
+| `PATCH` | `/api/collections/:id` | Update a collection, its field schema included (see [Editing a field schema](#editing-a-field-schema)) |
 | `DELETE` | `/api/collections/:id` | Soft-delete a collection |
 | `POST` | `/api/collections/:id/restore` | Restore a soft-deleted collection |
 | `GET` | `/api/collections/:id/items` | List items (`?status=owned\|wanted\|ordered`) |
@@ -37,6 +37,33 @@ All routes require `Authorization: Bearer <token>` except `GET /api/health`.
 | `POST` | `/api/import` | Restore a backup document (`?mode=skip`) |
 
 In dev mode, OpenAPI docs are available at `GET /api/docs`.
+
+### Editing a field schema
+
+`PATCH /api/collections/:id` accepts `fields`, replacing the whole array — send the
+schema you want, not a delta. Item values are stored in a JSON object keyed by field
+id and are never coerced against the collection's definitions, which decides what each
+edit costs:
+
+| Edit | Effect on existing items |
+| --- | --- |
+| Add a field | None. Items have no value for it and render blank. `required` starts applying the next time an item is edited; nothing is backfilled. |
+| Relabel, change help text, edit `select` options, `rating` max, or `currencyCode` | None. |
+| Reorder | None — display order only. |
+| Remove a field | Values stored under that id are **kept**, unrendered. They survive in `GET /api/export`. |
+| Change a field's type | Rejected with `400` while the collection holds any items. |
+
+Retyping is the one edit that would strand data — a text value under a field that
+became `number` is unreadable by the new control — so it is allowed only while the
+collection is empty. That count includes trashed items, because restoring one would
+bring back values the new schema cannot read.
+
+Removal keeps values rather than purging them, so a schema edit is never a mass delete.
+The kept values are reachable through a JSON export, not through the UI: re-adding a
+field mints a new id, so it does not re-attach to the old values.
+
+The route reads the collection before it writes, so a rejected patch leaves nothing
+behind — a `400` or `404` never persists the rest of the body.
 
 ### Trash and soft delete
 
