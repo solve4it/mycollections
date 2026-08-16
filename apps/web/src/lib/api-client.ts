@@ -94,6 +94,16 @@ export async function updateItem(collectionId: string, itemId: string, input: It
   return res.json() as Promise<Item>;
 }
 
+/**
+ * Undoes a soft delete. Sends no body, so `request` leaves the JSON Content-Type
+ * off — the server rejects a declared-but-empty JSON body (#202).
+ */
+export async function restoreItem(collectionId: string, itemId: string): Promise<Item> {
+  const res = await request(`/api/collections/${collectionId}/items/${itemId}/restore`, { method: "POST" });
+  if (!res.ok) throw new ApiError(res.status);
+  return res.json() as Promise<Item>;
+}
+
 export async function deleteItem(collectionId: string, itemId: string): Promise<void> {
   const res = await request(`/api/collections/${collectionId}/items/${itemId}`, { method: "DELETE" });
   if (!res.ok) throw new ApiError(res.status);
