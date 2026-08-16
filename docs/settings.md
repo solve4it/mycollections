@@ -9,7 +9,16 @@ description: Configuring MyCollections — app-level preferences, per-collection
 
 ## App settings
 
-_Global preferences — theme, language, shortcuts, accessibility options._
+**Theme** chooses between **Match system**, **Light** and **Dark**. Match system is
+the default: the app follows your operating system's appearance setting and
+switches the moment you change it there — no reload, no restart. Choosing Light or
+Dark overrides that until you set it back to Match system. The choice is remembered
+on this device and applied before the first frame is painted, so the app never
+flashes the wrong theme while it loads.
+
+**Language** selects the interface language (English today).
+
+_Shortcuts and accessibility options land with later settings work._
 
 ## Data backup & restore
 

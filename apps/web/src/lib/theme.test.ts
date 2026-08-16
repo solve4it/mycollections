@@ -1,5 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { applyTheme, getThemePreference, isThemePreference, setThemePreference, THEME_STORAGE_KEY } from "./theme.js";
+import {
+  applyTheme,
+  getThemePreference,
+  isThemePreference,
+  setThemePreference,
+  THEME_COLORS,
+  THEME_STORAGE_KEY,
+} from "./theme.js";
 
 beforeEach(() => {
   localStorage.clear();
@@ -48,6 +55,56 @@ describe("applyTheme", () => {
     applyTheme("dark");
     applyTheme("system");
     expect(document.documentElement.hasAttribute("data-theme")).toBe(false);
+  });
+});
+
+describe("applyTheme and the browser-chrome tint", () => {
+  /** jsdom loads no index.html, so stand the two meta tags up exactly as it declares them. */
+  function declareMetaTags(): void {
+    document.head.innerHTML = "";
+    for (const own of ["light", "dark"] as const) {
+      const meta = document.createElement("meta");
+      meta.name = "theme-color";
+      meta.dataset.themeColor = own;
+      meta.media = `(prefers-color-scheme: ${own})`;
+      meta.content = THEME_COLORS[own];
+      document.head.append(meta);
+    }
+  }
+
+  const tints = () =>
+    [...document.querySelectorAll<HTMLMetaElement>("meta[data-theme-color]")].map((meta) => meta.content);
+
+  beforeEach(declareMetaTags);
+
+  afterEach(() => {
+    document.head.innerHTML = "";
+  });
+
+  it("starts with one tint per OS preference", () => {
+    expect(tints()).toEqual([THEME_COLORS.light, THEME_COLORS.dark]);
+  });
+
+  it("overrides both meta tags when dark is forced, so the OS preference cannot win", () => {
+    applyTheme("dark");
+    expect(tints()).toEqual([THEME_COLORS.dark, THEME_COLORS.dark]);
+  });
+
+  it("overrides both meta tags when light is forced", () => {
+    applyTheme("light");
+    expect(tints()).toEqual([THEME_COLORS.light, THEME_COLORS.light]);
+  });
+
+  it("restores each meta to its own color for system", () => {
+    applyTheme("dark");
+    applyTheme("system");
+    expect(tints()).toEqual([THEME_COLORS.light, THEME_COLORS.dark]);
+  });
+
+  it("does nothing when the meta tags are absent", () => {
+    document.head.innerHTML = "";
+    expect(() => applyTheme("dark")).not.toThrow();
+    expect(document.documentElement.getAttribute("data-theme")).toBe("dark");
   });
 });
 

@@ -31,6 +31,27 @@ export function getThemePreference(): ThemePreference {
   }
 }
 
+/**
+ * Browser-chrome tint per theme — `--paper`, the color the page itself paints.
+ * Duplicated from global.css because a `<meta>` takes a literal; the copies are
+ * held together by theme-boot.integration.test.ts.
+ */
+export const THEME_COLORS = { light: "#f1f2ee", dark: "#141816" } as const;
+
+/**
+ * index.html declares one theme-color meta per `prefers-color-scheme`, and a UA
+ * uses the FIRST one whose media matches — so an extra media-less meta would
+ * never be reached. An explicit choice is applied by overwriting both meta tags
+ * with the chosen color, and "system" restores each to its own.
+ */
+function applyThemeColor(preference: ThemePreference): void {
+  for (const meta of document.querySelectorAll<HTMLMetaElement>("meta[data-theme-color]")) {
+    const own = meta.dataset.themeColor;
+    if (own !== "light" && own !== "dark") continue;
+    meta.content = THEME_COLORS[preference === "system" ? own : preference];
+  }
+}
+
 export function applyTheme(preference: ThemePreference): void {
   const root = document.documentElement;
   if (preference === "system") {
@@ -38,6 +59,7 @@ export function applyTheme(preference: ThemePreference): void {
   } else {
     root.setAttribute("data-theme", preference);
   }
+  applyThemeColor(preference);
 }
 
 /** Persists the choice and applies it immediately. */

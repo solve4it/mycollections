@@ -56,6 +56,8 @@ function deferred<T>() {
 
 beforeEach(() => {
   localStorage.clear();
+  // documentElement is shared across a file — never let a theme leak into a neighbor.
+  document.documentElement.removeAttribute("data-theme");
   vi.resetAllMocks();
   vi.mocked(exportData).mockResolvedValue(new Blob(["{}"], { type: "application/json" }));
   vi.mocked(importData).mockResolvedValue(IMPORT_SUMMARY);
@@ -134,10 +136,6 @@ describe("SettingsPage privacy", () => {
 });
 
 describe("SettingsPage theme", () => {
-  afterEach(() => {
-    document.documentElement.removeAttribute("data-theme");
-  });
-
   it("renders a theme selector that defaults to following the system", async () => {
     renderSettings();
     const select = await screen.findByRole("combobox", { name: /theme/i });
