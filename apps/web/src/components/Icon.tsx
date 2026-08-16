@@ -18,6 +18,7 @@ export const ICON_NAMES = [
   "back",
   "edit",
   "delete",
+  "restore",
   "import",
   "export",
   "logo",
@@ -69,6 +70,15 @@ const SHAPES: Record<IconName, ReactElement> = {
       <path d="M6 7v12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V7" />
       <line x1="10" y1="11" x2="10" y2="17" />
       <line x1="14" y1="11" x2="14" y2="17" />
+    </>
+  ),
+  // A counter-clockwise arrow: the delete, run backwards. Deliberately not the
+  // import tray — lifting a file *into* the app and putting a row *back* are
+  // different acts, and two icons that read alike would say they are the same.
+  restore: (
+    <>
+      <path d="M4 12a8 8 0 1 0 8-8 8.67 8.67 0 0 0-6 2.44L4 8.44" />
+      <polyline points="4 4 4 8.44 8.44 8.44" />
     </>
   ),
   // The arrow follows the file, not the data: import lifts a chosen file up out

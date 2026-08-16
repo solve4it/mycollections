@@ -11,9 +11,16 @@ vi.mock("../../lib/api-client.js", () => ({
   getToken: vi.fn(() => "test-token"),
   exportData: vi.fn(),
   importData: vi.fn(),
+  // The page's Trash section calls these; trash.test.tsx is where they are exercised.
+  listTrash: vi.fn(),
+  restoreItem: vi.fn(),
+  restoreCollection: vi.fn(),
+  purgeItem: vi.fn(),
+  purgeCollection: vi.fn(),
+  emptyTrash: vi.fn(),
 }));
 
-import { exportData, type ImportSummary, importData } from "../../lib/api-client.js";
+import { exportData, type ImportSummary, importData, listTrash } from "../../lib/api-client.js";
 import { isErrorReportingEnabled, setErrorReportingEnabled } from "../../lib/error-reporter.js";
 import { getThemePreference, setThemePreference } from "../../lib/theme.js";
 
@@ -29,6 +36,18 @@ function renderSettings() {
     </QueryClientProvider>,
   );
   return { router };
+}
+
+/**
+ * The Data section. Import progress is asserted inside it because the page now
+ * holds a second live region — the Trash section announces its own load — and a
+ * page-wide `role="status"` query would let one answer for the other.
+ */
+async function dataSection(): Promise<HTMLElement> {
+  const heading = await screen.findByRole("heading", { name: "Data" });
+  const section = heading.closest("section");
+  if (!section) throw new Error("Data heading is not inside a section");
+  return section;
 }
 
 function selectFile(input: HTMLElement, contents: string, name = "backup.json") {
@@ -61,6 +80,7 @@ beforeEach(() => {
   vi.resetAllMocks();
   vi.mocked(exportData).mockResolvedValue(new Blob(["{}"], { type: "application/json" }));
   vi.mocked(importData).mockResolvedValue(IMPORT_SUMMARY);
+  vi.mocked(listTrash).mockResolvedValue({ collections: [], items: [] });
 });
 
 afterEach(cleanup);
@@ -214,7 +234,7 @@ describe("SettingsPage data import", () => {
     selectFile(input, JSON.stringify({ version: 1, exportedAt: "x", collections: [], items: [] }));
 
     await waitFor(() => expect(importData).toHaveBeenCalledTimes(1));
-    const status = await screen.findByRole("status");
+    const status = await within(await dataSection()).findByRole("status");
     expect(status).toHaveTextContent(/imported 2 collections and 5 items/i);
     expect(status).toHaveTextContent(/1 collections and 3 items already present were skipped/i);
   });
@@ -236,11 +256,12 @@ describe("SettingsPage data import", () => {
     const input = await screen.findByLabelText(/choose backup file/i);
     selectFile(input, JSON.stringify({ version: 1, exportedAt: "x", collections: [], items: [] }));
 
-    expect(await screen.findByRole("status")).toHaveTextContent("Importing your backup…");
+    const data = within(await dataSection());
+    expect(await data.findByRole("status")).toHaveTextContent("Importing your backup…");
 
     inFlight.settle(IMPORT_SUMMARY);
 
-    await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent(/imported 2 collections and 5 items/i));
+    await waitFor(() => expect(data.getByRole("status")).toHaveTextContent(/imported 2 collections and 5 items/i));
     expect(screen.queryByText("Importing your backup…")).not.toBeInTheDocument();
   });
 
@@ -269,12 +290,13 @@ describe("SettingsPage data import", () => {
     const input = await screen.findByLabelText(/choose backup file/i);
     selectFile(input, JSON.stringify({ version: 1, exportedAt: "x", collections: [], items: [] }));
 
-    expect(await screen.findByRole("status")).toHaveTextContent("Importing your backup…");
+    const data = within(await dataSection());
+    expect(await data.findByRole("status")).toHaveTextContent("Importing your backup…");
 
     inFlight.fail(new Error("500"));
 
-    expect(await screen.findByRole("alert")).toHaveTextContent(/import failed/i);
-    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+    expect(await data.findByRole("alert")).toHaveTextContent(/import failed/i);
+    expect(data.queryByRole("status")).not.toBeInTheDocument();
     expect(input).toBeEnabled();
   });
 

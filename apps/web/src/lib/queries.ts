@@ -3,11 +3,16 @@ import {
   createCollection,
   createItem,
   deleteItem,
+  emptyTrash,
   getCollection,
   type ItemInput,
   importData,
   listCollections,
   listItems,
+  listTrash,
+  purgeCollection,
+  purgeItem,
+  restoreCollection,
   restoreItem,
   updateItem,
 } from "./api-client.js";
@@ -61,6 +66,68 @@ export function useDeleteItem(collectionId: string) {
   return useMutation({
     mutationFn: (itemId: string) => deleteItem(collectionId, itemId),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["collections", collectionId, "items"] }),
+  });
+}
+
+export function useTrash() {
+  return useQuery({ queryKey: ["trash"], queryFn: listTrash });
+}
+
+/**
+ * The trash's own restore, distinct from `useRestoreItem`: that one is the undo
+ * toast, which knows the single list it is undoing inside. A restore from
+ * Settings puts a row back into lists this screen cannot see, so it invalidates
+ * the whole `["collections"]` prefix — the dashboard's counts and every
+ * collection's items alike — as well as the trash it just left.
+ */
+export function useRestoreTrashedItem() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ collectionId, itemId }: { collectionId: string; itemId: string }) =>
+      restoreItem(collectionId, itemId),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["trash"] });
+      return queryClient.invalidateQueries({ queryKey: ["collections"] });
+    },
+  });
+}
+
+export function useRestoreCollection() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => restoreCollection(id),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["trash"] });
+      return queryClient.invalidateQueries({ queryKey: ["collections"] });
+    },
+  });
+}
+
+/**
+ * Purging and emptying only ever remove rows that were already hidden
+ * everywhere else, so the trash is the only list that can be stale.
+ */
+export function usePurgeItem() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (itemId: string) => purgeItem(itemId),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["trash"] }),
+  });
+}
+
+export function usePurgeCollection() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => purgeCollection(id),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["trash"] }),
+  });
+}
+
+export function useEmptyTrash() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => emptyTrash(),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["trash"] }),
   });
 }
 
