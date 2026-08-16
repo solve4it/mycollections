@@ -1,5 +1,16 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { createItem, deleteItem, listCollections, restoreItem } from "./api-client.js";
+import {
+  ApiError,
+  createItem,
+  deleteItem,
+  emptyTrash,
+  listCollections,
+  listTrash,
+  purgeCollection,
+  purgeItem,
+  restoreCollection,
+  restoreItem,
+} from "./api-client.js";
 
 function mockFetch(status = 200, body: unknown = []) {
   const fetchMock = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => ({
@@ -67,5 +78,54 @@ describe("api-client request headers", () => {
     const fetchMock = mockFetch(204);
     await deleteItem("c1", "i1");
     expect(headerOf(fetchMock, "Authorization")).toBe("Bearer tok");
+  });
+});
+
+describe("api-client trash", () => {
+  it("reads the trash as two lists", async () => {
+    const trash = {
+      collections: [{ id: "c1", name: "Records" }],
+      items: [{ id: "i1", collectionId: "c1", collectionName: "Records" }],
+    };
+    const fetchMock = mockFetch(200, trash);
+    await expect(listTrash()).resolves.toEqual(trash);
+    expect(fetchMock.mock.calls[0]?.[0]).toContain("/api/trash");
+    expect(initOf(fetchMock).method).toBeUndefined();
+  });
+
+  it("restores a collection through its own restore route, with no body", async () => {
+    const fetchMock = mockFetch(200, { id: "c1", name: "Records", deletedAt: null });
+    await expect(restoreCollection("c1")).resolves.toEqual({ id: "c1", name: "Records", deletedAt: null });
+    const init = initOf(fetchMock);
+    expect(fetchMock.mock.calls[0]?.[0]).toContain("/api/collections/c1/restore");
+    expect(init.method).toBe("POST");
+    expect(init.body).toBeUndefined();
+    expect(headerOf(fetchMock, "Content-Type")).toBeNull();
+  });
+
+  it("purges an item through the trash route, not the ordinary item DELETE", async () => {
+    const fetchMock = mockFetch(204);
+    await purgeItem("i1");
+    expect(fetchMock.mock.calls[0]?.[0]).toContain("/api/trash/items/i1");
+    expect(initOf(fetchMock).method).toBe("DELETE");
+  });
+
+  it("purges a collection through the trash route", async () => {
+    const fetchMock = mockFetch(204);
+    await purgeCollection("c1");
+    expect(fetchMock.mock.calls[0]?.[0]).toContain("/api/trash/collections/c1");
+    expect(initOf(fetchMock).method).toBe("DELETE");
+  });
+
+  it("empties the trash and returns what was removed", async () => {
+    const fetchMock = mockFetch(200, { items: 4, collections: 2 });
+    await expect(emptyTrash()).resolves.toEqual({ items: 4, collections: 2 });
+    expect(fetchMock.mock.calls[0]?.[0]).toContain("/api/trash");
+    expect(initOf(fetchMock).method).toBe("DELETE");
+  });
+
+  it("reports a failed purge rather than resolving quietly", async () => {
+    mockFetch(404);
+    await expect(purgeItem("gone")).rejects.toBeInstanceOf(ApiError);
   });
 });

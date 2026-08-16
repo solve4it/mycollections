@@ -1,4 +1,11 @@
-import type { Collection, CollectionWithItemCount, FieldDefinition, Item, ItemStatus } from "@mycollections/core";
+import type {
+  Collection,
+  CollectionWithItemCount,
+  DeletedItem,
+  FieldDefinition,
+  Item,
+  ItemStatus,
+} from "@mycollections/core";
 
 export interface CreateCollectionInput {
   name: string;
@@ -107,6 +114,56 @@ export async function restoreItem(collectionId: string, itemId: string): Promise
 export async function deleteItem(collectionId: string, itemId: string): Promise<void> {
   const res = await request(`/api/collections/${collectionId}/items/${itemId}`, { method: "DELETE" });
   if (!res.ok) throw new ApiError(res.status);
+}
+
+/**
+ * What the trash holds. Items of a trashed collection are deliberately absent —
+ * the server excludes them because they come back with their collection, so the
+ * UI never has to offer a restore it cannot honor (#281).
+ */
+export interface Trash {
+  collections: Collection[];
+  items: DeletedItem[];
+}
+
+/** How much emptying the trash destroyed, for the message that says so. */
+export interface EmptyTrashResult {
+  items: number;
+  collections: number;
+}
+
+export async function listTrash(): Promise<Trash> {
+  const res = await request("/api/trash");
+  if (!res.ok) throw new ApiError(res.status);
+  return res.json() as Promise<Trash>;
+}
+
+/** Undoes a collection's soft delete, bringing its items back with it. Sends no body, like `restoreItem`. */
+export async function restoreCollection(id: string): Promise<Collection> {
+  const res = await request(`/api/collections/${id}/restore`, { method: "POST" });
+  if (!res.ok) throw new ApiError(res.status);
+  return res.json() as Promise<Collection>;
+}
+
+/**
+ * Destroys one trashed item for good. Deliberately a different path from
+ * `deleteItem` — permanent deletion is never a parameter away from the
+ * everyday delete that undo can still reverse.
+ */
+export async function purgeItem(itemId: string): Promise<void> {
+  const res = await request(`/api/trash/items/${itemId}`, { method: "DELETE" });
+  if (!res.ok) throw new ApiError(res.status);
+}
+
+export async function purgeCollection(id: string): Promise<void> {
+  const res = await request(`/api/trash/collections/${id}`, { method: "DELETE" });
+  if (!res.ok) throw new ApiError(res.status);
+}
+
+export async function emptyTrash(): Promise<EmptyTrashResult> {
+  const res = await request("/api/trash", { method: "DELETE" });
+  if (!res.ok) throw new ApiError(res.status);
+  return res.json() as Promise<EmptyTrashResult>;
 }
 
 export interface ImportSummary {
