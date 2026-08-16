@@ -47,6 +47,19 @@ describe("ItemsRepository", () => {
     expect(await handle.items.getById(created.id)).toEqual(created);
   });
 
+  it("counts every item in one collection, trashed ones included", async () => {
+    expect(await handle.items.countByCollectionId(collection.id)).toBe(0);
+
+    await handle.items.create({ collectionId: collection.id, fields: { title: "A" } });
+    const trashed = await handle.items.create({ collectionId: collection.id, fields: { title: "B" } });
+    await handle.items.softDelete(trashed.id);
+    const other = await handle.collections.create({ name: "Movies", fields, isFiniteSet: false });
+    await handle.items.create({ collectionId: other.id, fields: { title: "C" } });
+
+    expect(await handle.items.countByCollectionId(collection.id)).toBe(2);
+    expect(await handle.items.countByCollectionId(other.id)).toBe(1);
+  });
+
   it("lists items by collection, filterable by status, excluding soft-deleted", async () => {
     const owned = await handle.items.create({ collectionId: collection.id, fields: { title: "A" } });
     await handle.items.create({ collectionId: collection.id, status: "wanted", fields: { title: "B" } });
