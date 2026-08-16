@@ -9,6 +9,8 @@
  * without a `matchMedia` listener.
  */
 
+import { readSetting, removeSetting, writeSetting } from "./storage.js";
+
 export const THEME_PREFERENCES = ["light", "dark", "system"] as const;
 
 export type ThemePreference = (typeof THEME_PREFERENCES)[number];
@@ -20,15 +22,10 @@ export function isThemePreference(value: unknown): value is ThemePreference {
   return typeof value === "string" && (THEME_PREFERENCES as readonly string[]).includes(value);
 }
 
-/** The stored choice, or "system" when nothing valid is stored. */
+/** The stored choice, or "system" when nothing valid is stored (or storage is denied). */
 export function getThemePreference(): ThemePreference {
-  try {
-    const stored = localStorage.getItem(THEME_STORAGE_KEY);
-    return isThemePreference(stored) ? stored : "system";
-  } catch {
-    // Storage can be denied outright (Safari private browsing, blocked cookies).
-    return "system";
-  }
+  const stored = readSetting(THEME_STORAGE_KEY);
+  return isThemePreference(stored) ? stored : "system";
 }
 
 /**
@@ -62,16 +59,12 @@ export function applyTheme(preference: ThemePreference): void {
   applyThemeColor(preference);
 }
 
-/** Persists the choice and applies it immediately. */
+/** Persists the choice and applies it immediately — a failed write costs persistence, not the switch. */
 export function setThemePreference(preference: ThemePreference): void {
-  try {
-    if (preference === "system") {
-      localStorage.removeItem(THEME_STORAGE_KEY);
-    } else {
-      localStorage.setItem(THEME_STORAGE_KEY, preference);
-    }
-  } catch {
-    // A failed write costs persistence, not the switch — apply it regardless.
+  if (preference === "system") {
+    removeSetting(THEME_STORAGE_KEY);
+  } else {
+    writeSetting(THEME_STORAGE_KEY, preference);
   }
   applyTheme(preference);
 }

@@ -1,15 +1,20 @@
 import { createErrorReporter, type ErrorReporter, toReportableError } from "@mycollections/core";
 import { UnauthorizedError } from "./api-client.js";
+import { readSetting, writeSetting } from "./storage.js";
 
 const STORAGE_KEY = "error_reporting_enabled";
 
-/** Enabled unless the user opted out in Settings. */
+/**
+ * Enabled unless the user opted out in Settings — and enabled, not crashing,
+ * when storage is denied: this is read while rendering Settings and again on
+ * every capture, so throwing here took out the page and the reporter both.
+ */
 export function isErrorReportingEnabled(): boolean {
-  return localStorage.getItem(STORAGE_KEY) !== "false";
+  return readSetting(STORAGE_KEY) !== "false";
 }
 
 export function setErrorReportingEnabled(enabled: boolean): void {
-  localStorage.setItem(STORAGE_KEY, String(enabled));
+  writeSetting(STORAGE_KEY, String(enabled));
 }
 
 /**

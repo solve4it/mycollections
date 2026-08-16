@@ -20,6 +20,11 @@ flashes the wrong theme while it loads.
 
 _Shortcuts and accessibility options land with later settings work._
 
+Preferences are stored in your browser. If the browser refuses to store anything —
+private-browsing modes and blocked-cookie settings both do — the app keeps working
+and your choices apply for the session; they just start from the defaults again next
+time.
+
 ## Data backup & restore
 
 The **Data** section of Settings lets you back up and move your data:
