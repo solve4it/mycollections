@@ -40,6 +40,28 @@ The **Data** section of Settings lets you back up and move your data:
   never looks like nothing is happening and a second file cannot be started on
   top of the first.
 
+## Trash
+
+Deleting a collection or an item does not destroy it. The **Trash** section of
+Settings is where deleted things wait, and where you decide what finally happens
+to them:
+
+- **Collections** and **Items** are listed separately, each with the date it was
+  deleted. Items that belonged to a deleted collection are not listed on their
+  own — they went into the trash with their collection and come back with it, so
+  restoring the collection restores its contents too.
+- **Restore** puts a row back exactly where it was: a collection returns to your
+  collections list with its items, an item returns to the collection it came from.
+- **Delete forever** destroys one entry permanently. Deleting a collection this
+  way also destroys every item inside it.
+- **Empty trash** destroys everything the trash holds at once, and then says what
+  it removed.
+
+Both permanent actions ask before they run, naming what is about to go, because
+neither can be undone. Nothing in the trash expires or is cleared on a schedule:
+it keeps what it holds until you empty it, so a deleted item is recoverable for
+as long as you leave it there.
+
 ## Privacy
 
 The **Privacy** section controls error reporting:
