@@ -2,6 +2,7 @@ import { createRoute, useNavigate } from "@tanstack/react-router";
 import { type ChangeEvent, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Icon } from "../../components/Icon.js";
+import { TrashSection } from "../../components/TrashSection.js";
 import { clearToken, exportData } from "../../lib/api-client.js";
 import { isErrorReportingEnabled, setErrorReportingEnabled } from "../../lib/error-reporter.js";
 import { useImportData } from "../../lib/queries.js";
@@ -141,6 +142,10 @@ function SettingsPage() {
         {importData.isSuccess && <p role="status">{t("import_success", { ...importData.data })}</p>}
         {importFailed && <p role="alert">{t("import_error")}</p>}
       </section>
+
+      {/* Trash sits under Data: both are about what the app is holding, and the
+          trash is where a delete is finally spent. */}
+      <TrashSection />
 
       <section className="settings-privacy">
         <h2>{t("privacy_label")}</h2>

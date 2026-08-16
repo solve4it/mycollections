@@ -138,10 +138,20 @@ describe("buttons", () => {
     expect(paints(button, "border")).toContain("var(--line)");
   });
 
-  it("styles both variants when disabled", () => {
+  it("marks the destructive variant in danger ink, not in the quiet skin", () => {
+    // The button that goes through with a permanent delete (#35). Sharing the
+    // quiet skin would make "Delete forever" look like "Cancel".
+    const danger = mount('<button type="button" class="touch-target button-danger">Delete forever</button>');
+    expect(paints(danger, "color")).toBe("var(--danger)");
+    expect(paints(danger, "border")).toContain("var(--danger)");
+    expect(paints(danger, "background")).toBe("var(--paper)");
+  });
+
+  it("styles every variant when disabled", () => {
     for (const [name, element] of [
       ["primary", mount('<button type="submit" disabled>Save</button>')],
       ["quiet", mount('<button type="button" class="button-quiet" disabled>Cancel</button>')],
+      ["danger", mount('<button type="button" class="button-danger" disabled>Delete forever</button>')],
     ] as const) {
       expect(paints(element, "cursor", ":disabled"), `${name} needs a disabled cursor`).toBe("not-allowed");
       expect(paints(element, "opacity", ":disabled"), `${name} needs a disabled opacity`).toBeDefined();

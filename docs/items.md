@@ -21,6 +21,14 @@ Details for each flow will land with their respective feature issues.
 
 _How to edit fields, attach images, add notes, and so on._
 
+## Deleting an item
+
+Deleting is reversible. The item disappears from the list and a shortcut appears
+for a few seconds offering to undo it; taking that undo puts the item straight
+back. Missing the shortcut costs nothing — the delete was soft, and the item is
+waiting in the trash, where it can be restored (or destroyed for good) at any
+time. See [Trash](./settings.md#trash) in Settings.
+
 ## Bulk operations
 
 _How to edit or delete many items at once._

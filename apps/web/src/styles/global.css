@@ -505,8 +505,33 @@ button[type="submit"]:hover {
   border-color: var(--ink-muted);
 }
 
+/* The destructive variant (#35). Worn only by the button that goes through with
+   a permanent delete — never by the one that merely asks — so red marks the point
+   of no return rather than the whole trash. Danger ink on paper with a matching
+   border: the same pair the error strip uses, already guarded at 4.5:1 (text) and
+   3:1 (border) in both themes by tokens.integration.test.ts. */
+.button-danger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  padding: 0 var(--space-3);
+  min-height: var(--touch-target-size);
+  border: 1px solid var(--danger);
+  border-radius: var(--radius-sm);
+  background: var(--paper);
+  color: var(--danger);
+  font: inherit;
+  cursor: pointer;
+}
+
+.button-danger:hover {
+  background: var(--danger-surface);
+}
+
 .button-primary:disabled,
 .button-quiet:disabled,
+.button-danger:disabled,
 button[type="submit"]:disabled {
   opacity: 0.6;
   cursor: not-allowed;
@@ -1025,6 +1050,82 @@ p[role="alert"] {
 .import-row input[type="file"] {
   font: inherit;
   color: var(--ink);
+}
+
+/* Settings: trash (#35). Rows are the item-row card at a smaller weight — same
+   card, same border, same two-column split of content and actions — because a
+   trashed row is still a catalog entry, just one on its way out. */
+.trash-list {
+  list-style: none;
+  margin: 0 0 var(--space-4);
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.trash-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--card);
+}
+
+.trash-entry {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-1) var(--space-3);
+  min-width: 0;
+}
+
+.trash-name {
+  font-weight: 600;
+}
+
+/* The collection an item came from, and the date it went in: context, not the
+   name, so it steps back to muted ink at the size the field labels use. */
+.trash-meta,
+.trash-note {
+  color: var(--ink-muted);
+  font-size: 0.8125rem;
+}
+
+.trash-note {
+  margin: 0 0 var(--space-2);
+  max-width: 52ch;
+}
+
+.trash-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  flex-shrink: 0;
+}
+
+/* The confirmation a destructive action opens in place of itself. It stacks —
+   the question is a full sentence and must not be squeezed into a button-width
+   column beside the answers. */
+.confirm-row {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-2);
+}
+
+.confirm-prompt {
+  margin: 0;
+  max-width: 52ch;
+}
+
+.confirm-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
 }
 
 .add-item {
