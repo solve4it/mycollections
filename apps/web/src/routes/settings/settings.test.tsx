@@ -1,6 +1,6 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createMemoryHistory, createRouter, RouterProvider } from "@tanstack/react-router";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { rootRoute } from "../__root.js";
 import { setupRoute } from "../setup/index.js";
@@ -15,6 +15,7 @@ vi.mock("../../lib/api-client.js", () => ({
 
 import { exportData, type ImportSummary, importData } from "../../lib/api-client.js";
 import { isErrorReportingEnabled, setErrorReportingEnabled } from "../../lib/error-reporter.js";
+import { getThemePreference, setThemePreference } from "../../lib/theme.js";
 
 const testRouteTree = rootRoute.addChildren([settingsRoute, setupRoute]);
 
@@ -55,6 +56,8 @@ function deferred<T>() {
 
 beforeEach(() => {
   localStorage.clear();
+  // documentElement is shared across a file — never let a theme leak into a neighbor.
+  document.documentElement.removeAttribute("data-theme");
   vi.resetAllMocks();
   vi.mocked(exportData).mockResolvedValue(new Blob(["{}"], { type: "application/json" }));
   vi.mocked(importData).mockResolvedValue(IMPORT_SUMMARY);
@@ -129,6 +132,46 @@ describe("SettingsPage privacy", () => {
     fireEvent.click(toggle);
     expect(toggle).toBeChecked();
     expect(isErrorReportingEnabled()).toBe(true);
+  });
+});
+
+describe("SettingsPage theme", () => {
+  it("renders a theme selector that defaults to following the system", async () => {
+    renderSettings();
+    const select = await screen.findByRole("combobox", { name: /theme/i });
+    expect(select).toHaveValue("system");
+  });
+
+  it("offers exactly light, dark and system", async () => {
+    renderSettings();
+    const select = await screen.findByRole("combobox", { name: /theme/i });
+    const options = within(select).getAllByRole("option");
+    expect(options.map((option) => (option as HTMLOptionElement).value)).toEqual(["system", "light", "dark"]);
+    expect(options.map((option) => option.textContent)).toEqual(["Match system", "Light", "Dark"]);
+  });
+
+  it("choosing dark stamps the override on the document and remembers it", async () => {
+    renderSettings();
+    const select = await screen.findByRole("combobox", { name: /theme/i });
+    fireEvent.change(select, { target: { value: "dark" } });
+    expect(select).toHaveValue("dark");
+    expect(document.documentElement.getAttribute("data-theme")).toBe("dark");
+    expect(getThemePreference()).toBe("dark");
+  });
+
+  it("reflects a previously saved choice", async () => {
+    setThemePreference("light");
+    renderSettings();
+    expect(await screen.findByRole("combobox", { name: /theme/i })).toHaveValue("light");
+  });
+
+  it("switching back to system drops the override so the OS decides again", async () => {
+    setThemePreference("dark");
+    renderSettings();
+    const select = await screen.findByRole("combobox", { name: /theme/i });
+    fireEvent.change(select, { target: { value: "system" } });
+    expect(document.documentElement.hasAttribute("data-theme")).toBe(false);
+    expect(getThemePreference()).toBe("system");
   });
 });
 

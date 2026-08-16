@@ -3,9 +3,31 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f1f2ee" />
-    <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#141816" />
+    <meta name="theme-color" data-theme-color="light" media="(prefers-color-scheme: light)" content="#f1f2ee" />
+    <meta name="theme-color" data-theme-color="dark" media="(prefers-color-scheme: dark)" content="#141816" />
     <title>MyCollections</title>
+    <!--
+      Applies the saved theme before the first paint (#25). Vite appends the
+      stylesheet and the entry module at the end of this <head>, so this runs
+      before either is even discovered and a stored "dark" never flashes light.
+      It duplicates applyTheme() in src/lib/theme.ts on purpose — a module
+      script cannot run this early — and theme-boot.integration.test.ts fails
+      the moment the two disagree. Read-only on storage and allowlisted to the
+      two explicit themes: localStorage is attacker-writable, so the value is
+      never interpolated into markup, only compared and set as an attribute.
+    -->
+    <script>
+      try {
+        const theme = localStorage.getItem("theme");
+        if (theme === "light" || theme === "dark") {
+          document.documentElement.setAttribute("data-theme", theme);
+        } else {
+          document.documentElement.removeAttribute("data-theme");
+        }
+      } catch {
+        // Storage denied (blocked cookies, partitioned storage): prefers-color-scheme decides.
+      }
+    </script>
   </head>
   <body>
     <div id="root"></div>
