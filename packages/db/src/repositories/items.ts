@@ -203,4 +203,18 @@ export class ItemsRepository {
     const result = this.#db.delete(schema.items).where(eq(schema.items.id, id)).run();
     return result.changes > 0;
   }
+
+  /**
+   * Permanently removes an item, but only while it is in the trash. The
+   * `deletedAt` guard is part of the DELETE rather than a separate read, so a
+   * restore racing a purge cannot destroy a row the user has just recovered.
+   * Returns false for a live item, an unknown id, and an already-purged one.
+   */
+  async purge(id: string): Promise<boolean> {
+    const result = this.#db
+      .delete(schema.items)
+      .where(and(eq(schema.items.id, id), isNotNull(schema.items.deletedAt)))
+      .run();
+    return result.changes > 0;
+  }
 }

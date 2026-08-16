@@ -112,6 +112,22 @@ describe("CollectionsRepository", () => {
     expect(deleted.every((c) => c.deletedAt !== null)).toBe(true);
   });
 
+  it("purges only trashed collections, taking their items with them", async () => {
+    const live = await handle.collections.create({ name: "Books", fields, isFiniteSet: false });
+    const liveItem = await handle.items.create({ collectionId: live.id, fields: { title: "Kept" } });
+    const trashed = await handle.collections.create({ name: "Movies", fields, isFiniteSet: false });
+    const trashedItem = await handle.items.create({ collectionId: trashed.id, fields: { title: "Gone" } });
+    await handle.collections.softDelete(trashed.id);
+
+    expect(await handle.collections.purge(live.id)).toBe(false);
+    expect(await handle.items.getById(liveItem.id)).not.toBeNull();
+
+    expect(await handle.collections.purge(trashed.id)).toBe(true);
+    expect(await handle.collections.getById(trashed.id, { includeDeleted: true })).toBeNull();
+    expect(await handle.items.getById(trashedItem.id, { includeDeleted: true })).toBeNull();
+    expect(await handle.collections.purge(trashed.id)).toBe(false);
+  });
+
   it("hard delete removes the row and cascades to items and media", async () => {
     const collection = await handle.collections.create({ name: "Books", fields, isFiniteSet: false });
     const item = await handle.items.create({ collectionId: collection.id, fields: { title: "Dune" } });

@@ -80,6 +80,20 @@ export async function registerItemRoutes(app: FastifyInstance, db: DatabaseHandl
     return updated;
   });
 
+  app.post("/api/collections/:id/items/:itemId/restore", async (request, _reply) => {
+    const { id, itemId } = request.params as { id: string; itemId: string };
+    // A trashed collection is unreachable here, which is the cascade rule doing its
+    // job: while the parent is in the trash its items come back with it, never one
+    // at a time into a collection the user cannot see.
+    const collection = await db.collections.getById(id);
+    if (!collection) throw app.httpErrors.notFound("Collection not found");
+    const existing = await db.items.getById(itemId, { includeDeleted: true });
+    if (!existing || existing.collectionId !== id) throw app.httpErrors.notFound("Item not found");
+    const restored = await db.items.restore(itemId);
+    if (!restored) throw app.httpErrors.notFound("Item not found in trash");
+    return db.items.getById(itemId);
+  });
+
   app.delete("/api/collections/:id/items/:itemId", async (request, reply) => {
     const { id, itemId } = request.params as { id: string; itemId: string };
     const collection = await db.collections.getById(id);

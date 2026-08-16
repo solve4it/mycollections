@@ -145,4 +145,18 @@ export class CollectionsRepository {
     const result = this.#db.delete(schema.collections).where(eq(schema.collections.id, id)).run();
     return result.changes > 0;
   }
+
+  /**
+   * Permanently removes a collection and, by foreign key cascade, everything it
+   * contains — but only while it is in the trash. The `deletedAt` guard is part
+   * of the DELETE rather than a separate read, so a restore racing a purge
+   * cannot destroy a collection the user has just recovered.
+   */
+  async purge(id: string): Promise<boolean> {
+    const result = this.#db
+      .delete(schema.collections)
+      .where(and(eq(schema.collections.id, id), isNotNull(schema.collections.deletedAt)))
+      .run();
+    return result.changes > 0;
+  }
 }

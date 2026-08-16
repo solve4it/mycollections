@@ -28,10 +28,34 @@ All routes require `Authorization: Bearer <token>` except `GET /api/health`.
 | `GET` | `/api/collections/:id/items/:itemId` | Get an item |
 | `PATCH` | `/api/collections/:id/items/:itemId` | Update an item |
 | `DELETE` | `/api/collections/:id/items/:itemId` | Soft-delete an item |
+| `POST` | `/api/collections/:id/items/:itemId/restore` | Restore a soft-deleted item |
+| `GET` | `/api/trash` | List what soft delete has hidden: `{ collections, items }` |
+| `DELETE` | `/api/trash/items/:itemId` | Permanently delete a trashed item |
+| `DELETE` | `/api/trash/collections/:id` | Permanently delete a trashed collection and its items |
 | `GET` | `/api/export` | Download a JSON backup of all collections and items |
 | `POST` | `/api/import` | Restore a backup document (`?mode=skip`) |
 
 In dev mode, OpenAPI docs are available at `GET /api/docs`.
+
+### Trash and soft delete
+
+`DELETE` on a collection or an item stamps `deletedAt` instead of removing the row.
+Permanent deletion is a separate request to a separate path (`/api/trash/...`), so
+destroying data is never one query parameter away from an everyday delete. Both purge
+routes carry the "is it actually in the trash?" test inside the `DELETE` statement, so a
+restore racing a purge cannot destroy a row the user has just recovered, and a live
+resource answers `404` without being touched.
+
+**Deleting a collection does not touch its items.** No child row is stamped: a trashed
+collection simply takes its contents down with it, and restoring the collection brings
+back everything it held. Consequently:
+
+- `GET /api/trash` lists a trashed collection, and lists trashed items only while their
+  collection is live. Items inside a trashed collection are not offered individually —
+  restoring one could only put it back somewhere the user cannot see.
+- `POST /api/collections/:id/items/:itemId/restore` answers `404` while the parent
+  collection is in the trash. Restore the collection instead.
+- Purging a collection removes its items too, via the foreign key cascade.
 
 ### Backup format
 

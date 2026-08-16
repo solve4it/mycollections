@@ -9,6 +9,7 @@ import { isLoopbackHost } from "./config.js";
 import { registerCollectionRoutes } from "./routes/collections.js";
 import { registerExportRoutes } from "./routes/export.js";
 import { registerItemRoutes } from "./routes/items.js";
+import { registerTrashRoutes } from "./routes/trash.js";
 
 export interface AppOptions {
   db: DatabaseHandle;
@@ -167,6 +168,7 @@ export async function buildApp(options: AppOptions) {
     await registerCollectionRoutes(authenticated, db);
     await registerItemRoutes(authenticated, db);
     await registerExportRoutes(authenticated, db);
+    await registerTrashRoutes(authenticated, db);
   });
 
   return app;

@@ -148,6 +148,19 @@ describe("ItemsRepository", () => {
       expect(deleted.map((i) => i.id)).toEqual([visible.id]);
     });
 
+    it("purges only trashed items, in a single conditional statement", async () => {
+      const live = await handle.items.create({ collectionId: collection.id, fields: { title: "Live" } });
+      const trashed = await handle.items.create({ collectionId: collection.id, fields: { title: "Gone" } });
+      await handle.items.softDelete(trashed.id);
+
+      expect(await handle.items.purge(live.id)).toBe(false);
+      expect(await handle.items.getById(live.id)).not.toBeNull();
+
+      expect(await handle.items.purge(trashed.id)).toBe(true);
+      expect(await handle.items.getById(trashed.id, { includeDeleted: true })).toBeNull();
+      expect(await handle.items.purge(trashed.id)).toBe(false);
+    });
+
     it("returns an empty list when nothing is deleted", async () => {
       await handle.items.create({ collectionId: collection.id, fields: { title: "Live" } });
       expect(await handle.items.listDeleted()).toEqual([]);

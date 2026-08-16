@@ -249,3 +249,67 @@ describe("DELETE /api/collections/:id/items/:itemId", () => {
     expect(res.statusCode).toBe(404);
   });
 });
+
+describe("POST /api/collections/:id/items/:itemId/restore", () => {
+  it("restores a soft-deleted item and returns it", async () => {
+    const item = await handle.items.create({ collectionId: collection.id, fields: { title: "Dune" } });
+    await handle.items.softDelete(item.id);
+    const app = await makeApp();
+
+    const res = await app.inject({
+      method: "POST",
+      url: `/api/collections/${collection.id}/items/${item.id}/restore`,
+      headers: auth,
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as Item;
+    expect(body.id).toBe(item.id);
+    expect(body.fields).toEqual({ title: "Dune" });
+    expect(body.deletedAt).toBeNull();
+    expect(await handle.items.getById(item.id)).not.toBeNull();
+  });
+
+  it("returns 404 for an item that is not deleted", async () => {
+    const item = await handle.items.create({ collectionId: collection.id, fields: {} });
+    const app = await makeApp();
+    const res = await app.inject({
+      method: "POST",
+      url: `/api/collections/${collection.id}/items/${item.id}/restore`,
+      headers: auth,
+    });
+    expect(res.statusCode).toBe(404);
+  });
+
+  it("returns 404 and leaves the item deleted when addressed via a different collection", async () => {
+    const other = await handle.collections.create({ name: "Movies", fields: baseFields, isFiniteSet: false });
+    const item = await handle.items.create({ collectionId: collection.id, fields: { title: "Dune" } });
+    await handle.items.softDelete(item.id);
+    const app = await makeApp();
+
+    const res = await app.inject({
+      method: "POST",
+      url: `/api/collections/${other.id}/items/${item.id}/restore`,
+      headers: auth,
+    });
+
+    expect(res.statusCode).toBe(404);
+    expect(await handle.items.getById(item.id)).toBeNull();
+  });
+
+  it("returns 404 while the parent collection is itself in the trash", async () => {
+    const item = await handle.items.create({ collectionId: collection.id, fields: {} });
+    await handle.items.softDelete(item.id);
+    await handle.collections.softDelete(collection.id);
+    const app = await makeApp();
+
+    const res = await app.inject({
+      method: "POST",
+      url: `/api/collections/${collection.id}/items/${item.id}/restore`,
+      headers: auth,
+    });
+
+    expect(res.statusCode).toBe(404);
+    expect(await handle.items.getById(item.id, { includeDeleted: true })).not.toBeNull();
+  });
+});
