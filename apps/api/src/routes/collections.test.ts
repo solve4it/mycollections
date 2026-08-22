@@ -138,6 +138,167 @@ describe("PATCH /api/collections/:id", () => {
     });
     expect(res.statusCode).toBe(404);
   });
+
+  it("replaces the field schema, leaving values under a removed field on the item", async () => {
+    const col = await handle.collections.create({
+      name: "Books",
+      fields: [
+        { id: "title", type: "text", label: "Title", required: true },
+        { id: "pages", type: "number", label: "Pages", required: false },
+      ],
+      isFiniteSet: false,
+    });
+    const item = await handle.items.create({ collectionId: col.id, fields: { title: "Dune", pages: 412 } });
+    const app = await makeApp();
+
+    const res = await app.inject({
+      method: "PATCH",
+      url: `/api/collections/${col.id}`,
+      headers: { ...auth, "Content-Type": "application/json" },
+      payload: {
+        fields: [
+          { id: "title", type: "text", label: "Name", required: true },
+          { id: "year", type: "number", label: "Year", required: false },
+        ],
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json<Collection>().fields).toEqual([
+      { id: "title", type: "text", label: "Name", required: true },
+      { id: "year", type: "number", label: "Year", required: false },
+    ]);
+    expect((await handle.items.getById(item.id))?.fields).toEqual({ title: "Dune", pages: 412 });
+  });
+
+  it("allows changing a field's type while the collection is empty", async () => {
+    const col = await handle.collections.create({ name: "Books", fields: baseFields, isFiniteSet: false });
+    const app = await makeApp();
+
+    const res = await app.inject({
+      method: "PATCH",
+      url: `/api/collections/${col.id}`,
+      headers: { ...auth, "Content-Type": "application/json" },
+      payload: { fields: [{ id: "title", type: "number", label: "Title", required: true }] },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json<Collection>().fields).toEqual([{ id: "title", type: "number", label: "Title", required: true }]);
+  });
+
+  it("rejects a type change once the collection holds items, persisting nothing", async () => {
+    const col = await handle.collections.create({ name: "Books", fields: baseFields, isFiniteSet: false });
+    await handle.items.create({ collectionId: col.id, fields: { title: "Dune" } });
+    const app = await makeApp();
+
+    const res = await app.inject({
+      method: "PATCH",
+      url: `/api/collections/${col.id}`,
+      headers: { ...auth, "Content-Type": "application/json" },
+      payload: {
+        name: "Renamed",
+        fields: [{ id: "title", type: "number", label: "Title", required: true }],
+      },
+    });
+
+    expect(res.statusCode).toBe(400);
+    const unchanged = await handle.collections.getById(col.id);
+    expect(unchanged?.fields).toEqual(baseFields);
+    expect(unchanged?.name).toBe("Books");
+  });
+
+  it("counts trashed items when guarding a type change", async () => {
+    const col = await handle.collections.create({ name: "Books", fields: baseFields, isFiniteSet: false });
+    const item = await handle.items.create({ collectionId: col.id, fields: { title: "Dune" } });
+    await handle.items.softDelete(item.id);
+    const app = await makeApp();
+
+    const res = await app.inject({
+      method: "PATCH",
+      url: `/api/collections/${col.id}`,
+      headers: { ...auth, "Content-Type": "application/json" },
+      payload: { fields: [{ id: "title", type: "number", label: "Title", required: true }] },
+    });
+
+    expect(res.statusCode).toBe(400);
+  });
+
+  it("accepts relabelling, reordering, and adding fields on a collection with items", async () => {
+    const col = await handle.collections.create({
+      name: "Books",
+      fields: [
+        { id: "title", type: "text", label: "Title", required: true },
+        { id: "pages", type: "number", label: "Pages", required: false },
+      ],
+      isFiniteSet: false,
+    });
+    await handle.items.create({ collectionId: col.id, fields: { title: "Dune" } });
+    const app = await makeApp();
+
+    const res = await app.inject({
+      method: "PATCH",
+      url: `/api/collections/${col.id}`,
+      headers: { ...auth, "Content-Type": "application/json" },
+      payload: {
+        fields: [
+          { id: "pages", type: "number", label: "Page count", required: false },
+          { id: "title", type: "text", label: "Title", required: true },
+          { id: "year", type: "number", label: "Year", required: false },
+        ],
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json<Collection>().fields.map((f) => f.id)).toEqual(["pages", "title", "year"]);
+  });
+
+  it("returns 400 rather than 500 for a malformed field definition", async () => {
+    const col = await handle.collections.create({ name: "Books", fields: baseFields, isFiniteSet: false });
+    const app = await makeApp();
+
+    const res = await app.inject({
+      method: "PATCH",
+      url: `/api/collections/${col.id}`,
+      headers: { ...auth, "Content-Type": "application/json" },
+      payload: { fields: [{ id: "title", type: "unsupported", label: "Title" }] },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect((await handle.collections.getById(col.id))?.fields).toEqual(baseFields);
+  });
+
+  it("returns 400 for duplicate field ids", async () => {
+    const col = await handle.collections.create({ name: "Books", fields: baseFields, isFiniteSet: false });
+    const app = await makeApp();
+
+    const res = await app.inject({
+      method: "PATCH",
+      url: `/api/collections/${col.id}`,
+      headers: { ...auth, "Content-Type": "application/json" },
+      payload: {
+        fields: [
+          { id: "title", type: "text", label: "Title", required: true },
+          { id: "title", type: "text", label: "Duplicate", required: false },
+        ],
+      },
+    });
+
+    expect(res.statusCode).toBe(400);
+  });
+
+  it("returns 400 for an empty fields array", async () => {
+    const col = await handle.collections.create({ name: "Books", fields: baseFields, isFiniteSet: false });
+    const app = await makeApp();
+
+    const res = await app.inject({
+      method: "PATCH",
+      url: `/api/collections/${col.id}`,
+      headers: { ...auth, "Content-Type": "application/json" },
+      payload: { fields: [] },
+    });
+
+    expect(res.statusCode).toBe(400);
+  });
 });
 
 describe("DELETE /api/collections/:id", () => {

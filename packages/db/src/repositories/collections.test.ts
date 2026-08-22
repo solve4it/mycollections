@@ -67,6 +67,21 @@ describe("CollectionsRepository", () => {
     expect(updated && updated.updatedAt >= created.updatedAt).toBe(true);
   });
 
+  it("replaces the field schema without touching stored item values", async () => {
+    const created = await handle.collections.create({ name: "Books", fields, isFiniteSet: false });
+    const item = await handle.items.create({ collectionId: created.id, fields: { title: "Dune", pages: 412 } });
+
+    // "pages" leaves the schema, "year" joins it, "title" is relabelled in place.
+    const nextFields: FieldDefinition[] = [
+      { id: "title", type: "text", label: "Name", required: true },
+      { id: "year", type: "number", label: "Year", required: false },
+    ];
+    const updated = await handle.collections.update(created.id, { fields: nextFields });
+
+    expect(updated?.fields).toEqual(nextFields);
+    expect((await handle.items.getById(item.id))?.fields).toEqual({ title: "Dune", pages: 412 });
+  });
+
   it("update returns null for unknown ids", async () => {
     expect(await handle.collections.update("00000000-0000-4000-8000-000000000000", { name: "X" })).toBeNull();
   });

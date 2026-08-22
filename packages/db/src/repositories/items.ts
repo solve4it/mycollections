@@ -105,6 +105,21 @@ export class ItemsRepository {
     return Object.fromEntries(rows.map((r) => [r.collectionId, r.count]));
   }
 
+  /**
+   * Counts the items of a single collection, soft-deleted ones included. Callers
+   * guarding a destructive schema change need the trash-inclusive number: a
+   * trashed item can be restored, and it would come back holding values the new
+   * schema can no longer read.
+   */
+  async countByCollectionId(collectionId: string): Promise<number> {
+    const row = this.#db
+      .select({ count: sql<number>`count(*)` })
+      .from(schema.items)
+      .where(eq(schema.items.collectionId, collectionId))
+      .get();
+    return row?.count ?? 0;
+  }
+
   async listByCollection(collectionId: string, options: ListItemsOptions = {}): Promise<Item[]> {
     const conditions = [eq(schema.items.collectionId, collectionId)];
     if (!options.includeDeleted) {
