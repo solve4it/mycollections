@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.0.2](https://github.com/solve4it/mycollections/compare/mycollections-v0.0.1...mycollections-v0.0.2) (2026-08-22)
+
+
+### Features
+
+* **api,db:** edit a collection's field schema after creation ([#197](https://github.com/solve4it/mycollections/issues/197) part 1) ([#287](https://github.com/solve4it/mycollections/issues/287)) ([5cecf76](https://github.com/solve4it/mycollections/commit/5cecf769893c3897d6db1c15cb5344585f20a54f))
+* **web:** collection editor — change a collection's fields after creation ([#197](https://github.com/solve4it/mycollections/issues/197) part 2) ([#288](https://github.com/solve4it/mycollections/issues/288)) ([dfc60a8](https://github.com/solve4it/mycollections/commit/dfc60a8fb40dd6c9982b5c1d83fb5c6db1682a4f))
+
+
+### Bug Fixes
+
+* **deps:** update all non-major dependencies ([#289](https://github.com/solve4it/mycollections/issues/289)) ([da523a7](https://github.com/solve4it/mycollections/commit/da523a724eb8e3a4c80327a0c2405839c84508c9))
+
 ## 0.0.1 (2026-08-16)
 
 
