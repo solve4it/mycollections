@@ -5,6 +5,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-li
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { rootRoute } from "../__root.js";
 import { collectionDetailRoute } from "./$id.js";
+import { editCollectionRoute } from "./edit.js";
 
 vi.mock("../../lib/api-client.js", () => ({
   getCollection: vi.fn(),
@@ -18,7 +19,7 @@ vi.mock("../../lib/api-client.js", () => ({
 
 import { createItem, deleteItem, getCollection, listItems, restoreItem, updateItem } from "../../lib/api-client.js";
 
-const testRouteTree = rootRoute.addChildren([collectionDetailRoute]);
+const testRouteTree = rootRoute.addChildren([collectionDetailRoute, editCollectionRoute]);
 
 const COLLECTION: Collection = {
   id: "11111111-1111-1111-1111-111111111111",
@@ -85,6 +86,12 @@ describe("CollectionDetailPage", () => {
   it("shows the collection name", async () => {
     renderDetail();
     expect(await screen.findByRole("heading", { name: "Games" })).toBeInTheDocument();
+  });
+
+  it("links to the collection's field editor", async () => {
+    renderDetail();
+    const link = await screen.findByRole("link", { name: /edit collection/i });
+    expect(link).toHaveAttribute("href", `/collections/${COLLECTION.id}/edit`);
   });
 
   it("shows an empty state when there are no items", async () => {

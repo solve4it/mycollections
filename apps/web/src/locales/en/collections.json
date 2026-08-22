@@ -24,6 +24,13 @@
   "submit": "Create collection",
   "cancel": "Cancel",
   "submit_error": "Could not create the collection. Check your input and try again.",
+  "edit_title": "Edit collection",
+  "edit_collection": "Edit collection",
+  "back_to_collection": "Back to collection",
+  "save": "Save changes",
+  "save_error": "Could not save the collection. Check your input and try again.",
+  "field_type_locked": "Cannot change the type: this collection already has items, and their stored values would not convert.",
+  "remove_field_note": "Removing a field hides it from every item. The values are kept in your data and stay in a JSON backup, but they are no longer shown, and adding the field back starts it empty.",
   "field_types": {
     "text": "Text",
     "number": "Number",

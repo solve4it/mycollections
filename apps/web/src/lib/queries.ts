@@ -14,6 +14,8 @@ import {
   purgeItem,
   restoreCollection,
   restoreItem,
+  type UpdateCollectionInput,
+  updateCollection,
   updateItem,
 } from "./api-client.js";
 
@@ -33,6 +35,19 @@ export function useImportData() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: importData,
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["collections"] }),
+  });
+}
+
+/**
+ * Invalidating the `["collections"]` prefix covers the list, this collection, and
+ * its items in one go — a field rename changes how every row is labelled, so the
+ * item list has to reload with the collection.
+ */
+export function useUpdateCollection(id: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: UpdateCollectionInput) => updateCollection(id, input),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["collections"] }),
   });
 }

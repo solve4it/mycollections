@@ -1,5 +1,6 @@
 import { rootRoute } from "./routes/__root.js";
 import { collectionDetailRoute } from "./routes/collections/$id.js";
+import { editCollectionRoute } from "./routes/collections/edit.js";
 import { collectionsRoute } from "./routes/collections/index.js";
 import { newCollectionRoute } from "./routes/collections/new.js";
 import { indexRoute } from "./routes/index.js";
@@ -10,6 +11,7 @@ export const routeTree = rootRoute.addChildren([
   indexRoute,
   setupRoute,
   newCollectionRoute,
+  editCollectionRoute,
   collectionDetailRoute,
   collectionsRoute,
   settingsRoute,

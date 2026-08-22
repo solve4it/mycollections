@@ -59,6 +59,9 @@ function itemLabel(collection: Collection, item: Item, untitled: string): string
 function CollectionDetailPage() {
   const { id } = collectionDetailRoute.useParams();
   const { t } = useTranslation("items");
+  // The editor is a collection-level action, so its label lives with the other
+  // collection strings rather than being duplicated into the items namespace.
+  const { t: tCollections } = useTranslation("collections");
   const collectionQuery = useCollection(id);
   const itemsQuery = useItems(id);
   const createItem = useCreateItem(id);
@@ -99,7 +102,13 @@ function CollectionDetailPage() {
         <Icon name="back" />
         {t("back_to_collections")}
       </Link>
-      <h1>{collection.name}</h1>
+      <div className="collection-detail-header">
+        <h1>{collection.name}</h1>
+        <Link to="/collections/$id/edit" params={{ id }} className="touch-target button-quiet">
+          <Icon name="edit" />
+          {tCollections("edit_collection")}
+        </Link>
+      </div>
       {collection.description && <p>{collection.description}</p>}
 
       <h2>{t("items_heading")}</h2>
