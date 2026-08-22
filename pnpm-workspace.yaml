@@ -13,3 +13,9 @@ allowBuilds:
 # a <24h-old release and the resulting minimumReleaseAge exclusion).
 overrides:
   "@types/node": "24.13.3"
+
+# The docs site's `prebuild`/`postbuild` hooks are load-bearing: `prebuild` copies
+# the shared docs in from the repo root, and `postbuild` fails the build on a
+# broken in-site link. pnpm has shipped this default both ways across majors, so
+# pin it rather than let a version bump quietly skip both.
+enablePrePostScripts: true
