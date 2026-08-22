@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.0.3](https://github.com/solve4it/mycollections/compare/mycollections-v0.0.2...mycollections-v0.0.3) (2026-08-22)
+
+
+### Bug Fixes
+
+* **docs-site:** fail the build when a doc is published empty or never reaches the site ([#298](https://github.com/solve4it/mycollections/issues/298)) ([6f845bb](https://github.com/solve4it/mycollections/commit/6f845bbc10b76355d0e6bca34ff3b83df62aa708))
+* **docs-site:** rewrite relative Markdown links so they stop 404ing on the published site ([#293](https://github.com/solve4it/mycollections/issues/293)) ([87da1cd](https://github.com/solve4it/mycollections/commit/87da1cd10399203d5c14d5e1e6257fd7401ae4b2))
+* **web:** keep the API token usable where the browser refuses to store it ([#297](https://github.com/solve4it/mycollections/issues/297)) ([ff33f14](https://github.com/solve4it/mycollections/commit/ff33f14c808d755b77cde64a750ed33de84493d8))
+
 ## [0.0.2](https://github.com/solve4it/mycollections/compare/mycollections-v0.0.1...mycollections-v0.0.2) (2026-08-22)
 
 
