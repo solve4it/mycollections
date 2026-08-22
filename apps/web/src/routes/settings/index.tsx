@@ -3,7 +3,7 @@ import { type ChangeEvent, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Icon } from "../../components/Icon.js";
 import { TrashSection } from "../../components/TrashSection.js";
-import { clearToken, exportData } from "../../lib/api-client.js";
+import { clearToken, exportData, isTokenSessionOnly } from "../../lib/api-client.js";
 import { isErrorReportingEnabled, setErrorReportingEnabled } from "../../lib/error-reporter.js";
 import { useImportData } from "../../lib/queries.js";
 import { getThemePreference, isThemePreference, setThemePreference } from "../../lib/theme.js";
@@ -165,6 +165,10 @@ function SettingsPage() {
 
       <section className="settings-connection">
         <h2>{t("connection_label")}</h2>
+        {/* Read on every render rather than held in state: another tab can
+            clear the stored token, and the browser can evict it, long after
+            this page mounted. */}
+        {isTokenSessionOnly() && <p role="status">{t("session_only_notice")}</p>}
         <p>{t("disconnect_description")}</p>
         <button type="button" className="touch-target button-quiet" onClick={handleDisconnect}>
           {t("disconnect_button")}

@@ -3,5 +3,6 @@
   "description": "Enter the API token shown in your terminal when the server started.",
   "token_label": "API Token",
   "token_placeholder": "Paste your API token here",
-  "connect_button": "Connect"
+  "connect_button": "Connect",
+  "no_persistence_notice": "This browser will not let MyCollections remember your token, so you will need to paste it again each time you open the app here."
 }
