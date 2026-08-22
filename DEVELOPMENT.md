@@ -140,7 +140,7 @@ Swagger UI: http://127.0.0.1:3001/api/docs
 
 > Running `pnpm dev`? Turborepo prefixes each line, so look for `@mycollections/api:dev: API token: …`.
 
-On first load the web app shows a setup screen — paste that token to connect. It's stored in `localStorage` (key `api_token`).
+On first load the web app shows a setup screen — paste that token to connect. It's stored in `localStorage` (key `api_token`), and also kept in memory for the session so that a browser which refuses storage still works; there the setup screen warns up front that the token cannot be remembered.
 
 By default the token is a **random UUID regenerated on every restart**, so after a server restart (including the auto-restart on file changes) you'd have to paste a fresh one. To keep a **stable token** across restarts, set it yourself:
 

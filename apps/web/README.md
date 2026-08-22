@@ -33,10 +33,11 @@ The root layout (`routes/__root.tsx`) wraps all routes with the `Shell` componen
 
 The web app talks to the `@mycollections/api` server over HTTP.
 
-- **`src/lib/api-client.ts`**: thin `fetch` wrapper. Adds `Authorization: Bearer <token>` from `localStorage` (`api_token`), throws `UnauthorizedError` on 401 and `ApiError` on other failures. Base URL comes from `VITE_API_URL` (default `http://localhost:3001`). Exposes `getToken` / `setToken` / `clearToken`, `listCollections`, `createCollection`, `getCollection`, and item operations (`listItems`, `createItem`, `updateItem`, `deleteItem`).
+- **`src/lib/api-client.ts`**: thin `fetch` wrapper. Adds `Authorization: Bearer <token>`, throws `UnauthorizedError` on 401 and `ApiError` on other failures. Base URL comes from `VITE_API_URL` (default `http://localhost:3001`). Exposes `listCollections`, `createCollection`, `getCollection`, and item operations (`listItems`, `createItem`, `updateItem`, `deleteItem`), and re-exports the token API below.
+- **`src/lib/token.ts`**: `getToken` / `setToken` / `clearToken` / `isTokenSessionOnly`. The token is persisted to `localStorage` (`api_token`) and also held in memory for the session, because touching storage throws outright where it is denied — cookies blocked, a sandboxed frame, partitioned or policy-restricted storage — and every route's `beforeLoad` reads the token. A denied write costs the reload, not the session, and `isTokenSessionOnly()` is how the UI says so rather than letting the next reload look like a bug (#279).
 - **`src/lib/queries.ts`**: TanStack Query hooks — `useCollections()`, `useCollection(id)`, `useItems(id)` (queries) and `useCreateCollection()`, `useCreateItem(id)`, `useUpdateItem(id)`, `useDeleteItem(id)` (mutations, each invalidating the relevant query on success). `QueryClientProvider` is mounted in `main.tsx`.
 
-The API token is the random UUID the server prints to stdout on startup; the user pastes it into the `/setup` screen.
+The API token is the random UUID the server prints to stdout on startup; the user pastes it into the `/setup` screen. Where the browser will not store anything, that screen says so before the token is pasted, and Settings → Connection repeats it — the app still works, it just cannot remember the token.
 
 ## Collection creation
 
