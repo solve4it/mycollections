@@ -6,6 +6,7 @@ import type {
   Item,
   ItemStatus,
 } from "@mycollections/core";
+import { getToken } from "./token.js";
 
 export interface CreateCollectionInput {
   name: string;
@@ -33,17 +34,12 @@ export class UnauthorizedError extends ApiError {
   }
 }
 
-export function getToken(): string | null {
-  return localStorage.getItem("api_token");
-}
-
-export function setToken(token: string): void {
-  localStorage.setItem("api_token", token.trim());
-}
-
-export function clearToken(): void {
-  localStorage.removeItem("api_token");
-}
+/**
+ * Re-exported rather than defined here: the token needs guarding against a
+ * browser that will not store anything (#279), and `token.js` is where that
+ * lives. Every caller and every test mock still reaches it through this module.
+ */
+export { clearToken, getToken, isTokenSessionOnly, setToken } from "./token.js";
 
 async function request(path: string, init?: RequestInit): Promise<Response> {
   const token = getToken();
