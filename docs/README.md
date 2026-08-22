@@ -46,14 +46,14 @@ New top-level sections should be added as sibling markdown files. Nested sub-sec
 ## Authoring rules
 
 - **Plain Markdown.** Keep frontmatter minimal (`title:` and `description:`) so the content is portable across renderers. Starlight-specific features (tabs, asides, etc.) should be used sparingly — in-app Help may not support them.
-- **No absolute paths to other docs.** Use relative links (`./collections.md`) so they work regardless of the base URL.
+- **No absolute paths to other docs.** Use relative links (`./collections.md`) so they work regardless of the base URL. The docs site rewrites them to real page URLs when it builds, and its build fails on any it cannot resolve — including a link that points outside this directory, which should be an absolute GitHub URL instead.
 - **No references to renderer-specific chrome.** Don't write "click the button in the top-right of the docs site" — the in-app Help won't have that button.
 - **Images.** Put images in `docs/assets/` and reference them with relative paths. Both renderers will copy them to their output.
 - **Update `CHANGELOG`-worthy content only when behavior changes.** Cosmetic doc edits don't need a feature flag or migration note.
 
 ## How Starlight consumes this directory
 
-Starlight (in `apps/docs`) is configured to load user docs from this directory via a custom content collection loader. See `apps/docs/astro.config.mjs` for the exact configuration once [#12](https://github.com/solve4it/mycollections/issues/12) lands.
+`apps/docs/scripts/copy-shared-docs.mjs` copies every markdown file here into `apps/docs/src/content/docs/user/` before the site builds, and a Markdown plugin registered in `apps/docs/astro.config.mjs` rewrites the relative links between them. The copied directory is generated and gitignored — this directory stays the only source.
 
 ## How the in-app Help will consume this directory (Phase 1)
 
