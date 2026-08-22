@@ -1,9 +1,22 @@
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+import { satteri } from "@astrojs/markdown-satteri";
 import starlight from "@astrojs/starlight";
 import { defineConfig } from "astro/config";
+import { satteriRelativeDocLinks } from "./scripts/satteri-relative-doc-links.mjs";
+import { BASE, SITE } from "./site.mjs";
+
+const CONTENT_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "src/content/docs");
 
 export default defineConfig({
-  site: "https://solve4it.github.io",
-  base: "/mycollections",
+  site: SITE,
+  base: BASE,
+  markdown: {
+    // `satteri()` is the default processor; naming it here only adds the plugin.
+    // The shared docs in `docs/` link to each other the way GitHub needs, and
+    // this turns those links into site URLs.
+    processor: satteri({ hastPlugins: [satteriRelativeDocLinks({ base: BASE, contentRoot: CONTENT_ROOT })] }),
+  },
   integrations: [
     starlight({
       title: "MyCollections",
