@@ -9,6 +9,7 @@ import { settingsRoute } from "./index.js";
 vi.mock("../../lib/api-client.js", () => ({
   clearToken: vi.fn(() => localStorage.removeItem("api_token")),
   getToken: vi.fn(() => "test-token"),
+  isTokenSessionOnly: vi.fn(() => false),
   exportData: vi.fn(),
   importData: vi.fn(),
   // The page's Trash section calls these; trash.test.tsx is where they are exercised.
@@ -20,7 +21,7 @@ vi.mock("../../lib/api-client.js", () => ({
   emptyTrash: vi.fn(),
 }));
 
-import { exportData, type ImportSummary, importData, listTrash } from "../../lib/api-client.js";
+import { exportData, type ImportSummary, importData, isTokenSessionOnly, listTrash } from "../../lib/api-client.js";
 import { isErrorReportingEnabled, setErrorReportingEnabled } from "../../lib/error-reporter.js";
 import { getThemePreference, setThemePreference } from "../../lib/theme.js";
 
@@ -112,6 +113,22 @@ describe("SettingsPage", () => {
   it("renders a Disconnect button", async () => {
     renderSettings();
     expect(await screen.findByRole("button", { name: /disconnect/i })).toBeInTheDocument();
+  });
+
+  it("says the token is not saved when it is only held for the session", async () => {
+    // The re-prompt after a reload is expected, not a bug — the Connection
+    // section is where someone goes looking for why (#279).
+    vi.mocked(isTokenSessionOnly).mockReturnValue(true);
+    renderSettings();
+    const notice = await screen.findByText(/token is not saved on this device/i);
+    expect(notice).toHaveAttribute("role", "status");
+  });
+
+  it("says nothing about the token when it is stored normally", async () => {
+    vi.mocked(isTokenSessionOnly).mockReturnValue(false);
+    renderSettings();
+    await screen.findByRole("button", { name: /disconnect/i });
+    expect(screen.queryByText(/token is not saved on this device/i)).toBeNull();
   });
 
   it("clearing the connection removes the stored token and goes to /setup", async () => {

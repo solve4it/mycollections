@@ -1,7 +1,8 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createMemoryHistory, createRouter, RouterProvider } from "@tanstack/react-router";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { clearToken } from "../../lib/api-client.js";
 import { rootRoute } from "../__root.js";
 import { collectionsRoute } from "../collections/index.js";
 import { setupRoute } from "./index.js";
@@ -25,10 +26,17 @@ function renderSetup() {
 }
 
 beforeEach(() => {
+  // `clearToken()` as well as the storage wipe: the token is held in memory for
+  // the session too (#279), so clearing storage alone leaves a previous test's
+  // token in play and this route redirects straight to /collections.
   localStorage.clear();
+  clearToken();
 });
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.restoreAllMocks();
+});
 
 describe("SetupPage", () => {
   it("renders the API token input", async () => {
@@ -57,6 +65,38 @@ describe("SetupPage", () => {
     renderSetup();
     const input = await screen.findByLabelText(/api token/i);
     expect(input.closest(".form-row")).not.toBeNull();
+  });
+
+  it("says the token will not be remembered when storage is denied", async () => {
+    // The one moment this can be said: the page navigates away the instant a
+    // token is accepted, so a notice shown after connecting is never read (#279).
+    vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => {
+      throw new DOMException("denied", "SecurityError");
+    });
+    renderSetup();
+    const notice = await screen.findByRole("status");
+    expect(notice.textContent).toMatch(/will not let mycollections remember your token/i);
+  });
+
+  it("says nothing about persistence when storage works", async () => {
+    renderSetup();
+    await screen.findByLabelText(/api token/i);
+    expect(screen.queryByRole("status")).toBeNull();
+  });
+
+  it("still lets the user connect when storage is denied", async () => {
+    vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => {
+      throw new DOMException("denied", "SecurityError");
+    });
+    vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+      throw new DOMException("denied", "SecurityError");
+    });
+    const { router } = renderSetup();
+    const input = await screen.findByLabelText(/api token/i);
+    fireEvent.change(input, { target: { value: "session-token" } });
+    fireEvent.click(await screen.findByRole("button", { name: /connect/i }));
+    await screen.findByRole("main");
+    expect(router.state.location.pathname).toBe("/collections");
   });
 
   it("redirects to /collections if token already stored", async () => {

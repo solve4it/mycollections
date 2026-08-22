@@ -10,6 +10,7 @@ import { settingsRoute } from "./index.js";
 vi.mock("../../lib/api-client.js", () => ({
   clearToken: vi.fn(),
   getToken: vi.fn(() => "test-token"),
+  isTokenSessionOnly: vi.fn(() => false),
   exportData: vi.fn(),
   importData: vi.fn(),
   listTrash: vi.fn(),

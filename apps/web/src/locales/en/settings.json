@@ -7,6 +7,7 @@
   "theme_light": "Light",
   "theme_dark": "Dark",
   "connection_label": "Connection",
+  "session_only_notice": "Your token is not saved on this device. You will need to enter it again the next time you open the app.",
   "disconnect_description": "Disconnect from the API and enter a different token. Use this if the server restarted with a new token.",
   "disconnect_button": "Disconnect",
   "data_label": "Data",
