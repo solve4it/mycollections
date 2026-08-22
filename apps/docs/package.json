@@ -15,7 +15,7 @@
     "dev": "astro dev",
     "prebuild": "node scripts/copy-shared-docs.mjs",
     "build": "astro build",
-    "postbuild": "node scripts/check-built-links.mjs",
+    "postbuild": "node scripts/check-built-links.mjs && node scripts/check-built-pages.mjs",
     "preview": "astro preview",
     "typecheck": "astro check",
     "lint": "echo 'No lint yet'",
