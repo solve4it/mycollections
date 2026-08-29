@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.4](https://github.com/solve4it/mycollections/compare/mycollections-v0.0.3...mycollections-v0.0.4) (2026-08-29)
+
+
+### Bug Fixes
+
+* **deps:** update all non-major dependencies ([#300](https://github.com/solve4it/mycollections/issues/300)) ([c4b129f](https://github.com/solve4it/mycollections/commit/c4b129f1e9fad88476b80c9ab2856b023f26ba37))
+
 ## [0.0.3](https://github.com/solve4it/mycollections/compare/mycollections-v0.0.2...mycollections-v0.0.3) (2026-08-22)
 
 
