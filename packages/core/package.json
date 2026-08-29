@@ -30,7 +30,7 @@
     "lint": "biome check src"
   },
   "dependencies": {
-    "zod": "^4.4.3"
+    "zod": "^4.5.1"
   },
   "devDependencies": {
     "typescript": "^7.0.2",
