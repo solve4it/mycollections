@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.5](https://github.com/solve4it/mycollections/compare/mycollections-v0.0.4...mycollections-v0.0.5) (2026-09-06)
+
+
+### Bug Fixes
+
+* **web:** announce route changes, name every page, and land focus deliberately ([#307](https://github.com/solve4it/mycollections/issues/307)) ([08a7e07](https://github.com/solve4it/mycollections/commit/08a7e077118e2deddabff6116fa5ef28779a924b))
+
 ## [0.0.4](https://github.com/solve4it/mycollections/compare/mycollections-v0.0.3...mycollections-v0.0.4) (2026-08-29)
 
 
