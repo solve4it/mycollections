@@ -11,6 +11,7 @@ import { rootRoute } from "../__root.js";
 export const editCollectionRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/collections/$id/edit",
+  staticData: { titleKey: "collections:edit_title" },
   beforeLoad: () => {
     if (!getToken()) throw redirect({ to: "/setup" });
   },

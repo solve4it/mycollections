@@ -1,5 +1,6 @@
 {
   "app_name": "MyCollections",
+  "page_title": "{{page}} · MyCollections",
   "nav_collections": "Collections",
   "nav_settings": "Settings",
   "skip_to_main": "Skip to main content",

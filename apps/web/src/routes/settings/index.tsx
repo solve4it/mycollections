@@ -12,6 +12,7 @@ import { rootRoute } from "../__root.js";
 export const settingsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/settings",
+  staticData: { titleKey: "settings:title" },
   component: SettingsPage,
 });
 
