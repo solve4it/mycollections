@@ -9,6 +9,7 @@ import { rootRoute } from "../__root.js";
 export const newCollectionRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/collections/new",
+  staticData: { titleKey: "collections:new_title" },
   beforeLoad: () => {
     if (!getToken()) throw redirect({ to: "/setup" });
   },

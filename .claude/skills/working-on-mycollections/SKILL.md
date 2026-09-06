@@ -95,6 +95,9 @@ Tests passing is CI's evidence, not yours. Before "done" or "fixed":
 - **Skipping the a11y floor.** Labels tied to inputs, `role="alert"`/`role="status"` for
   feedback, 44px touch targets, visible focus, text contrast ≥ 4.5:1, non-text UI ≥ 3:1,
   animations behind `prefers-reduced-motion`. Biome enforces some of this; the rest is on you.
+  A new route also needs `staticData: { titleKey }` — the shell turns it into the document title
+  and the route-change announcement — and a new live region belongs in the shell's announcer, not
+  mounted with its text already inside it (NVDA and JAWS usually stay silent for those).
 - **Environment traps.** Don't `source ~/.zshrc` — the tool shell already inherits the fnm
   PATH (`which pnpm node` proves it), and `source` evaluates its argument as shell code, so it
   can never be auto-approved and costs a permission prompt every call. If a shell really is

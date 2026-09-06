@@ -1,5 +1,6 @@
 {
   "title": "Collections",
+  "detail_title": "Collection",
   "empty_title": "No collections yet",
   "empty_description": "Create your first collection to start tracking.",
   "create_cta": "Create collection",

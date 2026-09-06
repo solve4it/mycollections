@@ -8,6 +8,7 @@ import { rootRoute } from "../__root.js";
 export const setupRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/setup",
+  staticData: { titleKey: "setup:short_title" },
   beforeLoad: () => {
     if (getToken()) throw redirect({ to: "/collections" });
   },

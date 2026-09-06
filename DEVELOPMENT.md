@@ -258,13 +258,39 @@ and 4173 (web preview), with a token generated per run and `DB_PATH=:memory:`. I
 database in your working tree.
 
 What it covers, and what it does not: axe finds violations that are machine-decidable from the
-rendered page. Keyboard reachability, focus management, and screen-reader announcement are not
-among them — see [#24](https://github.com/solve4it/mycollections/issues/24) for what is still
-outstanding.
+rendered page. On top of that, the `keyboard access` specs drive the parts axe cannot see — the
+skip link, and where focus lands after a client-side navigation — and one spec scans the app in a
+navigated-into state rather than after a page load. What no tool can check is whether a screen
+reader actually spoke: every assertion about announcement is a check on the shape of the DOM. See
+[#24](https://github.com/solve4it/mycollections/issues/24) for what is still outstanding, including
+the manual screen-reader pass.
 
 The rest of the accessibility floor is asserted without a browser, by the integration tests in
-`apps/web/src/styles`: contrast ratios in both themes (`tokens.integration.test.ts`) and the
-`prefers-reduced-motion` gating of every animation (`motion.integration.test.ts`).
+`apps/web/src/styles`: contrast ratios in both themes (`tokens.integration.test.ts`), the
+`prefers-reduced-motion` gating of every animation (`motion.integration.test.ts`), and where the
+focus ring is and is not drawn (`focus.integration.test.ts`).
+
+### Page titles and route announcements
+
+A client-side navigation replaces the content with no page load, so nothing reaches a screen
+reader unless the app arranges it. Two pieces of the shell do that, and both need a line from any
+new route:
+
+- **Every route names itself.** Add `staticData: { titleKey: "<namespace>:<key>" }` beside the
+  route's `path`. `Shell.tsx` turns it into `"<page> · MyCollections"` for `document.title` and
+  for the announcement. A translation key rather than a string, because `staticData` is read
+  outside React where `useTranslation` is unavailable. `Shell.navigation.test.tsx` walks the real
+  route tree and fails if a route with a component has no key.
+- **New live regions go through the shell's announcer**, not into the page. A live region that is
+  inserted with its text already inside is announced by VoiceOver but usually not by NVDA or JAWS.
+  The shell's region (`aria-live="polite"`, `visually-hidden`, no role) is in the document from
+  first paint and empty, and receives text afterwards. It sits outside the pathname-keyed wrapper
+  in `routes/__root.tsx` on purpose: inside it, it would be rebuilt on every navigation and have
+  the same bug.
+
+Focus is recovered in the same place. That keyed wrapper unmounts the whole content subtree on
+every navigation, so anything focused inside it takes focus to `<body>` with it; the shell moves
+focus to `<main>` when — and only when — that has happened.
 
 ## Debugging tips
 
