@@ -50,6 +50,12 @@ Tests passing is CI's evidence, not yours. Before "done" or "fixed":
 
 - **Run the full gate**: `pnpm check` (biome + cSpell + typecheck + tests + builds across the
   workspace). Zero failures AND zero new warnings.
+- **For any UI change, also run `pnpm test:e2e`** — the Playwright + axe accessibility sweep. It
+  is outside `pnpm check` because it needs a browser (`pnpm --filter @mycollections/web exec
+  playwright install chromium`, once). It starts its own API on 3111 against `DB_PATH=:memory:`
+  and its own web preview on 4173, so it never touches real data — but it also refuses to reuse a
+  server already on those ports, so free them first. New route or new interactive state → new
+  scan in `apps/web/e2e/a11y.spec.ts`.
 - **Drive the changed surface.** API change → start the server and curl the actual route;
   web change → load it in the browser and click. Launch recipe:
   ```bash

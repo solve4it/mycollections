@@ -70,6 +70,7 @@ Run from the repo root:
 | `pnpm dev` | Start all apps in dev mode (`turbo run dev`) |
 | `pnpm build` | Build every workspace (`turbo run build`) |
 | `pnpm test` | Run the full test suite (`turbo run test`) |
+| `pnpm test:e2e` | Run the accessibility sweep in a real browser (`turbo run test:e2e`) |
 | `pnpm typecheck` | Type-check every workspace (`turbo run typecheck`) |
 | `pnpm lint` | Biome lint across the repo (includes a11y rules) |
 | `pnpm lint:fix` | Auto-fix lint issues where possible |
@@ -230,7 +231,40 @@ pnpm --filter @mycollections/core test --watch
 pnpm --filter @mycollections/core test --coverage
 ```
 
-Integration and E2E test harnesses will be added as features land that need them (tracked in Phase 2+ issues).
+### Accessibility sweep (Playwright + axe)
+
+`pnpm test:e2e` builds the web app, starts the API against an in-memory database, and runs
+[axe-core](https://github.com/dequelabs/axe-core) over every route in a real Chromium — at two
+viewports and both color schemes, because the sidebar, the bottom nav, and the dark palette are
+each invisible to the other combination.
+
+It is deliberately **not** part of `pnpm test` or `pnpm check`, which stay runnable without a
+browser download. Install the browser once before the first run:
+
+```bash
+pnpm --filter @mycollections/web exec playwright install chromium
+```
+
+Then, from the repo root:
+
+```bash
+pnpm test:e2e                                             # everything
+pnpm --filter @mycollections/web exec playwright test --project desktop-light   # one project
+pnpm --filter @mycollections/web exec playwright show-trace apps/web/test-results/<dir>/trace.zip
+```
+
+The suite needs no local setup beyond that: it starts both servers itself, on ports 3111 (API)
+and 4173 (web preview), with a token generated per run and `DB_PATH=:memory:`. It never opens the
+database in your working tree.
+
+What it covers, and what it does not: axe finds violations that are machine-decidable from the
+rendered page. Keyboard reachability, focus management, and screen-reader announcement are not
+among them — see [#24](https://github.com/solve4it/mycollections/issues/24) for what is still
+outstanding.
+
+The rest of the accessibility floor is asserted without a browser, by the integration tests in
+`apps/web/src/styles`: contrast ratios in both themes (`tokens.integration.test.ts`) and the
+`prefers-reduced-motion` gating of every animation (`motion.integration.test.ts`).
 
 ## Debugging tips
 
@@ -238,6 +272,7 @@ Integration and E2E test harnesses will be added as features land that need them
 - **Node version mismatches** cause confusing failures. Run `fnm use` after `git pull` if `.nvmrc` changed.
 - **Husky pre-commit hook** runs Biome and cSpell on staged files via lint-staged. If a commit is blocked, fix the reported issue and re-stage — don't bypass with `--no-verify`.
 - **cSpell false positives**: add project-specific terms to the `words` array in `cspell.json` rather than inline-ignoring.
+- **`pnpm test:e2e` fails to start a server**: something is already on port 3111 or 4173. The harness refuses to reuse an existing server on purpose — it would be one it did not configure, backed by a database it did not choose. Free the port (`lsof -ti tcp:3111 -sTCP:LISTEN | xargs kill`) and re-run.
 - **VS Code**: install the Biome extension for inline lint/format feedback and disable ESLint/Prettier to avoid conflicts.
 
 ## Getting help
