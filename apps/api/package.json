@@ -35,10 +35,10 @@
     "@mycollections/auth": "workspace:*",
     "@mycollections/core": "workspace:*",
     "@mycollections/db": "workspace:*",
-    "fastify": "^5.12.1"
+    "fastify": "^5.12.3"
   },
   "devDependencies": {
-    "tsx": "^4.23.12",
+    "tsx": "^4.23.13",
     "typescript": "^7.0.2",
     "vitest": "^4.1.11"
   }
