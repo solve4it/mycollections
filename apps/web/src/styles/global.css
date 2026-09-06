@@ -260,6 +260,18 @@ h2 {
   outline-offset: 2px;
 }
 
+/* The skip link and the route-change recovery both focus <main> (#24), which
+   Chromium then matches :focus-visible on — and a 2px ring around a container
+   the size of the page is not an indicator: its top and right edges are off
+   screen, so all the user sees is a stray blue stripe down the sidebar seam.
+   Verified in the browser before removing it. <main tabindex="-1"> is not a
+   user interface component — it is programmatically focusable and not operable
+   — so WCAG 2.4.7 does not ask for a visible focus indicator here. Scoped to
+   this one element; every :focus-visible ring in the app is untouched. */
+.shell-main:focus {
+  outline: none;
+}
+
 .shell-sidebar :focus-visible,
 .shell-bottom-nav :focus-visible,
 .sidebar-nav a:focus-visible,
