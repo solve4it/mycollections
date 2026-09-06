@@ -146,11 +146,18 @@ export default defineConfig({
       // from a turbo cache entry produced without it — a restored `dist` would
       // fall back to the port-3001 default in `src/lib/api-client.ts`, which is
       // where a developer's real dev API lives.
+      //
+      // `preview:e2e` passes `--host 127.0.0.1` rather than taking Vite's
+      // default of `localhost`: on the CI runner that name resolves to ::1
+      // first, so the preview bound v6 only while Playwright polled
+      // 127.0.0.1 — three minutes of waiting on a server that was already up,
+      // reported as a webServer timeout.
       command: "pnpm run build:e2e && pnpm run preview:e2e",
       url: WEB_URL,
       env: { VITE_API_URL: API_URL },
       reuseExistingServer: false,
-      timeout: 180_000,
+      // Covers a cold `vite build` as well as the server start.
+      timeout: 240_000,
     },
   ],
 });
