@@ -52,6 +52,68 @@ test.describe("keyboard access", () => {
     await page.keyboard.press("Enter");
     await expect(page.locator("main#main-content")).toBeFocused();
   });
+
+  /**
+   * Every other scan in this file arrives by `page.goto`, which is a real page
+   * load — the one thing that never happens to someone using the app. This is
+   * the first spec to audit a client-side navigation, which is where the title
+   * changes, the live region speaks, and nothing at all reaches a screen reader
+   * unless the shell arranges it.
+   */
+  test("a client-side navigation renames the page and announces it", async ({ page, api }) => {
+    await api.reset();
+
+    await page.goto("/settings");
+    await expect(page).toHaveTitle("Settings · MyCollections");
+    // Empty on arrival: a live region that already holds its text when it is
+    // inserted is announced by VoiceOver but usually not by NVDA or JAWS, and
+    // announcing the page the user just opened is noise in any case.
+    await expect(page.locator('[aria-live="polite"]')).toBeEmpty();
+
+    await page.getByRole("link", { name: "Collections" }).first().click();
+
+    await expect(page).toHaveURL(/\/collections$/);
+    await expect(page).toHaveTitle("Collections · MyCollections");
+    await expect(page.locator('[aria-live="polite"]')).toHaveText("Collections · MyCollections");
+
+    // Scanned in the navigated-into state, which no other spec here reaches.
+    await expectNoAccessibilityViolations(page);
+  });
+
+  /**
+   * The focus half, in a real browser. `.screen` is keyed by pathname
+   * (routes/__root.tsx), so following a link inside the content unmounts the
+   * link itself and focus falls to <body> — where Tab starts over at the top of
+   * the document. Clicking is how a keyboard user follows a link too: Enter on a
+   * focused link fires the same navigation.
+   */
+  test("following a link inside the page hands focus to the page it opens", async ({ page, api }) => {
+    await api.reset();
+    const collection = await api.createCollection({ name: "Vinyl records", fields: FIELDS });
+
+    await page.goto("/collections");
+    await page.getByRole("link", { name: /Vinyl records/ }).focus();
+    await page.keyboard.press("Enter");
+
+    await expect(page).toHaveURL(`/collections/${collection.id}`);
+    await expect(page.locator("main#main-content")).toBeFocused();
+  });
+
+  /**
+   * The negative half: the nav lives outside the keyed wrapper, so its links
+   * survive the navigation and keep focus. Tabbing on from a nav link must
+   * continue through the nav, not restart from the top of the content.
+   */
+  test("navigating from the nav leaves focus on the nav", async ({ page }) => {
+    await page.goto("/collections");
+
+    const settingsLink = page.getByRole("link", { name: "Settings" }).first();
+    await settingsLink.focus();
+    await page.keyboard.press("Enter");
+
+    await expect(page).toHaveURL(/\/settings$/);
+    await expect(settingsLink).toBeFocused();
+  });
 });
 
 test.describe("accessibility", () => {
