@@ -32,6 +32,17 @@ describe("Shell layout", () => {
     expect(await screen.findByRole("main")).toBeInTheDocument();
   });
 
+  it("makes main a focus target so the skip link actually moves focus (#24)", async () => {
+    // Safari and Firefox scroll to a fragment target but leave focus where it
+    // was unless the target is focusable, which turns the skip link into a
+    // no-op for the keyboard users it exists for (WCAG 2.4.1). tabindex="-1"
+    // makes it programmatically focusable without adding it to the tab order.
+    render(<RouterProvider router={makeRouter()} />);
+    const main = await screen.findByRole("main");
+    expect(main).toHaveAttribute("id", "main-content");
+    expect(main).toHaveAttribute("tabindex", "-1");
+  });
+
   it("nav items carry the touch-target CSS class (≥44px hit area)", async () => {
     render(<RouterProvider router={makeRouter()} />);
     await screen.findByRole("navigation", { name: /main navigation/i });

@@ -29,6 +29,31 @@ test.describe("accessibility of the setup screen", () => {
   });
 });
 
+test.describe("keyboard access", () => {
+  /**
+   * The skip link is the app's bypass mechanism (WCAG 2.4.1), and a bypass that
+   * moves the viewport without moving focus is not one: the next Tab continues
+   * from wherever focus still is — the top of the nav — so the link the user
+   * pressed changed nothing for them.
+   *
+   * Asserted on `toBeFocused` rather than on the URL fragment, which is what the
+   * browser updates either way. Chromium is the browser this suite runs, and it
+   * discriminates: without `tabindex="-1"` on <main> it sets only the sequential
+   * focus navigation starting point and leaves document.activeElement on <body>.
+   */
+  test("the skip link moves focus into the main landmark", async ({ page }) => {
+    await page.goto("/collections");
+    await expect(page).toHaveURL(/\/collections$/);
+
+    await page.keyboard.press("Tab");
+    const skipLink = page.getByRole("link", { name: "Skip to main content" });
+    await expect(skipLink, "the skip link must be the first thing Tab reaches").toBeFocused();
+
+    await page.keyboard.press("Enter");
+    await expect(page.locator("main#main-content")).toBeFocused();
+  });
+});
+
 test.describe("accessibility", () => {
   test("the collections list with no collections", async ({ page, api }) => {
     await api.reset();

@@ -39,7 +39,11 @@ export function Shell({ children }: ShellProps) {
           <div className="sidebar-foot">{t("local_first_footer", { version: __APP_VERSION__ })}</div>
         </nav>
 
-        <main className="shell-main" id="main-content">
+        {/* tabIndex={-1} is what makes the skip link work: Safari and Firefox
+            scroll to a fragment target but leave focus behind unless the target
+            can hold it, so without this the link moves the viewport and nothing
+            else (WCAG 2.4.1). -1 keeps it out of the tab order. */}
+        <main className="shell-main" id="main-content" tabIndex={-1}>
           {children}
         </main>
 
