@@ -22,9 +22,9 @@
     "test": "echo 'No tests yet'"
   },
   "dependencies": {
-    "@astrojs/markdown-satteri": "^0.3.8",
-    "@astrojs/starlight": "^0.41.10",
-    "astro": "^7.2.9",
+    "@astrojs/markdown-satteri": "^0.4.0",
+    "@astrojs/starlight": "^0.42.0",
+    "astro": "^7.3.1",
     "sharp": "^0.35.4"
   },
   "devDependencies": {
