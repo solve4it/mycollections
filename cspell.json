@@ -6,6 +6,7 @@
     "Bricolage",
     "Fastify",
     "PKCE",
+    "Playwright",
     "PVTSSF",
     "Pagefind",
     "Tauri",
@@ -16,6 +17,7 @@
     "autoincrement",
     "barcodes",
     "biomejs",
+    "chromium",
     "commitlint",
     "cutover",
     "depscore",
@@ -49,6 +51,7 @@
     "upsert",
     "upserts",
     "vite",
+    "viewports",
     "vitest",
     "withastro",
     "woff",
@@ -58,5 +61,17 @@
   ],
   "ignoreRegExpList": ["/PVT_[a-zA-Z0-9]+/g", "/PVTSSF_[a-zA-Z0-9]+/g", "/[a-f0-9]{8,}/g"],
   "enableGlobDot": false,
-  "ignorePaths": ["node_modules", "dist", "build", "coverage", ".turbo", "pnpm-lock.yaml", ".git", ".claude/worktrees"]
+  "ignorePaths": [
+    "node_modules",
+    "dist",
+    "build",
+    "coverage",
+    ".turbo",
+    "pnpm-lock.yaml",
+    ".git",
+    ".claude/worktrees",
+    "test-results",
+    "playwright-report",
+    "blob-report"
+  ]
 }

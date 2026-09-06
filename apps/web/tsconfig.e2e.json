@@ -1,0 +1,19 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["ES2022", "DOM"],
+    // Explicit: the browser project next door pulls in no ambient types, and
+    // without naming it here the harness's `node:` imports and `process` do not
+    // resolve even with @types/node installed.
+    "types": ["node"],
+    "noEmit": true,
+    "declaration": false,
+    "declarationMap": false,
+    "sourceMap": false
+  },
+  // The browser typecheck next door is rooted at `src` and targets the bundle.
+  // The harness is Node code that drives a browser, so it gets its own project
+  // rather than being wedged into that one — and it is typechecked, because an
+  // untyped test suite is where a silently-passing assertion comes from.
+  "include": ["e2e", "playwright.config.ts"]
+}

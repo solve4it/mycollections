@@ -13,8 +13,11 @@
     "build": "vite build",
     "dev": "vite",
     "test": "vitest run",
-    "typecheck": "tsc --noEmit",
-    "lint": "biome check src"
+    "test:e2e": "playwright test",
+    "build:e2e": "vite build --outDir dist/e2e",
+    "preview:e2e": "vite preview --outDir dist/e2e --host 127.0.0.1",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.e2e.json",
+    "lint": "biome check src e2e playwright.config.ts"
   },
   "dependencies": {
     "@mycollections/core": "workspace:*",
@@ -28,10 +31,13 @@
     "react-i18next": "^17.0.13"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.13.0",
     "@mycollections/api": "workspace:*",
+    "@playwright/test": "^1.63.0",
     "@tanstack/router-vite-plugin": "^1.167.35",
     "@testing-library/jest-dom": "^7.0.1",
     "@testing-library/react": "^16.3.3",
+    "@types/node": "24.13.3",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.7",
     "@vitejs/plugin-react": "^6.1.1",

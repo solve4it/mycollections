@@ -1101,6 +1101,7 @@ p[role="alert"] {
 
 .trash-row {
   display: flex;
+  flex-wrap: wrap;
   align-items: flex-start;
   justify-content: space-between;
   gap: var(--space-3);
@@ -1140,6 +1141,21 @@ p[role="alert"] {
   flex-wrap: wrap;
   gap: var(--space-2);
   flex-shrink: 0;
+}
+
+/* A confirmation is a sentence, not a pair of buttons, and the actions column
+   does not shrink — correct for two buttons, wrong for prose. At 390px the
+   column sized itself to the prompt's 52ch and overflowed the card by 218px,
+   collapsing `.trash-entry` to zero width: the user was asked to permanently
+   delete something whose name was no longer on screen. Found by the axe sweep
+   in `e2e/a11y.spec.ts`, which could not resolve the overlapped text (#24).
+
+   While it holds a question the column takes a line of its own, which is what
+   the wrap on `.trash-row` above is for. */
+.trash-actions:has(.confirm-row) {
+  flex-basis: 100%;
+  flex-shrink: 1;
+  min-width: 0;
 }
 
 /* The confirmation a destructive action opens in place of itself. It stacks —
