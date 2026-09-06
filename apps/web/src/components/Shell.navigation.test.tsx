@@ -1,7 +1,7 @@
 import type { Collection } from "@mycollections/core";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createMemoryHistory, createRouter, RouterProvider } from "@tanstack/react-router";
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { routeTree } from "../routeTree.js";
 
@@ -172,6 +172,61 @@ describe("announcing route changes", () => {
     // take the text out of the accessibility tree along with the layout.
     expect(announcer()).toHaveClass("visually-hidden");
     expect(announcer()).toHaveAttribute("aria-atomic", "true");
+  });
+});
+
+describe("where focus goes on a route change", () => {
+  /**
+   * __root.tsx keys the screen wrapper by pathname so the entrance animation
+   * replays, which means every navigation unmounts the whole content subtree.
+   * Anything focused inside it goes with it and focus falls to <body> — the tab
+   * sequence restarts at the top of the document and a screen reader's virtual
+   * cursor drops to the start of the page (WCAG 2.4.3).
+   */
+  it("lands focus on the page when the navigation unmounted what had it", async () => {
+    const router = renderAt("/settings");
+    const main = await screen.findByRole("main");
+    const insideThePage = within(main).getAllByRole("button")[0];
+    if (!insideThePage) throw new Error("settings should render a button inside main");
+    insideThePage.focus();
+    expect(document.activeElement).toBe(insideThePage);
+
+    await router.navigate({ to: "/collections" });
+
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole("main")));
+  });
+
+  /**
+   * On first load nothing has been focused yet, so activeElement is <body> and
+   * the "focus was taken away" guard is satisfied by a page that never had it.
+   * Focusing <main> there moves the document's tab start past the skip link and
+   * the nav, so the user's first Tab lands inside the content — and the bypass
+   * link the previous commit just fixed becomes unreachable.
+   */
+  it("does not take focus on first load, which would put the skip link out of reach", async () => {
+    renderAt("/settings");
+    await screen.findByRole("main");
+    await waitFor(() => expect(document.title).toBe("Settings · MyCollections"));
+    expect(document.activeElement).toBe(document.body);
+  });
+
+  /**
+   * The negative half, and the reason the guard exists rather than an
+   * unconditional focus(): the nav lives outside the keyed wrapper, so a user
+   * tabbing through it still has focus after the navigation. Stealing it back to
+   * <main> would cost them their place in the nav on every single click.
+   */
+  it("leaves focus alone when the navigation did not take it away", async () => {
+    const router = renderAt("/settings");
+    await screen.findByRole("main");
+    const navLink = screen.getAllByRole("link", { name: "Collections" })[0];
+    if (!navLink) throw new Error("the shell should render a Collections nav link");
+    navLink.focus();
+
+    await router.navigate({ to: "/collections" });
+
+    await waitFor(() => expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Collections"));
+    expect(document.activeElement).toBe(navLink);
   });
 });
 

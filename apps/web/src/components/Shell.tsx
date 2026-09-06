@@ -81,6 +81,33 @@ export function Shell({ children }: ShellProps) {
     setAnnouncement(pageTitle);
   }, [titleKey, pageTitle]);
 
+  /**
+   * __root.tsx keys the screen wrapper by pathname so the entrance animation
+   * replays, which means every navigation unmounts the whole content subtree.
+   * Whatever was focused inside it — a collection card, the back link, a form
+   * control — goes with it, and focus falls to <body>: the tab sequence restarts
+   * at the top of the document and a screen reader's virtual cursor drops to the
+   * start of the page (WCAG 2.4.3).
+   *
+   * Guarded twice, and both guards matter. The nav sits outside that wrapper, so
+   * a user moving through it keeps focus across the navigation; pulling focus to
+   * <main> anyway would cost them their place in the nav on every click, and
+   * would land them on a container that at that moment usually holds a skeleton.
+   * And on first load nothing has been focused yet — activeElement is <body>
+   * without anything having been taken away — so the pathname guard is what
+   * stops the app opening with focus already inside the content, which would put
+   * the skip link and the nav behind the user's first Tab.
+   */
+  const pathname = useRouterState({ select: (state) => state.location.pathname });
+  const mainRef = useRef<HTMLElement>(null);
+  const focusedPathname = useRef(pathname);
+  useEffect(() => {
+    if (focusedPathname.current === pathname) return;
+    focusedPathname.current = pathname;
+    const focused = document.activeElement;
+    if (focused === null || focused === document.body) mainRef.current?.focus();
+  }, [pathname]);
+
   return (
     <>
       <a href="#main-content" className="skip-link">
@@ -118,7 +145,7 @@ export function Shell({ children }: ShellProps) {
             scroll to a fragment target but leave focus behind unless the target
             can hold it, so without this the link moves the viewport and nothing
             else (WCAG 2.4.1). -1 keeps it out of the tab order. */}
-        <main className="shell-main" id="main-content" tabIndex={-1}>
+        <main className="shell-main" id="main-content" tabIndex={-1} ref={mainRef}>
           {children}
         </main>
 
