@@ -13,6 +13,11 @@ build
 # Test coverage
 coverage
 
+# Playwright (accessibility E2E) run artifacts
+test-results/
+playwright-report/
+blob-report/
+
 # Local SQLite database files + pre-migration backups (created by the dev server)
 data/
 *.db

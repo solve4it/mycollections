@@ -13,6 +13,13 @@
     "test": {
       "dependsOn": ["build"]
     },
+    "test:e2e": {
+      // ^build so the API entrypoint's workspace dependencies (core, db, auth)
+      // have a dist for tsx to import. Never cached: the result depends on a
+      // browser binary and two servers, none of which are inputs turbo can hash.
+      "dependsOn": ["^build"],
+      "cache": false
+    },
     "typecheck": {
       "dependsOn": ["^build"]
     }
