@@ -103,6 +103,78 @@ describe("the document title", () => {
   });
 });
 
+/** The one live region the shell owns. Exactly one, or the announcement is ambiguous. */
+function announcer(): HTMLElement {
+  const regions = document.querySelectorAll<HTMLElement>('[aria-live="polite"]');
+  expect(regions, "the shell must own exactly one polite live region").toHaveLength(1);
+  const region = regions[0];
+  if (!region) throw new Error("no live region");
+  return region;
+}
+
+describe("announcing route changes", () => {
+  /**
+   * A screen reader is told nothing when a client-side navigation swaps the
+   * content: there is no page load to announce. A live region that is already
+   * in the document and *then* receives text is the announcement — a region
+   * inserted with its text already inside is announced by VoiceOver but usually
+   * not by NVDA or JAWS, which is the bug this exists to avoid.
+   */
+  it("mounts the live region empty, so the first page load is not announced", async () => {
+    renderAt("/settings");
+    expect(await screen.findByRole("main")).toBeInTheDocument();
+    expect(announcer()).toBeEmptyDOMElement();
+  });
+
+  it.each([
+    ["/", "the index route redirects to /collections"],
+    ["/collections", "the token guard redirects to /setup"],
+  ])("stays empty when %s loads through a redirect", async (path, _why) => {
+    if (path === "/collections") localStorage.clear();
+    renderAt(path);
+    expect(await screen.findByRole("main")).toBeInTheDocument();
+    // A redirect that committed its intermediate location would announce on
+    // first load — the one thing an announcer must never do.
+    expect(announcer()).toBeEmptyDOMElement();
+  });
+
+  it("announces the page it navigated to, by name", async () => {
+    const router = renderAt("/collections");
+    expect(await screen.findByRole("main")).toBeInTheDocument();
+
+    await router.navigate({ to: "/settings" });
+
+    // The same words as the document title: it is the string every screen
+    // reader user is already trained to hear on a page change.
+    //
+    // The exact string is what makes this test worth having. Announcing on a
+    // `location.pathname` change reads as obviously correct and is wrong —
+    // pathname lands a render before the matches resolve, so the region gets
+    // filled with the title of the page being *left*. That version passes any
+    // "the region is not empty" assertion.
+    await waitFor(() => expect(announcer()).toHaveTextContent("Settings · MyCollections"));
+  });
+
+  it("keeps announcing as the user moves on", async () => {
+    const router = renderAt("/collections");
+    expect(await screen.findByRole("main")).toBeInTheDocument();
+
+    await router.navigate({ to: "/settings" });
+    await waitFor(() => expect(announcer()).toHaveTextContent("Settings · MyCollections"));
+    await router.navigate({ to: "/collections/new" });
+    await waitFor(() => expect(announcer()).toHaveTextContent("New collection · MyCollections"));
+  });
+
+  it("hides the region from view without hiding it from assistive tech", async () => {
+    renderAt("/settings");
+    expect(await screen.findByRole("main")).toBeInTheDocument();
+    // .visually-hidden clips the box rather than using display:none, which would
+    // take the text out of the accessibility tree along with the layout.
+    expect(announcer()).toHaveClass("visually-hidden");
+    expect(announcer()).toHaveAttribute("aria-atomic", "true");
+  });
+});
+
 describe("route titles as data", () => {
   it("gives every route that renders a screen a title key", () => {
     // A route added without one would silently keep whatever title the previous
