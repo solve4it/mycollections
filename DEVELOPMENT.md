@@ -231,6 +231,28 @@ pnpm --filter @mycollections/core test --watch
 pnpm --filter @mycollections/core test --coverage
 ```
 
+### jest-dom matcher types under Vitest 5
+
+`apps/web/src/vitest.d.ts` re-declares jest-dom's matchers on Vitest's `Matchers` interface.
+It is a workaround, not a design choice.
+
+`@testing-library/jest-dom` augments `interface Assertion<T = any>`. Vitest 5 changed that
+interface to take two type parameters — `Assertion<R, T>`, return type first — and TypeScript
+only merges interface declarations whose type parameter lists are identical. So the
+augmentation is dropped, every matcher vanishes from the assertion type, and the tests fail to
+compile with hundreds of `Property 'toBeInTheDocument' does not exist on type
+'Assertion<void, HTMLElement>'`. The underlying mismatch (TS2428) is reported inside
+`node_modules`, where `skipLibCheck` hides it. Runtime is unaffected — `expect.extend` still
+registers the matchers and the tests pass.
+
+Augmenting `Matchers` instead is Vitest's supported extension point and reaches `Assertion`,
+`ExpectStatic` and `AsymmetricMatchersContaining` alike, so it merges cleanly. Note that
+`AsymmetricMatchersContaining` must *not* also be augmented — it already extends `Matchers`,
+and a second `TestingLibraryMatchers` base makes it unsatisfiable (TS2320).
+
+Delete the file once jest-dom ships Vitest 5 types — tracked upstream at
+[testing-library/jest-dom#738](https://github.com/testing-library/jest-dom/issues/738).
+
 ### Accessibility sweep (Playwright + axe)
 
 `pnpm test:e2e` builds the web app, starts the API against an in-memory database, and runs
