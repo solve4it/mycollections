@@ -121,7 +121,11 @@ describe("SettingsPage", () => {
     vi.mocked(isTokenSessionOnly).mockReturnValue(true);
     renderSettings();
     const notice = await screen.findByText(/token is not saved on this device/i);
-    expect(notice).toHaveAttribute("role", "status");
+    // A plain hint, not a live region (#308): it is on screen from the moment
+    // the section renders and never changes, so a `role="status"` on it could
+    // never fire — it only made every page-level status query ambiguous.
+    expect(notice).not.toHaveAttribute("role");
+    expect(notice).toHaveClass("form-hint");
   });
 
   it("says nothing about the token when it is stored normally", async () => {
