@@ -9,6 +9,7 @@ import { Icon } from "../../components/Icon.js";
 import { CollectionDetailSkeleton, ItemListSkeleton } from "../../components/Skeleton.js";
 import { UndoToast } from "../../components/UndoToast.js";
 import { getToken } from "../../lib/api-client.js";
+import { type PageName, usePageTitle } from "../../lib/page-title.js";
 import {
   useCollection,
   useCreateItem,
@@ -22,7 +23,10 @@ import { rootRoute } from "../__root.js";
 export const collectionDetailRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/collections/$id",
-  staticData: { titleKey: "collections:detail_title" },
+  // "Collection" is only what this page is called until the collection itself
+  // arrives; `dynamicTitle` is what tells the shell a better name is coming and
+  // that the route-change announcement should wait for it (#309).
+  staticData: { titleKey: "collections:detail_title", dynamicTitle: true },
   beforeLoad: () => {
     if (!getToken()) throw redirect({ to: "/setup" });
   },
@@ -57,6 +61,16 @@ function itemLabel(collection: Collection, item: Item, untitled: string): string
   return untitled;
 }
 
+/**
+ * What this page calls itself (#309). A collection that failed to load is as
+ * named as it is ever going to be — reporting that is what keeps the shell from
+ * holding the route-change announcement for a name that is not coming.
+ */
+function collectionPageName(collection: Collection | undefined, failed: boolean): PageName {
+  if (collection) return { status: "named", name: collection.name };
+  return failed ? { status: "unnamed" } : { status: "pending" };
+}
+
 function CollectionDetailPage() {
   const { id } = collectionDetailRoute.useParams();
   const { t } = useTranslation("items");
@@ -72,6 +86,12 @@ function CollectionDetailPage() {
   const [undo, setUndo] = useState<{ itemId: string; name: string } | null>(null);
 
   const collection = collectionQuery.data;
+
+  // The name in the <h1> is also the name of the page, so the tab, the history
+  // entry and the route-change announcement carry it too (#309). Above the
+  // early returns, because a hook cannot be called conditionally — and the
+  // loading and error branches are two of the three answers it reports.
+  usePageTitle(collectionPageName(collection, collectionQuery.error != null));
 
   // A query can sit pending without fetching, so "no data yet" is not an error
   // and must not be presented as one. Once the collection has loaded it stays

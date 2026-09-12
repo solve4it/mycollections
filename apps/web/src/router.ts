@@ -24,5 +24,18 @@ declare module "@tanstack/react-router" {
    */
   interface StaticDataRouteOption {
     titleKey?: string;
+    /**
+     * This route's screen publishes a better title of its own through
+     * `usePageTitle` — the collection's name rather than "Collection" (#309) —
+     * and `titleKey` is the stand-in until it arrives.
+     *
+     * Declared on the route rather than inferred from the screen because the
+     * shell has to know it in the same commit as the route change: a screen can
+     * only report upward from an effect, and by then the shell has already
+     * decided whether to announce. Silence from a screen that has not rendered
+     * yet is indistinguishable from a screen with nothing to add, so this flag
+     * is what says which of the two it is.
+     */
+    dynamicTitle?: boolean;
   }
 }
