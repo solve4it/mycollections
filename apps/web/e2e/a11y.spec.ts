@@ -196,6 +196,15 @@ test.describe("accessibility", () => {
     await expect(page.getByRole("heading", { level: 1, name: "Settings" })).toBeVisible();
     await expect(page.getByText("Kind of Blue")).toBeVisible();
 
+    // #299: every control hangs off an <h2>, so heading navigation reaches all
+    // of them. axe cannot see this — an ungrouped control breaks no rule, it
+    // just sits outside the outline a screen reader walks — so it is asserted
+    // here, on the rendered page, as well as in the unit test.
+    const preferences = page.locator("section.settings-interface");
+    await expect(preferences.getByRole("heading", { level: 2, name: "Interface" })).toBeVisible();
+    await expect(preferences.getByLabel("Language")).toBeVisible();
+    await expect(preferences.getByLabel("Theme")).toBeVisible();
+
     await expectNoAccessibilityViolations(page);
   });
 
