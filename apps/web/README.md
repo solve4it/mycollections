@@ -117,8 +117,14 @@ All UI strings use `react-i18next`. Translation files live in `src/locales/<lang
 **Adding a new language:**
 
 1. Create `src/locales/<lang>/<namespace>.json` files.
-2. Register the resources in `src/i18n/index.ts`.
+2. Register the resources in `src/i18n/index.ts` — in the `init()` call, so the language is
+   resolved with its bundle already present.
 3. Add `{ code: "<lang>", labelKey: "language_<lang>" }` to `SUPPORTED_LANGUAGES` in `src/routes/settings/index.tsx`.
+
+`<html lang>` needs no step of its own: `syncDocumentLanguage` (`src/lib/document-language.ts`)
+stamps it from the resolved language at startup and on every change, so the page always declares
+the language it is actually rendered in (WCAG 3.1.1). See
+[DEVELOPMENT.md](../../DEVELOPMENT.md#the-document-language).
 
 **Locale-aware formatting:**
 

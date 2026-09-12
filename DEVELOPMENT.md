@@ -315,6 +315,23 @@ Focus is recovered in the same place. That keyed wrapper unmounts the whole cont
 every navigation, so anything focused inside it takes focus to `<body>` with it; the shell moves
 focus to `<main>` when — and only when — that has happened.
 
+### The document language
+
+`<html lang>` has to name the language the page is actually rendered in (WCAG 3.1.1), and a
+language switch never reloads the page — so, exactly like the theme, the attribute is the app's
+to maintain. `index.html` ships `lang="en"` for the window before any script runs, and
+`main.tsx` then hands the i18next singleton to `syncDocumentLanguage` (`src/lib/document-language.ts`)
+beside the `applyTheme` call; it stamps the language at startup and on every `languageChanged`.
+
+It follows i18next's **resolved** language, not the requested one: selecting a locale that has no
+bundle leaves every string English, and `lang="de"` over English text fails the same criterion
+from the other side. `document-language.integration.test.ts` keeps `index.html`'s hardcoded value
+equal to the configured `fallbackLng` — change one and it fails.
+
+Adding a locale therefore needs nothing here, as long as its bundle is passed to `i18n.init()`
+with the others. A locale fetched lazily would not be: it resolves to the fallback first and
+arrives on i18next's `loaded` event, which nothing listens to yet.
+
 ## Debugging tips
 
 - **Turborepo caches aggressively.** If a change isn't taking effect, try `pnpm turbo run <task> --force` or delete `.turbo/` in the affected workspace.

@@ -32,6 +32,11 @@ export function resolveDocumentLanguage(i18n: I18n): string | undefined {
  *
  * Registered once for the life of the document (from `main.tsx`), so there is
  * deliberately nothing to unsubscribe.
+ *
+ * Every locale is bundled into `init`, which is what makes the startup stamp
+ * correct on a reload. A locale fetched lazily instead would resolve to the
+ * fallback before its bundle lands — and arrive on `loaded`, not
+ * `languageChanged`, so this would need that event too.
  */
 export function syncDocumentLanguage(i18n: I18n): void {
   const apply = () => {
