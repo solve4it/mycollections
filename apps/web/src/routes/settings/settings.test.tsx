@@ -212,6 +212,32 @@ describe("SettingsPage theme", () => {
   });
 });
 
+/**
+ * #299: heading navigation is a primary way through a long settings page, so
+ * every control has to hang off an <h2>. Asserted structurally — the controls
+ * are looked up *within* the section its heading names, so moving a row back
+ * out of the section fails here even though the control is still on the page.
+ */
+describe("SettingsPage outline", () => {
+  it("holds the language and theme controls inside the Interface section", async () => {
+    renderSettings();
+    const heading = await screen.findByRole("heading", { level: 2, name: "Interface" });
+    const section = heading.closest("section");
+    if (!section) throw new Error("Interface heading is not inside a section");
+
+    const preferences = within(section);
+    expect(preferences.getByRole("combobox", { name: /language/i })).toHaveValue("en");
+    expect(preferences.getByRole("combobox", { name: /theme/i })).toHaveValue("system");
+  });
+
+  it("names every group on the page, in order", async () => {
+    renderSettings();
+    await screen.findByRole("heading", { level: 2, name: "Interface" });
+    const outline = screen.getAllByRole("heading", { level: 2 });
+    expect(outline.map((h) => h.textContent)).toEqual(["Interface", "Data", "Trash", "Privacy", "Connection"]);
+  });
+});
+
 describe("SettingsPage data export", () => {
   it("renders an Export button", async () => {
     renderSettings();
