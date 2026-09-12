@@ -259,10 +259,78 @@ describe("CollectionDetailPage", () => {
     await waitFor(() => expect(deleteItem).toHaveBeenCalledWith(COLLECTION.id, ITEM.id));
   });
 
+  /**
+   * The toast's live region (#308). Queried by class rather than by role: the
+   * region carries `aria-live` and no `role="status"`, so that the skeletons'
+   * status regions stay the only thing `getByRole("status")` finds. A bare
+   * `[aria-live="polite"]` query would match the shell's announcer too — these
+   * tests render the real root route, so both regions are in this document.
+   */
+  function liveRegion(): HTMLElement {
+    const regions = document.querySelectorAll<HTMLElement>(".undo-toast-live");
+    expect(regions, "the page must own exactly one toast live region").toHaveLength(1);
+    const region = regions[0];
+    if (!region) throw new Error("no toast live region");
+    return region;
+  }
+
+  /** The visible toast itself, once a delete has put one in the live region. */
+  async function findToast(): Promise<HTMLElement> {
+    return await waitFor(() => {
+      const toast = document.querySelector<HTMLElement>(".undo-toast");
+      if (!toast) throw new Error("no toast on screen");
+      return toast;
+    });
+  }
+
   // #33: a delete is soft, and the toast is the shortcut back. It has to survive
   // the row that spawned it disappearing from the list, which is why it is owned
   // by the page rather than by the <li>.
   describe("undo toast", () => {
+    it("fills a live region that was already in the document, rather than inserting one with its message inside (#308)", async () => {
+      vi.mocked(listItems).mockResolvedValueOnce([ITEM]).mockResolvedValue([]);
+      renderDetail();
+      await screen.findByText("Zelda");
+
+      // The sequence is the whole point, so it is asserted as a sequence. A
+      // region that appears already holding its text is announced by VoiceOver
+      // but usually not by NVDA or JAWS — and a test that only inspected the
+      // final DOM would pass against exactly that bug.
+      const before = liveRegion();
+      expect(before).toHaveAttribute("aria-live", "polite");
+      // No role="status": an inner live region would own its own subtree's
+      // mutations (nearest ancestor wins), so the host would never fire — and a
+      // role here would make every page-level status query ambiguous with the
+      // loading skeletons.
+      expect(before).not.toHaveAttribute("role");
+      expect(before, "the region must already be in the document, and empty").toBeEmptyDOMElement();
+
+      fireEvent.click(screen.getByRole("button", { name: /delete/i }));
+
+      await waitFor(() => expect(liveRegion()).toHaveTextContent("Deleted “Zelda”"));
+      // Identity, not shape: a region torn down and rebuilt with the message in
+      // it satisfies every "the text is there" assertion and announces nothing.
+      expect(liveRegion(), "the message must land in the same node, not a replacement").toBe(before);
+    });
+
+    it("keeps the live region in the document, and empty, once the toast is dismissed (#308)", async () => {
+      vi.mocked(listItems).mockResolvedValueOnce([ITEM]).mockResolvedValue([]);
+      renderDetail();
+      await screen.findByText("Zelda");
+      const before = liveRegion();
+
+      fireEvent.click(screen.getByRole("button", { name: /delete/i }));
+      await waitFor(() => expect(liveRegion()).toHaveTextContent("Deleted “Zelda”"));
+
+      fireEvent.click(screen.getByRole("button", { name: "Dismiss" }));
+
+      // The half-fix this catches: a region that is conditionally rendered again
+      // once nothing is in it is a region that gets re-inserted — with its text
+      // already inside — on the next delete.
+      await waitFor(() => expect(liveRegion()).toBeEmptyDOMElement());
+      expect(liveRegion()).toBe(before);
+    });
+
     it("offers undo naming the deleted item, after the row is gone", async () => {
       vi.mocked(listItems).mockResolvedValueOnce([ITEM]).mockResolvedValue([]);
       renderDetail();
@@ -270,7 +338,7 @@ describe("CollectionDetailPage", () => {
 
       fireEvent.click(screen.getByRole("button", { name: /delete/i }));
 
-      const toast = await screen.findByRole("status");
+      const toast = await findToast();
       expect(toast).toHaveTextContent(/deleted/i);
       expect(toast).toHaveTextContent("Zelda");
       await waitFor(() => expect(screen.queryByText("Zelda")).not.toBeInTheDocument());
@@ -284,10 +352,12 @@ describe("CollectionDetailPage", () => {
       await screen.findByText("Zelda");
       fireEvent.click(screen.getByRole("button", { name: /delete/i }));
 
-      fireEvent.click(within(await screen.findByRole("status")).getByRole("button", { name: "Undo" }));
+      fireEvent.click(within(await findToast()).getByRole("button", { name: "Undo" }));
 
       await waitFor(() => expect(restoreItem).toHaveBeenCalledWith(COLLECTION.id, ITEM.id));
-      await waitFor(() => expect(screen.queryByRole("status")).not.toBeInTheDocument());
+      // The toast goes; the region it spoke through stays, empty, for the next one.
+      await waitFor(() => expect(document.querySelector(".undo-toast")).toBeNull());
+      expect(liveRegion()).toBeEmptyDOMElement();
       expect(await screen.findByText("Zelda")).toBeInTheDocument();
     });
 
@@ -300,12 +370,15 @@ describe("CollectionDetailPage", () => {
 
       const deleteButtons = () => screen.getAllByRole("button", { name: /delete/i });
       fireEvent.click(deleteButtons()[0] as HTMLElement);
-      expect(await screen.findByRole("status")).toHaveTextContent("Zelda");
+      expect(await findToast()).toHaveTextContent("Zelda");
 
       fireEvent.click(deleteButtons()[1] as HTMLElement);
 
-      await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("Mario"));
-      expect(screen.getAllByRole("status")).toHaveLength(1);
+      // Into the same region, which is why it announces at all the second time:
+      // the text changes inside a region that never left the document.
+      await waitFor(() => expect(liveRegion()).toHaveTextContent("Mario"));
+      expect(liveRegion()).not.toHaveTextContent("Zelda");
+      expect(document.querySelectorAll(".undo-toast")).toHaveLength(1);
     });
 
     it("says so and keeps the toast when the undo itself fails", async () => {
@@ -315,9 +388,14 @@ describe("CollectionDetailPage", () => {
       await screen.findByText("Zelda");
       fireEvent.click(screen.getByRole("button", { name: /delete/i }));
 
-      fireEvent.click(within(await screen.findByRole("status")).getByRole("button", { name: "Undo" }));
+      fireEvent.click(within(await findToast()).getByRole("button", { name: "Undo" }));
 
-      await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent("Could not restore this item"));
+      const alert = await screen.findByRole("alert");
+      expect(alert).toHaveTextContent("Could not restore this item");
+      // The failure is its own assertive announcement, so it sits beside the
+      // live region rather than inside it: a live region nested in a live region
+      // owns its own subtree, and the polite one would never speak for it.
+      expect(liveRegion().contains(alert)).toBe(false);
       expect(screen.getByRole("button", { name: "Undo" })).toBeInTheDocument();
     });
 

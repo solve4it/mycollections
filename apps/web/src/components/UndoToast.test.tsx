@@ -7,6 +7,13 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
+/** The toast itself. It carries no role of its own — see the test below. */
+function toast(): HTMLElement {
+  const element = document.querySelector<HTMLElement>(".undo-toast");
+  if (!element) throw new Error("no toast on screen");
+  return element;
+}
+
 function renderToast(overrides: Partial<Parameters<typeof UndoToast>[0]> = {}) {
   const onAction = vi.fn();
   const onDismiss = vi.fn();
@@ -24,14 +31,24 @@ function renderToast(overrides: Partial<Parameters<typeof UndoToast>[0]> = {}) {
 }
 
 describe("UndoToast", () => {
-  it("announces the message politely and offers the action as a real button", () => {
+  it("shows the message and offers the action as a real button", () => {
     renderToast();
-    const toast = screen.getByRole("status");
-    expect(toast).toHaveTextContent("Deleted “Zelda”");
-    // role="status" is polite: a confirmation must not interrupt what the user
-    // is doing, and it must not be role="alert" — nothing has gone wrong.
-    expect(toast).not.toHaveAttribute("role", "alert");
+    expect(toast()).toHaveTextContent("Deleted “Zelda”");
     expect(screen.getByRole("button", { name: "Undo" })).toBeInTheDocument();
+  });
+
+  it("declares no live region of its own — the page's persistent region announces it (#308)", () => {
+    renderToast();
+    // The toast is mounted with its message already inside it, which is exactly
+    // what a live region must never be: one inserted with content is announced
+    // by VoiceOver but usually not by NVDA or JAWS. So the region belongs to the
+    // page — already in the document, and empty — and the toast is what arrives
+    // in it. A `role="status"` here would take that announcement back: a
+    // mutation is owned by the nearest live-region ancestor, which would be this
+    // element, and this element has just been inserted whole.
+    expect(toast()).not.toHaveAttribute("role");
+    expect(toast()).not.toHaveAttribute("aria-live");
+    expect(screen.queryByRole("status")).toBeNull();
   });
 
   it("runs the action when the undo button is pressed", () => {
@@ -65,15 +82,14 @@ describe("UndoToast", () => {
   it("holds the window open while the pointer is over it", () => {
     vi.useFakeTimers();
     const { onDismiss } = renderToast({ duration: 10_000 });
-    const toast = screen.getByRole("status");
 
-    fireEvent.mouseEnter(toast);
+    fireEvent.mouseEnter(toast());
     vi.advanceTimersByTime(30_000);
     expect(onDismiss).not.toHaveBeenCalled();
 
     // Leaving restarts the window rather than resuming a nearly-expired one, so
     // the undo does not vanish the instant the pointer moves away.
-    fireEvent.mouseLeave(toast);
+    fireEvent.mouseLeave(toast());
     vi.advanceTimersByTime(9_999);
     expect(onDismiss).not.toHaveBeenCalled();
     vi.advanceTimersByTime(1);
@@ -83,13 +99,12 @@ describe("UndoToast", () => {
   it("holds the window open while focus is inside it, so a keyboard user is not timed out", () => {
     vi.useFakeTimers();
     const { onDismiss } = renderToast({ duration: 10_000 });
-    const toast = screen.getByRole("status");
 
     fireEvent.focus(screen.getByRole("button", { name: "Undo" }));
     vi.advanceTimersByTime(30_000);
     expect(onDismiss).not.toHaveBeenCalled();
 
-    fireEvent.blur(toast);
+    fireEvent.blur(toast());
     vi.advanceTimersByTime(10_000);
     expect(onDismiss).toHaveBeenCalledTimes(1);
   });
