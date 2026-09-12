@@ -121,10 +121,16 @@ All UI strings use `react-i18next`. Translation files live in `src/locales/<lang
    resolved with its bundle already present.
 3. Add `{ code: "<lang>", labelKey: "language_<lang>" }` to `SUPPORTED_LANGUAGES` in `src/routes/settings/index.tsx`.
 
-`<html lang>` needs no step of its own: `syncDocumentLanguage` (`src/lib/document-language.ts`)
-stamps it from the resolved language at startup and on every change, so the page always declares
-the language it is actually rendered in (WCAG 3.1.1). See
-[DEVELOPMENT.md](../../DEVELOPMENT.md#the-document-language).
+`<html lang>` and `<html dir>` need no step of their own: `syncDocumentLanguage`
+(`src/lib/document-language.ts`) stamps both from the resolved language at startup and on every
+change, so the page always declares the language it is actually rendered in (WCAG 3.1.1) and the
+direction that language is written in. The direction comes from `Intl.Locale`'s CLDR data, so a
+new locale needs no entry anywhere. See
+[DEVELOPMENT.md](../../DEVELOPMENT.md#the-document-language-and-direction).
+
+Adding a **right-to-left** locale needs more than this, though: the attribute flips, the layout
+does not yet — the CSS still uses physical properties in places and directional icons are not
+mirrored ([#322](https://github.com/solve4it/mycollections/issues/322)).
 
 **Locale-aware formatting:**
 

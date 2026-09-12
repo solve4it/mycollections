@@ -317,22 +317,39 @@ Focus is recovered in the same place. That keyed wrapper unmounts the whole cont
 every navigation, so anything focused inside it takes focus to `<body>` with it; the shell moves
 focus to `<main>` when — and only when — that has happened.
 
-### The document language
+### The document language and direction
 
-`<html lang>` has to name the language the page is actually rendered in (WCAG 3.1.1), and a
-language switch never reloads the page — so, exactly like the theme, the attribute is the app's
-to maintain. `index.html` ships `lang="en"` for the window before any script runs, and
-`main.tsx` then hands the i18next singleton to `syncDocumentLanguage` (`src/lib/document-language.ts`)
-beside the `applyTheme` call; it stamps the language at startup and on every `languageChanged`.
+`<html lang>` has to name the language the page is actually rendered in (WCAG 3.1.1), `<html dir>`
+has to say which way that language is written, and a language switch never reloads the page — so,
+exactly like the theme, both attributes are the app's to maintain. `index.html` ships
+`lang="en" dir="ltr"` for the window before any script runs, and `main.tsx` then hands the i18next
+singleton to `syncDocumentLanguage` (`src/lib/document-language.ts`) beside the `applyTheme` call;
+it stamps both at startup and on every `languageChanged`.
 
-It follows i18next's **resolved** language, not the requested one: selecting a locale that has no
+Both follow i18next's **resolved** language, not the requested one: selecting a locale that has no
 bundle leaves every string English, and `lang="de"` over English text fails the same criterion
-from the other side. `document-language.integration.test.ts` keeps `index.html`'s hardcoded value
-equal to the configured `fallbackLng` — change one and it fails.
+from the other side. For `dir` the stake is higher still — a requested-but-unbundled Arabic would
+otherwise reverse a page that is still rendering English.
+
+Direction itself comes from the platform: `Intl.Locale`'s `getTextInfo()` (or the older `textInfo`
+accessor), which is CLDR's own data, so there is no language table to maintain. Neither accessor is
+in this app's build target — `chrome111, edge111, firefox114, safari16.4, ios16.4`, and Chrome has
+since dropped `textInfo` again — so `directionForLanguage` has one fallback: `maximize()` supplies
+the locale's script, still from CLDR, and only the step from script to direction is ours (a short
+set of right-to-left ISO 15924 codes; a script's direction is intrinsic, whereas a list of
+right-to-left *languages* goes stale). The unit test deletes both accessors to exercise that path,
+because Node's Intl has them and would otherwise hide it.
+
+`document-language.integration.test.ts` keeps `index.html`'s hardcoded values equal to the
+configured `fallbackLng` and its direction — change one and it fails.
 
 Adding a locale therefore needs nothing here, as long as its bundle is passed to `i18n.init()`
 with the others. A locale fetched lazily would not be: it resolves to the fallback first and
 arrives on i18next's `loaded` event, which nothing listens to yet.
+
+Note that a correct `dir` is not a right-to-left *layout*: the CSS still uses physical properties
+in places, and directional icons are not mirrored. Labelling the document is #277; making the
+layout survive the flip is #322.
 
 ## Debugging tips
 
