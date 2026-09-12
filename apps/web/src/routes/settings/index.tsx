@@ -87,33 +87,42 @@ function SettingsPage() {
   return (
     <div>
       <h1>{t("title")}</h1>
-      <div className="form-row">
-        <label htmlFor="language-select">{t("language_label")}</label>
-        <select
-          id="language-select"
-          value={i18n.resolvedLanguage ?? i18n.language}
-          onChange={(e) => {
-            void i18n.changeLanguage(e.target.value);
-          }}
-        >
-          {SUPPORTED_LANGUAGES.map(({ code, labelKey }) => (
-            <option key={code} value={code}>
-              {t(labelKey)}
-            </option>
-          ))}
-        </select>
-      </div>
 
-      <div className="form-row">
-        <label htmlFor="theme-select">{t("theme_label")}</label>
-        <select id="theme-select" value={theme} onChange={handleThemeChange}>
-          {THEME_OPTIONS.map(({ value, labelKey }) => (
-            <option key={value} value={value}>
-              {t(labelKey)}
-            </option>
-          ))}
-        </select>
-      </div>
+      {/* Language and theme were the only ungrouped controls on the page, so the
+          heading outline — h1 then four h2s — skipped straight past them, and
+          heading navigation could not reach them at all (#299). "Interface"
+          rather than "Appearance", which frames the language control as a
+          visual one for exactly the readers this heading is for. */}
+      <section className="settings-interface">
+        <h2>{t("interface_label")}</h2>
+        <div className="form-row">
+          <label htmlFor="language-select">{t("language_label")}</label>
+          <select
+            id="language-select"
+            value={i18n.resolvedLanguage ?? i18n.language}
+            onChange={(e) => {
+              void i18n.changeLanguage(e.target.value);
+            }}
+          >
+            {SUPPORTED_LANGUAGES.map(({ code, labelKey }) => (
+              <option key={code} value={code}>
+                {t(labelKey)}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="form-row">
+          <label htmlFor="theme-select">{t("theme_label")}</label>
+          <select id="theme-select" value={theme} onChange={handleThemeChange}>
+            {THEME_OPTIONS.map(({ value, labelKey }) => (
+              <option key={value} value={value}>
+                {t(labelKey)}
+              </option>
+            ))}
+          </select>
+        </div>
+      </section>
 
       <section className="settings-data">
         <h2>{t("data_label")}</h2>
