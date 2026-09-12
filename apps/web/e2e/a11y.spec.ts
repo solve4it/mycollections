@@ -104,6 +104,31 @@ test.describe("keyboard access", () => {
   });
 
   /**
+   * The page a route cannot name on its own (#309): the collection's name is in
+   * the API response, so the title and the announcement can only be right a
+   * round trip after the navigation. No axe scan — this is the detail screen the
+   * scans below already cover, in a state they already reach; what is under test
+   * here is the naming, which only a client-side navigation exercises.
+   */
+  test("a collection names the page after itself", async ({ page, api }) => {
+    await api.reset();
+    await api.createCollection({ name: "Vinyl records", fields: FIELDS });
+    // A second collection, so a title taken from "the only collection there is"
+    // could not pass either.
+    const boardGames = await api.createCollection({ name: "Board games", fields: FIELDS });
+
+    await page.goto("/collections");
+    await page.getByRole("link", { name: /Board games/ }).click();
+
+    await expect(page).toHaveURL(`/collections/${boardGames.id}`);
+    await expect(page).toHaveTitle("Board games · MyCollections");
+    // The announcement waits for the name rather than reading out the route's
+    // "Collection" and correcting itself, which a screen reader would speak
+    // twice.
+    await expect(page.locator('.visually-hidden[aria-live="polite"]')).toHaveText("Board games · MyCollections");
+  });
+
+  /**
    * The negative half: the nav lives outside the keyed wrapper, so its links
    * survive the navigation and keep focus. Tabbing on from a nav link must
    * continue through the nav, not restart from the top of the content.

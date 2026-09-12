@@ -313,6 +313,37 @@ new route:
   in `routes/__root.tsx` on purpose: inside it, it would be rebuilt on every navigation and have
   the same bug.
 
+The announcement is made once per **page**, where a page is the matched route's own interpolated
+pathname (`/collections/<id>`) — not `location.pathname`, which the router updates a render before
+the matches resolve, so a guard on it announces the page being *left*; and not the translated
+title, which would announce the current page again on every language change.
+
+#### A page whose name is in the data
+
+Some pages cannot be named by their route: `/collections/$id` is "Collection" until the query says
+which collection it is. Such a screen publishes its own name (#309):
+
+- The route declares **`staticData: { titleKey, dynamicTitle: true }`**. The key stays as the
+  stand-in — what the page is called while the query is in flight, and for good if it fails.
+- The screen calls **`usePageTitle`** (`src/lib/page-title.tsx`) with a `PageName`: `{ status:
+  "named", name }`, `{ status: "pending" }` while it does not know yet, or `{ status: "unnamed" }`
+  when it never will. A union rather than nullish values, because "no name yet" and "no name,
+  ever" decide whether the announcement waits, and two nullish values swap places silently.
+- The shell holds the route-change announcement until the screen reports something other than
+  `pending`, so the page is announced once, by the name it ends up with. Both halves are load
+  bearing: **without `dynamicTitle`** the shell cannot tell a screen that has not rendered yet
+  from one with nothing to add, announces the stand-in, and latches — so the collection's own name
+  is never announced; **without the wait being scoped to that flag**, a page that never publishes
+  would wait forever.
+
+A query that never settles therefore means no announcement rather than a wrong one (see
+[Query state on the web](#query-state-on-the-web) for what can stay pending). Renames do not
+announce either — the title follows the data, the announcement follows the navigation.
+
+Counting announcements is the assertion for any change here. `waitFor(toHaveTextContent(...))`
+polls, so it can step straight over a wrong intermediate value; `Shell.navigation.test.tsx`
+records the region's text through a `MutationObserver` instead.
+
 Focus is recovered in the same place. That keyed wrapper unmounts the whole content subtree on
 every navigation, so anything focused inside it takes focus to `<body>` with it; the shell moves
 focus to `<main>` when — and only when — that has happened.
