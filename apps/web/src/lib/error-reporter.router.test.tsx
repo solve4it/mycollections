@@ -40,7 +40,8 @@ function ExplodingPanel(): never {
 
 /** Pulls the sanitized report out of the console noise React also writes there. */
 function lastReport(): { context: Record<string, unknown> } {
-  const call = consoleSpy.mock.calls.findLast((args) => args[0] === "[error-report]");
+  const calls = consoleSpy.mock.calls as unknown[][];
+  const call = calls.filter((args) => args[0] === "[error-report]").at(-1);
   if (!call) throw new Error("no error report was captured");
   return call[1] as { context: Record<string, unknown> };
 }
