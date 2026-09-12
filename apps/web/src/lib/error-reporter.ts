@@ -1,4 +1,5 @@
 import { createErrorReporter, type ErrorReporter, toReportableError } from "@mycollections/core";
+import type { ErrorInfo } from "react";
 import { UnauthorizedError } from "./api-client.js";
 import { readSetting, writeSetting } from "./storage.js";
 
@@ -42,9 +43,18 @@ export function registerGlobalErrorHandlers(): void {
  * Hooked into TanStack Router's defaultOnCatch — route render errors never bubble
  * past the router. The value is whatever the render threw, not necessarily an
  * Error, so it goes through `toReportableError` like the window handlers above.
+ *
+ * `errorInfo` is the router's own catch boundary's React `ErrorInfo`, and its
+ * `componentStack` is the only thing that says which component threw — without
+ * it a route crash reports the same as any other. Optional because tests call
+ * this directly; an absent stack leaves the key off the report rather than
+ * writing `undefined` (core drops non-primitive context values).
  */
-export function onRouterCatch(error: unknown): void {
-  errorReporter.capture(toReportableError(error), { source: "router" });
+export function onRouterCatch(error: unknown, errorInfo?: ErrorInfo): void {
+  errorReporter.capture(toReportableError(error), {
+    source: "router",
+    componentStack: errorInfo?.componentStack ?? undefined,
+  });
 }
 
 /**
