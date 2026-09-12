@@ -103,9 +103,17 @@ describe("the document title", () => {
   });
 });
 
-/** The one live region the shell owns. Exactly one, or the announcement is ambiguous. */
+/**
+ * The one live region the shell owns. Exactly one, or the announcement is
+ * ambiguous.
+ *
+ * Scoped to the hidden one: a page may own a polite region of its own — the undo
+ * toast's is one (#308) — and those are not the shell's to speak through. The
+ * shell's is the only one that is `visually-hidden`, because it holds words and
+ * nothing a user could look at or reach.
+ */
 function announcer(): HTMLElement {
-  const regions = document.querySelectorAll<HTMLElement>('[aria-live="polite"]');
+  const regions = document.querySelectorAll<HTMLElement>('.visually-hidden[aria-live="polite"]');
   expect(regions, "the shell must own exactly one polite live region").toHaveLength(1);
   const region = regions[0];
   if (!region) throw new Error("no live region");

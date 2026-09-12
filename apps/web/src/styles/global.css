@@ -1231,6 +1231,25 @@ p[role="alert"] {
   flex-direction: column;
   align-items: center;
   gap: var(--space-2);
+  /* The strip is in the document permanently now (#308), so it must not sit
+     between the page and the pointer: it spans the viewport, and without this it
+     would swallow clicks either side of the toast for the whole undo window. The
+     toast and the error take the pointer back. */
+  pointer-events: none;
+}
+
+.undo-toast-region > * {
+  pointer-events: auto;
+}
+
+/* The live region, holding the toast and nothing else. Empty and zero-height
+   until a delete puts something in it, which is the whole mechanism: the words
+   arrive in a region that was already there. It matches the column above so the
+   toast is centred and sized exactly as it was before it gained a wrapper. */
+.undo-toast-live {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
 }
 
 .undo-toast {

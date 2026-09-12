@@ -68,13 +68,17 @@ test.describe("keyboard access", () => {
     // Empty on arrival: a live region that already holds its text when it is
     // inserted is announced by VoiceOver but usually not by NVDA or JAWS, and
     // announcing the page the user just opened is noise in any case.
-    await expect(page.locator('[aria-live="polite"]')).toBeEmpty();
+    //
+    // Scoped to the hidden region rather than to every polite one: pages own
+    // polite regions too (the undo toast's, #308), and a bare attribute locator
+    // would be ambiguous the moment one of them is on the screen under test.
+    await expect(page.locator('.visually-hidden[aria-live="polite"]')).toBeEmpty();
 
     await page.getByRole("link", { name: "Collections" }).first().click();
 
     await expect(page).toHaveURL(/\/collections$/);
     await expect(page).toHaveTitle("Collections · MyCollections");
-    await expect(page.locator('[aria-live="polite"]')).toHaveText("Collections · MyCollections");
+    await expect(page.locator('.visually-hidden[aria-live="polite"]')).toHaveText("Collections · MyCollections");
 
     // Scanned in the navigated-into state, which no other spec here reaches.
     await expectNoAccessibilityViolations(page);
@@ -236,6 +240,46 @@ test.describe("accessibility", () => {
     const actionsWidth = (await row.locator(".trash-actions").boundingBox())?.width ?? 0;
     await expect(row.locator(".trash-name")).toHaveText("Kind of Blue");
     expect(actionsWidth, "the confirmation overflows the row it belongs to").toBeLessThanOrEqual(rowWidth);
+
+    await expectNoAccessibilityViolations(page);
+  });
+
+  /**
+   * The other state no route-level scan reaches, and the one with a deadline on
+   * it: the undo toast, up over a collection (#308).
+   *
+   * The assertions before the scan are the announcement's mechanism, in a real
+   * browser rather than in jsdom — the region is in the document and empty
+   * *before* the delete, and the words arrive in it afterwards. A region
+   * inserted with its text already inside is announced by VoiceOver but usually
+   * not by NVDA or JAWS, which is what made this the one message in the app a
+   * large share of screen-reader users never heard.
+   */
+  test("the undo toast, open over a collection", async ({ page, api }) => {
+    await api.reset();
+    const collection = await api.createCollection({ name: "Vinyl records", fields: FIELDS });
+    await api.createItem(collection.id, { title: "Kind of Blue", year: 1959, signed: true }, "owned");
+
+    await page.goto(`/collections/${collection.id}`);
+    await expect(page).toHaveURL(`/collections/${collection.id}`);
+    await expect(page.getByText("Kind of Blue")).toBeVisible();
+
+    const region = page.locator(".undo-toast-live");
+    await expect(region).toHaveAttribute("aria-live", "polite");
+    await expect(region, "the region must be on the page, and empty, before the delete").toBeEmpty();
+
+    await page.getByRole("button", { name: "Delete" }).first().click();
+
+    await expect(region).toContainText("Deleted “Kind of Blue”");
+    const undo = page.getByRole("button", { name: "Undo" });
+    await expect(undo).toBeVisible();
+
+    // The toast dismisses itself after 10s, and two axe passes plus their
+    // reporting is not obviously inside that. Hovering holds the window open for
+    // as long as the pointer stays — Playwright parks it — so the scan cannot
+    // race the timer. Hover rather than focus: `onBlur` is a bubbling focusout,
+    // so anything that moved focus afterwards would restart the countdown.
+    await undo.hover();
 
     await expectNoAccessibilityViolations(page);
   });

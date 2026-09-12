@@ -18,10 +18,24 @@ interface UndoToastProps {
 /**
  * The undo shortcut shown after a delete (#33).
  *
- * `role="status"` rather than `role="alert"`: nothing has gone wrong, so the
- * confirmation is announced politely and does not interrupt whatever the user is
- * typing. The action is a real `<button>` inside the region, reachable in tab
- * order — not a click handler on the toast itself.
+ * This component carries no live region of its own, and that is the point
+ * (#308). It is mounted with its message already inside it, and a live region
+ * inserted with its content is announced by VoiceOver but usually not by NVDA or
+ * JAWS — so the `role="status"` this used to declare was the one announcement in
+ * the app with a deadline on it going unheard by a large share of screen-reader
+ * users. The region belongs to the page instead (`routes/collections/$id.tsx`):
+ * it is in the document from the moment the screen renders, empty, and this
+ * toast is what arrives in it.
+ *
+ * Putting a role back here would take the announcement away again rather than
+ * double it: a mutation is announced by the *nearest* live-region ancestor, so
+ * this element would own its own insertion — and its insertion is the thing
+ * screen readers do not reliably announce.
+ *
+ * It is announced politely rather than assertively because nothing has gone
+ * wrong: the confirmation must not interrupt whatever the user is typing. The
+ * action is a real `<button>`, reachable in tab order — not a click handler on
+ * the toast itself.
  *
  * On the timeout and WCAG 2.2.1 (Timing Adjustable): the window limits the
  * *shortcut*, never the outcome. A delete is soft, so once the toast goes the
@@ -54,9 +68,15 @@ export function UndoToast({
     // The mouse handlers only pause the auto-dismiss timer — no behavior is
     // mouse-only: every action has its own button, and the focus/blur pair beside
     // them is the keyboard equivalent of hovering.
+    //
+    // The lint rule below wants a role on anything carrying handlers, and the
+    // role that would fit is exactly the `role="status"` this element must not
+    // have (#308) — it would make the toast the nearest live region for its own
+    // insertion and silence the page's region.
+    //
+    // biome-ignore lint/a11y/noStaticElementInteractions: see above — timer only
     <div
       className="undo-toast"
-      role="status"
       onMouseEnter={() => setHeld(true)}
       onMouseLeave={() => setHeld(false)}
       onFocus={() => setHeld(true)}

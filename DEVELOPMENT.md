@@ -317,6 +317,33 @@ Focus is recovered in the same place. That keyed wrapper unmounts the whole cont
 every navigation, so anything focused inside it takes focus to `<body>` with it; the shell moves
 focus to `<main>` when — and only when — that has happened.
 
+### Live regions the announcer cannot carry
+
+The announcer is hidden and holds no controls, so a message that has to be **seen**, or that comes
+with something to **press**, needs a region of its own. The undo toast is the one in the app: the
+words "Deleted …" and the Undo button have to stay together on screen. The rule such a region has
+to follow is the same one, met differently — persistent and empty, never conditional:
+
+- **Render the region unconditionally, and put the message inside it later.** `routes/collections/$id.tsx`
+  keeps `.undo-toast-region` in the tree whether or not a toast is open; only the toast inside it is
+  conditional. A region that appears together with its message is the bug, and `{condition && <div
+  aria-live>…}` is exactly that shape.
+- **Split layout from semantics.** The outer element positions; the inner `.undo-toast-live` carries
+  `aria-live="polite"` and holds the announced content alone. Errors that are live regions in their
+  own right (`role="alert"`) stay outside it — a live region nested in a live region owns its own
+  subtree, so the outer one never speaks for it.
+- **No role on the region, and none on the thing that arrives in it.** `role="status"` implies
+  `aria-live="polite"`, so a role on the toast would make the toast the nearest live region for its
+  own insertion — the announcement would be lost, not doubled. Leaving the role off also keeps
+  page-level `getByRole("status")` queries pointed at the loading skeletons, which use it.
+- **No `aria-atomic` unless the whole region is one string.** The shell's announcer replaces one
+  string wholesale, so atomic is right there. A region whose content is replaced in place — a second
+  delete renaming the toast — would re-read the entire toast instead of the name that changed.
+- **Scan the open state.** An interactive state no route-level scan reaches gets its own scan in
+  `apps/web/e2e/a11y.spec.ts`, with the region asserted empty before the action and filled after.
+  If the state times out, hold it open (the toast's timer stops while the pointer is over it) rather
+  than racing the scan.
+
 ### The document language and direction
 
 `<html lang>` has to name the language the page is actually rendered in (WCAG 3.1.1), `<html dir>`
