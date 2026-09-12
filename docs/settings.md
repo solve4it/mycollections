@@ -9,6 +9,11 @@ description: Configuring MyCollections — app-level preferences, per-collection
 
 ## App settings
 
+The **Interface** section of Settings holds the two choices that change how the
+app presents itself to you — the language it speaks and the theme it renders in.
+It is a labelled section like every other group on the page, so it can be reached
+by heading navigation rather than only by scrolling past the page title.
+
 **Theme** chooses between **Match system**, **Light** and **Dark**. Match system is
 the default: the app follows your operating system's appearance setting and
 switches the moment you change it there — no reload, no restart. Choosing Light or
@@ -19,6 +24,10 @@ flashes the wrong theme while it loads.
 **Language** selects the interface language (English today).
 
 _Shortcuts and accessibility options land with later settings work._
+
+Interface is deliberately not a catch-all: it names what its two controls govern
+rather than collecting whatever has no other home. A new app-level preference
+belongs here only if it is about how the app presents itself.
 
 Preferences are stored in your browser. If the browser refuses to store anything —
 private-browsing modes and blocked-cookie settings both do — the app keeps working
