@@ -124,21 +124,44 @@ function CollectionDetailPage() {
         }}
       />
 
-      {undo && (
-        <div className="undo-toast-region">
-          <UndoToast
-            message={t("deleted_toast", { name: undo.name })}
-            actionLabel={t("undo")}
-            dismissLabel={t("dismiss_undo")}
-            onAction={() => restoreItem.mutate(undo.itemId, { onSuccess: () => setUndo(null) })}
-            onDismiss={() => setUndo(null)}
-          />
-          {/* A failed undo keeps the toast up: the shortcut is the only thing
-              that failed, and taking it away would leave the user nothing to
-              retry with. */}
-          {restoreItem.isError && <p role="alert">{t("restore_error")}</p>}
+      {/* Always rendered, never conditional (#308). The toast used to appear as
+          a `role="status"` region with its message already inside it, and a live
+          region inserted with content is announced by VoiceOver but usually not
+          by NVDA or JAWS. So the region is here from the screen's first commit,
+          empty, and the toast arrives in it — a delete needs a loaded row and a
+          round trip, so the words can never land in the same commit as the
+          region that speaks them.
+
+          It cannot be the shell's announcer: that one is visually hidden and
+          holds no interactive content, whereas these words come with a focusable
+          Undo button and the two have to stay together on screen. Rendered in
+          place rather than portalled to the shell for the same reason — inside
+          <main>, the button stays in its landmark and in its tab position.
+
+          The outer element is layout only. The live region is the inner wrapper,
+          which holds the toast alone: the restore error below is `role="alert"`,
+          a live region in its own right, and nesting it would give it two owners.
+          No `aria-atomic` either — unlike the shell's announcer, which replaces
+          one string wholesale, this region's content is replaced in place by a
+          second delete, and atomic would re-read the whole toast instead of the
+          name that changed. */}
+      <div className="undo-toast-region">
+        <div className="undo-toast-live" aria-live="polite">
+          {undo && (
+            <UndoToast
+              message={t("deleted_toast", { name: undo.name })}
+              actionLabel={t("undo")}
+              dismissLabel={t("dismiss_undo")}
+              onAction={() => restoreItem.mutate(undo.itemId, { onSuccess: () => setUndo(null) })}
+              onDismiss={() => setUndo(null)}
+            />
+          )}
         </div>
-      )}
+        {/* A failed undo keeps the toast up: the shortcut is the only thing that
+            failed, and taking it away would leave the user nothing to retry
+            with. */}
+        {undo && restoreItem.isError && <p role="alert">{t("restore_error")}</p>}
+      </div>
 
       <section className="add-item">
         <h2>{t("add_item")}</h2>
