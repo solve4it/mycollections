@@ -313,6 +313,158 @@ describe("CORS preflight (dev)", () => {
   });
 });
 
+// The allowlist used to be a hardcoded constant, so a web dev server on any other port
+// was silently blocked and parallel instances were impossible (#327). It is now an
+// option — still an exact-match list of loopback origins, still dev-only.
+describe("configurable dev origins", () => {
+  async function preflight(origin: string, options: { isDev?: boolean; devOrigins?: string[] }) {
+    const app = await buildApp({ db: handle, token: TEST_TOKEN, ...options });
+    return app.inject({
+      method: "OPTIONS",
+      url: "/api/collections",
+      headers: { Origin: origin, "Access-Control-Request-Method": "GET" },
+    });
+  }
+
+  it("reflects a configured non-default origin", async () => {
+    const res = await preflight("http://localhost:5199", { isDev: true, devOrigins: ["http://localhost:5199"] });
+    expect(res.headers["access-control-allow-origin"]).toBe("http://localhost:5199");
+  });
+
+  // The configured list replaces the defaults rather than extending them, so the port
+  // that is no longer named must stop being reflected — otherwise this test would pass
+  // against an implementation that ignored the option entirely.
+  it("stops reflecting a default origin the configured list drops", async () => {
+    const res = await preflight("http://localhost:5173", { isDev: true, devOrigins: ["http://localhost:5199"] });
+    expect(res.headers["access-control-allow-origin"]).toBeUndefined();
+  });
+
+  it.each([
+    "http://localhost:5198",
+    "http://127.0.0.1:5199",
+    "https://localhost:5199",
+    "http://localhost:5199.evil.example.com",
+    "http://evil.example.com",
+  ])("still refuses the unlisted origin %s", async (origin) => {
+    const res = await preflight(origin, { isDev: true, devOrigins: ["http://localhost:5199"] });
+    expect(res.headers["access-control-allow-origin"]).toBeUndefined();
+  });
+
+  it("reflects a configured origin on the request itself, not only the preflight", async () => {
+    const app = await buildApp({
+      db: handle,
+      token: TEST_TOKEN,
+      isDev: true,
+      devOrigins: ["http://localhost:5199"],
+    });
+    const res = await app.inject({
+      method: "GET",
+      url: "/api/collections",
+      headers: { Origin: "http://localhost:5199", Authorization: `Bearer ${TEST_TOKEN}` },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.headers["access-control-allow-origin"]).toBe("http://localhost:5199");
+  });
+
+  it.each(["PATCH", "DELETE"])("permits %s in the preflight for a configured origin", async (method) => {
+    const app = await buildApp({ db: handle, token: TEST_TOKEN, isDev: true, devOrigins: ["http://localhost:5199"] });
+    const res = await app.inject({
+      method: "OPTIONS",
+      url: "/api/collections/some-id",
+      headers: { Origin: "http://localhost:5199", "Access-Control-Request-Method": method },
+    });
+    const allowed = (res.headers["access-control-allow-methods"] as string) ?? "";
+    expect(allowed.split(",").map((m) => m.trim())).toContain(method);
+  });
+
+  // `Vary: Origin` is the canary for the one way this can go wrong silently: a single
+  // "*" in the array makes @fastify/cors collapse the whole option to the wildcard
+  // string, which reflects everything AND stops varying on Origin. It is only sent
+  // while the option is still a list.
+  it("varies on Origin with a configured allowlist", async () => {
+    const res = await preflight("http://localhost:5199", { isDev: true, devOrigins: ["http://localhost:5199"] });
+    expect(String(res.headers.vary)).toContain("Origin");
+  });
+
+  // The null origin (a sandboxed iframe, a data: URL) is a real origin value, and a
+  // request with no Origin at all is not cross-origin. Neither may be reflected.
+  it.each([["null"], [undefined]])("reflects nothing for the origin %s", async (origin) => {
+    const app = await buildApp({ db: handle, token: TEST_TOKEN, isDev: true, devOrigins: ["http://localhost:5199"] });
+    const res = await app.inject({
+      method: "OPTIONS",
+      url: "/api/collections",
+      headers: {
+        ...(origin === undefined ? {} : { Origin: origin }),
+        "Access-Control-Request-Method": "GET",
+      },
+    });
+    expect(res.headers["access-control-allow-origin"]).toBeUndefined();
+  });
+
+  // Host pinning runs in a root onRequest hook registered before CORS, and configuring
+  // the allowlist must not reorder that: a DNS-rebinding request carries an allowlisted
+  // Origin and an attacker Host, and is refused before CORS is consulted (#242).
+  it("still refuses an allowlisted origin arriving with a non-loopback Host", async () => {
+    const app = await buildApp({ db: handle, token: TEST_TOKEN, isDev: true, devOrigins: ["http://localhost:5199"] });
+    const res = await app.inject({
+      method: "GET",
+      url: "/api/collections",
+      headers: {
+        Origin: "http://localhost:5199",
+        Host: "evil.example.com",
+        Authorization: `Bearer ${TEST_TOKEN}`,
+      },
+    });
+    expect(res.statusCode).toBe(403);
+    expect(res.headers["access-control-allow-origin"]).toBeUndefined();
+  });
+
+  // `origin: []` is truthy, so @fastify/cors takes it as an allowlist that matches
+  // nothing: every call fails with no error anywhere. Refuse to build instead.
+  it("refuses to build in development with an empty allowlist", async () => {
+    await expect(buildApp({ db: handle, token: TEST_TOKEN, isDev: true, devOrigins: [] })).rejects.toThrow(
+      /allowlist is empty/,
+    );
+  });
+
+  // Production is unchanged by construction: `origin: false` outside development, so
+  // even a populated — or a nonsensical — list cannot re-open CORS there.
+  it.each([
+    ["a configured origin", "http://localhost:5199"],
+    ["a default origin", "http://localhost:5173"],
+    ["a wildcard", "*"],
+  ])("sends no CORS headers outside development with %s in the list", async (_name, origin) => {
+    const res = await preflight(origin === "*" ? "http://localhost:5199" : origin, {
+      isDev: false,
+      devOrigins: ["http://localhost:5199", "http://localhost:5173", "*"],
+    });
+    expect(res.headers["access-control-allow-origin"]).toBeUndefined();
+  });
+
+  // Defense in depth: a programmatic caller cannot smuggle a wildcard, the null origin
+  // or a remote host into the allowlist, even in development. The wildcard is the one
+  // that matters most — @fastify/cors turns an array containing "*" into the wildcard
+  // string, reflecting every origin and dropping Vary: Origin with it.
+  it.each(["*", "null", "http://evil.example.com", "http://localhost:5173.evil.example.com", "not-a-url"])(
+    "refuses to build in development with the invalid dev origin %s",
+    async (origin) => {
+      await expect(buildApp({ db: handle, token: TEST_TOKEN, isDev: true, devOrigins: [origin] })).rejects.toThrow(
+        /dev origin/i,
+      );
+    },
+  );
+
+  // The option is typed `readonly string[]`, so these can only arrive from untyped
+  // JavaScript — where @fastify/cors would honour both as "reflect everything".
+  it.each([
+    ["a regular expression", /.*/],
+    ["true", true],
+  ])("refuses to build in development with %s as a dev origin", async (_name, value) => {
+    const devOrigins = [value] as unknown as string[];
+    await expect(buildApp({ db: handle, token: TEST_TOKEN, isDev: true, devOrigins })).rejects.toThrow(/dev origin/i);
+  });
+});
+
 // Defense against DNS rebinding: a page on an attacker domain whose name resolves to
 // 127.0.0.1 reaches this server as a same-origin request, and CORS never sees it. The
 // Host header still carries the attacker's name, so pin it to loopback.
