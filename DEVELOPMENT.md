@@ -170,6 +170,7 @@ Wiring:
 
 - **API** — the Fastify error handler reports unhandled (5xx) errors and returns a generic `500` body so internal details never reach clients; 4xx errors pass through untouched.
 - **Web** — route render errors are caught by TanStack Router (`defaultOnCatch`), everything else by the top-level `ErrorBoundary`, `window` `error`/`unhandledrejection` handlers, and the React Query cache `onError`. Users can opt out via Settings → Privacy (persisted in `localStorage`, checked on every capture).
+- **Every web entry point takes `unknown` and normalizes with `toReportableError`.** A `throw` in a render, a rejected promise and an `ErrorEvent` all carry whatever value was thrown, not necessarily an `Error`. `buildErrorReport` reads `.message`, so handing it a raw string threw inside `capture`, which swallows failures by design — the report was dropped silently. Type a handler's parameter as `Error` and that hole reopens.
 - **Never render `error.message` to the user** — it is never sanitized and can carry internals or collection data (a malformed response makes `res.json()` throw a `SyntaxError` quoting the payload). Show a translated string; the reporter keeps the original.
 
 ### Query state on the web

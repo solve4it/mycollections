@@ -109,6 +109,19 @@ describe("onRouterCatch", () => {
     expect(lastReportJson()).toContain("render boom");
     expect(lastReportJson()).toContain("router");
   });
+
+  /**
+   * A React error boundary catches whatever was thrown, not necessarily an Error
+   * — `throw "boom"` in a render reaches here as a string. Router 1.170.35 types
+   * `defaultOnCatch`'s first argument as `unknown` for exactly that reason, so the
+   * value has to go through `toReportableError` like every other entry point.
+   */
+  it("describes a non-Error thrown value instead of reporting an empty error", () => {
+    onRouterCatch("thrown string");
+    expect(consoleSpy).toHaveBeenCalledTimes(1);
+    expect(lastReportJson()).toContain("Non-Error thrown value of type string");
+    expect(lastReportJson()).toContain("router");
+  });
 });
 
 describe("reportQueryError", () => {
