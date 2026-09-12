@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import i18n from "../i18n/index.js";
-import { syncDocumentLanguage } from "./document-language.js";
+import { directionForLanguage, syncDocumentLanguage } from "./document-language.js";
 
 /**
  * The other half of the contract: `main.tsx` hands the app's real i18next
@@ -18,19 +18,27 @@ import { syncDocumentLanguage } from "./document-language.js";
 // vitest runs with the package as cwd.
 const html = readFileSync(resolve("index.html"), "utf8");
 const markupLanguage = /<html[^>]*\slang="(?<lang>[^"]*)"/.exec(html)?.groups?.lang;
+const markupDirection = /<html[^>]*\sdir="(?<dir>[^"]*)"/.exec(html)?.groups?.dir;
+
+// i18next normalizes fallbackLng to an array; the first entry is the one an
+// unmatched language lands on, and so the one the markup should claim.
+const [fallbackLanguage] = [i18n.options.fallbackLng].flat();
 
 afterEach(async () => {
   await i18n.changeLanguage("en");
   i18n.removeResourceBundle("de", "common");
+  i18n.removeResourceBundle("ar", "common");
   document.documentElement.lang = "en";
+  document.documentElement.dir = "ltr";
 });
 
 describe("index.html", () => {
   it("declares the fallback language, so the pre-script window is labelled", () => {
-    // i18next normalizes fallbackLng to an array; the first entry is the one
-    // an unmatched language lands on, and so the one the markup should claim.
-    const [fallback] = [i18n.options.fallbackLng].flat();
-    expect(markupLanguage).toBe(fallback);
+    expect(markupLanguage).toBe(fallbackLanguage);
+  });
+
+  it("declares that language's direction beside it", () => {
+    expect(markupDirection).toBe(directionForLanguage(String(fallbackLanguage)));
   });
 });
 
@@ -48,5 +56,18 @@ describe("the app's i18next instance", () => {
 
     await i18n.changeLanguage("en");
     expect(document.documentElement.lang).toBe("en");
+  });
+
+  it("turns the document right-to-left when the selected locale is", async () => {
+    i18n.addResourceBundle("ar", "common", { app_name: "MyCollections" });
+    syncDocumentLanguage(i18n);
+    expect(document.documentElement.dir).toBe("ltr");
+
+    await i18n.changeLanguage("ar");
+    expect(document.documentElement.lang).toBe("ar");
+    expect(document.documentElement.dir).toBe("rtl");
+
+    await i18n.changeLanguage("en");
+    expect(document.documentElement.dir).toBe("ltr");
   });
 });
