@@ -5,6 +5,13 @@
     "build": {
       "dependsOn": ["typecheck", "^build"],
       "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/docs/**"]
+    },
+    // `test/docs-images.test.mjs` builds the site from the shared docs, so they
+    // are an input to the tests for the same reason they are an input to the
+    // build — without this a change under `docs/` replays a stale test result.
+    "test": {
+      "dependsOn": ["build"],
+      "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/docs/**"]
     }
   }
 }

@@ -13,6 +13,15 @@
  * image, through the real `copySharedDocs`, the real Astro config and the real
  * image pipeline, into a throwaway output directory. The fixture lives here
  * rather than in `docs/` so the published user guide carries no test page.
+ *
+ * Two things about the shape of this test are forced rather than chosen.
+ * Starlight's `docsLoader()` reads from `src/content/docs` and nowhere else, so
+ * the fixture build has to go through that directory — it cannot be pointed at
+ * an isolated content root. And the build runs as a subprocess rather than
+ * through Astro's API so that no Vite or Astro module state is shared with the
+ * test runner. The first of those means no other test file may touch
+ * `src/content/docs/user`: vitest runs test files in parallel, and a second one
+ * that did would race this build.
  */
 import { execFile } from "node:child_process";
 import { cp, mkdtemp, readFile, rm, stat } from "node:fs/promises";
