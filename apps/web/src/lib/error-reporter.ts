@@ -38,9 +38,13 @@ export function registerGlobalErrorHandlers(): void {
   });
 }
 
-/** Hooked into TanStack Router's defaultOnCatch — route render errors never bubble past the router. */
-export function onRouterCatch(error: Error): void {
-  errorReporter.capture(error, { source: "router" });
+/**
+ * Hooked into TanStack Router's defaultOnCatch — route render errors never bubble
+ * past the router. The value is whatever the render threw, not necessarily an
+ * Error, so it goes through `toReportableError` like the window handlers above.
+ */
+export function onRouterCatch(error: unknown): void {
+  errorReporter.capture(toReportableError(error), { source: "router" });
 }
 
 /**
