@@ -53,8 +53,11 @@ function EditCollectionPage() {
     if (collectionQuery.error)
       return (
         <div role="alert">
-          <h1>{t("error_title")}</h1>
-          <p>{t("error_description")}</p>
+          {/* The single-collection copy, not the dashboard's plural pair (#347):
+              this screen is editing one collection, and `error_title` in this
+              namespace is about the list. */}
+          <h1>{t("collection_error_title")}</h1>
+          <p>{t("collection_error_description")}</p>
         </div>
       );
     return (

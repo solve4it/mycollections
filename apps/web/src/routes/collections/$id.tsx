@@ -75,7 +75,9 @@ function CollectionDetailPage() {
   const { id } = collectionDetailRoute.useParams();
   const { t } = useTranslation("items");
   // The editor is a collection-level action, so its label lives with the other
-  // collection strings rather than being duplicated into the items namespace.
+  // collection strings rather than being duplicated into the items namespace —
+  // as does "could not load this collection", which the editor needs too and
+  // took the dashboard's plural copy for want of (#347).
   const { t: tCollections } = useTranslation("collections");
   const collectionQuery = useCollection(id);
   const itemsQuery = useItems(id);
@@ -100,8 +102,8 @@ function CollectionDetailPage() {
     if (collectionQuery.error)
       return (
         <div role="alert">
-          <h1>{t("error_title")}</h1>
-          <p>{t("error_description")}</p>
+          <h1>{tCollections("collection_error_title")}</h1>
+          <p>{tCollections("collection_error_description")}</p>
         </div>
       );
     // The way back does not depend on the collection, so it does not wait for
