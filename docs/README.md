@@ -42,7 +42,16 @@ docs/
 └── settings.md          # configuration and preferences
 ```
 
-New top-level sections should be added as sibling markdown files. Nested sub-sections can go in subdirectories (`docs/plugins/lego.md`, `docs/plugins/audio.md`, etc.) once there's enough content to warrant the hierarchy.
+New sections are added as **sibling markdown files at the top level**. That is the whole
+layout: `assets/` is the only subdirectory this directory publishes from, and Markdown
+anywhere else fails the docs build with a message naming the file, rather than being
+quietly skipped (#331).
+
+Nesting is not supported yet on purpose. Copying a nested page in would only move the
+silence one step along: the sidebar in `apps/docs/astro.config.mjs` is written by hand, so
+`docs/plugins/lego.md` would build to a real URL and still be linked from nowhere. When
+there is enough content to warrant a hierarchy, add it deliberately — copy step, the
+`check-built-pages.mjs` copy audit, and the sidebar together — in its own issue.
 
 ## Authoring rules
 
@@ -54,7 +63,7 @@ New top-level sections should be added as sibling markdown files. Nested sub-sec
 
 ## How Starlight consumes this directory
 
-`apps/docs/scripts/copy-shared-docs.mjs` copies every markdown file here, plus the whole of `assets/`, into `apps/docs/src/content/docs/user/` before the site builds, and a Markdown plugin registered in `apps/docs/astro.config.mjs` rewrites the relative links between them. Images take a different route: relative image references are left alone in the Markdown and resolved by Astro against the copied `assets/` directory, which is why it has to travel with the pages. The copied directory is generated and gitignored — this directory stays the only source.
+`apps/docs/scripts/copy-shared-docs.mjs` copies every top-level markdown file here, plus the whole of `assets/`, into `apps/docs/src/content/docs/user/` before the site builds, and a Markdown plugin registered in `apps/docs/astro.config.mjs` rewrites the relative links between them. Images take a different route: relative image references are left alone in the Markdown and resolved by Astro against the copied `assets/` directory, which is why it has to travel with the pages. The copied directory is generated and gitignored — this directory stays the only source.
 
 ## How the in-app Help will consume this directory (Phase 1)
 
