@@ -28,20 +28,25 @@ interface FailureSurfaceProps {
  * The `<h1>` + explanation + controls block, with the focus half of its
  * announcement.
  *
- * `role="alert"` because that is how every failure in this app is written, and
- * the danger treatment hangs off the role rather than a class (`global.css`,
- * `alerts.integration.test.ts`). It is also the one live region here that cannot
- * follow the "persistent and empty, filled afterwards" rule in DEVELOPMENT.md:
- * the whole match subtree is replaced, so there is no host left to be persistent
- * in. Focus is what covers the gap.
+ * `role="alert"` because that is how every failure in this app is written, the
+ * danger treatment hangs off the role rather than a class (`global.css`,
+ * `alerts.integration.test.ts`), and — the part that matters — an `alert` is
+ * announced when it is *inserted*. A user agent fires an event on creation, so
+ * unlike an `aria-live` region this one does not have to be persistent and
+ * filled afterwards. #319 claimed it was an exception to that rule; it was never
+ * subject to it (#347).
  *
- * Focus is taken only when `document.activeElement` is `<body>` or nothing —
- * exactly the guard in `Shell.tsx`, and for the same reason. A crash during a
- * re-render moves no pathname, so the shell's own recovery never runs: whatever
- * the user was on is destroyed with the subtree, focus falls to `<body>`, and
- * the tab order restarts at the top of the document with nothing announced
- * (WCAG 2.4.3). Where focus survived — a nav link, the link that was clicked —
- * it is left alone, and the alert's insertion is the announcement.
+ * So the role is the announcement, and the focus below is for two other things.
+ * A crash destroys whatever was focused: focus falls to `<body>` and the tab
+ * order restarts at the top of the document (WCAG 2.4.3), and where the crash
+ * was a re-render rather than a navigation the shell's own recovery never runs,
+ * because no pathname changed. And browsers suppress live-region events until
+ * the document has loaded — which is exactly `AppErrorScreen` on a first paint,
+ * the one case where the role alone would say nothing.
+ *
+ * Guarded on `document.activeElement` being `<body>` or nothing, the same guard
+ * `Shell.tsx` uses: where focus survived — a nav link, the link that was clicked
+ * — it is left where the user put it.
  *
  * Focus lands on the container, not the `<h1>`: the container is the alert, and
  * focusing something inside it makes VoiceOver read the title twice.

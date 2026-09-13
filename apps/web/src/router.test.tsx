@@ -145,10 +145,10 @@ describe("the app router's handling of a route render error", () => {
   });
 
   /**
-   * Focus, because the alert cannot follow this app's live-region rule: the whole
-   * match subtree is replaced, so there is no persistent host to fill afterwards.
-   * A crash also destroys whatever was focused — focus falls to <body> and the
-   * tab order restarts at the top of the document (WCAG 2.4.3).
+   * Focus is not the announcement — the inserted `role="alert"` is (#347) — but a
+   * crash destroys whatever was focused, so focus falls to <body> and the tab
+   * order restarts at the top of the document (WCAG 2.4.3). The surface picks it
+   * up rather than leaving the user at the top of the page.
    */
   it("takes the focus the crash orphaned", async () => {
     renderThrowingRoute();

@@ -310,6 +310,44 @@ test.describe("accessibility", () => {
   });
 
   /**
+   * A full-page load failure (#347) — the state no scan reached, on a screen
+   * whose copy nothing was asserting. Its twin, the editor, renders the same
+   * markup with the same strings and is covered by `edit.test.tsx`; repeating it
+   * here would buy one more identical axe pass for another seven seconds of
+   * backoff.
+   *
+   * Seven seconds because `lib/query-client.ts` overrides only `networkMode`, so
+   * React Query's default three retries apply and the failure surface arrives
+   * that long after the navigation rather than with it. Waited out rather than
+   * skipped: `page.clock` does not carry the retry timers here, and a scan that
+   * silently stopped reaching this state would be worse than a slow one.
+   *
+   * That latency is also why these screens keep announcing themselves through
+   * `role="alert"` rather than by taking focus the way the crash screen below
+   * does — by the time they mount, focus has long since settled somewhere else
+   * (#346, closed).
+   *
+   * The collection request is aborted and its `/items` left alone: the glob
+   * matches `/api/collections/<id>` and not the path below it.
+   */
+  test("a collection that will not load", async ({ page, api }) => {
+    await api.reset();
+    const collection = await api.createCollection({ name: "Vinyl records", fields: FIELDS });
+    await page.route("**/api/collections/*", (route) => route.abort());
+
+    await page.goto(`/collections/${collection.id}`);
+    await expect(page).toHaveURL(`/collections/${collection.id}`);
+
+    const alert = page.getByRole("alert");
+    await expect(alert).toContainText("Could not load this collection", { timeout: 20_000 });
+    await expect(alert, "one collection must not be reported in the plural").not.toContainText(
+      "Could not load collections",
+    );
+
+    await expectNoAccessibilityViolations(page);
+  });
+
+  /**
    * The state a route-level sweep can never reach because it is not a state the
    * app is supposed to have: a screen that threw while rendering (#319).
    *
@@ -342,9 +380,9 @@ test.describe("accessibility", () => {
     const alert = page.getByRole("alert");
     await expect(alert).toContainText("Something went wrong");
 
-    // Focus is the announcement here, and the only one available: the whole
-    // match subtree is replaced, so there is no persistent region to fill
-    // afterwards the way #308 and #326 require of every other message.
+    // Not the announcement — the inserted role="alert" is (#347) — but the crash
+    // orphaned focus to <body>, and this is what stops the user's tab order
+    // restarting at the top of the document.
     await expect(alert, "the crash orphaned focus, so the surface must take it").toBeFocused();
 
     // The internals stay off the screen. Asserted on the runtime's own words for
