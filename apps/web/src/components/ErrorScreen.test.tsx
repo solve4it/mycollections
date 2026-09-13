@@ -60,11 +60,11 @@ describe("AppErrorScreen", () => {
   });
 
   /**
-   * Focus is the announcement here. A crash destroys whatever was focused, focus
-   * falls to <body>, and the tab order restarts at the top of the document with
-   * nothing said (WCAG 2.4.3). The container is what takes it, not the heading:
-   * the container carries role="alert", and focusing inside it makes VoiceOver
-   * read the title twice.
+   * A crash destroys whatever was focused, focus falls to <body>, and the tab
+   * order restarts at the top of the document (WCAG 2.4.3). The container is what
+   * takes it, not the heading: the container carries role="alert" — which is what
+   * actually announces (#347) — and focusing inside it makes VoiceOver read the
+   * title twice.
    */
   it("takes focus when the crash orphaned it", () => {
     render(<AppErrorScreen />);

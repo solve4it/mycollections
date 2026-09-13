@@ -191,10 +191,24 @@ describe("EditCollectionPage", () => {
     expect(router.state.location.pathname).toBe(`/collections/${COLLECTION_ID}/edit`);
   });
 
-  it("reports a failed load instead of an empty editor", async () => {
+  /**
+   * Asserted on the words, not on the role (#347). This screen is editing *one*
+   * collection, and it took the `collections` namespace's plural strings — "Could
+   * not load collections. Your collections are safe." — for as long as the
+   * assertion here was `toBeInTheDocument()`.
+   */
+  it("reports a failed load in the singular, instead of an empty editor", async () => {
     vi.mocked(getCollection).mockRejectedValue(new Error("offline"));
     renderEdit();
-    expect(await screen.findByRole("alert")).toBeInTheDocument();
+
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent("Could not load this collection");
+    expect(alert).toHaveTextContent("Your data is safe.");
+    // The dashboard's copy, which is what this screen used to show. Named so the
+    // failure says which string arrived rather than only that one did not.
+    expect(alert, "the editor must not borrow the dashboard's plural copy").not.toHaveTextContent(
+      "Could not load collections",
+    );
     expect(screen.queryByRole("button", { name: /save changes/i })).not.toBeInTheDocument();
   });
 });

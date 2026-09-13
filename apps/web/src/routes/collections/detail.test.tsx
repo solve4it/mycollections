@@ -187,6 +187,27 @@ describe("CollectionDetailPage", () => {
     expect(screen.queryByText(/no items yet/i)).not.toBeInTheDocument();
   });
 
+  /**
+   * The screen's own failure, which had no test at all until #347 — its only
+   * coverage was an incidental `getByRole("alert")` in `Shell.navigation.test.tsx`,
+   * which is there for the announcement rather than the words.
+   *
+   * The words are the point: this is one collection, and the plural pair in the
+   * `collections` namespace is about the dashboard. Both are asserted, so a
+   * screen that reached for the wrong one could not pass.
+   */
+  it("reports a failed collection load in the singular", async () => {
+    vi.mocked(getCollection).mockRejectedValue(new Error("API error 500"));
+    renderDetail();
+
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent("Could not load this collection");
+    expect(alert).toHaveTextContent("Your data is safe.");
+    expect(alert, "the collection must not borrow the dashboard's plural copy").not.toHaveTextContent(
+      "Could not load collections",
+    );
+  });
+
   it("does not claim there are no items while the item load is still in flight", async () => {
     vi.mocked(listItems).mockReturnValue(new Promise(() => {}));
     renderDetail();
