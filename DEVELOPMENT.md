@@ -424,8 +424,19 @@ differently — persistent and empty, never conditional:
 - **Scan the open state.** An interactive state no route-level scan reaches gets its own scan in
   `apps/web/e2e/a11y.spec.ts`, with the region asserted empty before the action and filled after.
   This is the only place the mechanism is proven in a real browser — jsdom has no accessibility tree
-  at all. If the state times out, hold it open (the toast's timer stops while the pointer is over
-  it) rather than racing the scan.
+  at all. If the state times out, hold it open rather than racing the scan: the undo toast's timer
+  stops while the pointer is over it, and where a message has no such hold, `page.clock.install()`
+  freezes time for the scan and `page.clock.fastForward()` then proves the self-clear as well.
+- **Give a message a life span, and empty the region in place.** A message that describes a finished
+  event has to go away on its own when nothing on the page can clear it — Settings' emptied-trash
+  confirmation outlived its list for the whole mount because the only thing that could have cleared
+  it, the button, was gone with the trash (#336). Clear the *message*, never the region: a region
+  torn down when it has nothing to say is one that arrives with its text already inside it next
+  time. Emptying it announces nothing, because `aria-relevant` defaults to `additions text` and a
+  removal is neither. Hold the message in local state rather than deriving it from a mutation's
+  `isSuccess`: a second run that resolves before React re-renders commits no pending state in
+  between, so a timer keyed on the flag survives into the next message — and a `reset()` firing
+  mid-flight detaches the observer from the running mutation, whose result then never arrives.
 - **Assert the sequence, by node identity.** `expect(region()).toBe(before)` is what fails when a
   region is torn down and rebuilt with its text inside; every assertion about the final DOM passes
   against exactly the bug this rule exists to prevent.
