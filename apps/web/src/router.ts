@@ -1,11 +1,20 @@
-import { createRouter } from "@tanstack/react-router";
+import { type AnyRoute, createRouter, type RouterHistory } from "@tanstack/react-router";
 import { onRouterCatch } from "./lib/error-reporter.js";
 import { routeTree } from "./routeTree.js";
+
+interface AppRouterOverrides {
+  routeTree?: AnyRoute;
+  history?: RouterHistory;
+}
 
 // The router wraps every route in its own catch boundary, so route render
 // errors never reach a boundary around <RouterProvider>; defaultOnCatch is
 // the hook that sees them.
-export const router = createRouter({ routeTree, defaultOnCatch: onRouterCatch });
+export function createAppRouter({ routeTree: tree = routeTree, history }: AppRouterOverrides = {}) {
+  return createRouter({ routeTree: tree, defaultOnCatch: onRouterCatch, ...(history ? { history } : {}) });
+}
+
+export const router = createAppRouter();
 
 declare module "@tanstack/react-router" {
   interface Register {
