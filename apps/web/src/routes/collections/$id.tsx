@@ -5,6 +5,7 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { DynamicItemForm } from "../../components/DynamicItemForm.js";
 import { EmptyState } from "../../components/EmptyState.js";
+import { FailureSurface } from "../../components/ErrorScreen.js";
 import { Icon } from "../../components/Icon.js";
 import { CollectionDetailSkeleton, ItemListSkeleton } from "../../components/Skeleton.js";
 import { UndoToast } from "../../components/UndoToast.js";
@@ -101,10 +102,10 @@ function CollectionDetailPage() {
   if (collection === undefined) {
     if (collectionQuery.error)
       return (
-        <div role="alert">
-          <h1>{tCollections("collection_error_title")}</h1>
-          <p>{tCollections("collection_error_description")}</p>
-        </div>
+        <FailureSurface
+          title={tCollections("collection_error_title")}
+          description={tCollections("collection_error_description")}
+        />
       );
     // The way back does not depend on the collection, so it does not wait for
     // it: a slow load must never be a screen with no way off it.

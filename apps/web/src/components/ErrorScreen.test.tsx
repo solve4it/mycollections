@@ -1,6 +1,6 @@
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { AppErrorScreen } from "./ErrorScreen.js";
+import { AppErrorScreen, FailureSurface } from "./ErrorScreen.js";
 
 /**
  * The last-resort screen (#319), which the root route's boundary and the
@@ -81,5 +81,54 @@ describe("AppErrorScreen", () => {
 
     expect(document.activeElement).toBe(survivor);
     survivor.remove();
+  });
+});
+
+/**
+ * The surface itself (#349), which all five failure screens now share: the two
+ * crash screens above and the three route-level load failures that used to
+ * hand-roll this markup. Mounted bare here because these two cases are about
+ * the surface's own contract rather than any one screen's copy.
+ */
+describe("FailureSurface", () => {
+  /**
+   * The deliberate behavior change in #349. Taking focus is right for a crash,
+   * which orphans it synchronously — and wrong for a load failure, which arrives
+   * seconds after the navigation once React Query's retries are exhausted;
+   * moving focus that long after a user action is a hazard, not a help. The
+   * `role="alert"` is what announces these, so nothing is lost by staying put.
+   *
+   * Nothing else pins this: every existing focus assertion is on a screen that
+   * *does* claim focus, so the default would be unprotected the moment it lands.
+   */
+  it("leaves focus alone unless the screen claims it", () => {
+    render(<FailureSurface title="Could not load collections" description="Your collections are safe." />);
+
+    expect(document.activeElement).toBe(document.body);
+  });
+
+  /**
+   * The actions row is a flex container with a name in the a11y tree's way; a
+   * screen with nothing to offer should not ship an empty one. The crash screens
+   * that do have controls still get it — asserted above by finding the Reload
+   * button inside the surface.
+   */
+  it("renders no actions row when the screen offers no actions", () => {
+    const { container } = render(
+      <FailureSurface title="Could not load collections" description="Your collections are safe." />,
+    );
+
+    expect(container.querySelector(".failure-actions")).toBeNull();
+  });
+
+  /**
+   * The title stays an `<h1>`: `page-has-heading-one` is in the e2e structural
+   * rule set and is scanned against the detail screen's load failure, so a
+   * demoted heading fails the sweep rather than a unit test.
+   */
+  it("names the failure in the page's only h1", () => {
+    render(<FailureSurface title="Could not load collections" description="Your collections are safe." />);
+
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Could not load collections");
   });
 });

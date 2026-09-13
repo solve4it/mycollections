@@ -188,6 +188,29 @@ describe("CollectionDetailPage", () => {
   });
 
   /**
+   * The trap in #349. This block is the same markup *shape* as the three
+   * full-page load failures — a `<div role="alert">` holding two lines — but it
+   * replaces the item list, not the screen, and the collection's own `<h1>` is
+   * still on the page above it. Converting it to the shared `FailureSurface`
+   * would put a second `<h1>` mid-page, and the assertion above would not
+   * notice: it reads text content, which a converted region still carries.
+   *
+   * So the shape is what is asserted. `global.css` styles both shapes through
+   * one `div[role="alert"] > p:last-of-type` selector, which is why the region
+   * is two `<p>` rather than a heading and a paragraph.
+   */
+  it("keeps the items failure a region, not a second full-page screen", async () => {
+    vi.mocked(listItems).mockRejectedValue(new Error("API error 500"));
+    renderDetail();
+
+    const alert = await screen.findByRole("alert");
+    expect(within(alert).queryAllByRole("heading")).toEqual([]);
+    expect([...alert.children].map((child) => child.tagName)).toEqual(["P", "P"]);
+    // The collection's own heading is what still names the page.
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Games");
+  });
+
+  /**
    * The screen's own failure, which had no test at all until #347 — its only
    * coverage was an incidental `getByRole("alert")` in `Shell.navigation.test.tsx`,
    * which is there for the announcement rather than the words.
