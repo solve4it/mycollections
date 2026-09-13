@@ -12,6 +12,10 @@
  * is driven from the content directory rather than from whatever happens to be
  * in `dist`: a source file that produced no page at all is the same failure as
  * one that produced an empty page, and only the source side can see it.
+ *
+ * The not-found page is checked by name on top of that (#339). It is the one page
+ * no link points at, so the link check never reaches it and a regression there
+ * would be invisible until a real visitor hit a real dead URL.
  */
 import { readdir, readFile } from "node:fs/promises";
 import { dirname, join, posix, relative, resolve, sep } from "node:path";
@@ -19,8 +23,8 @@ import { fileURLToPath } from "node:url";
 import { BASE } from "../site.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const DIST = resolve(__dirname, "../dist");
-const CONTENT_ROOT = resolve(__dirname, "../src/content/docs");
+export const DIST = resolve(__dirname, "../dist");
+export const CONTENT_ROOT = resolve(__dirname, "../src/content/docs");
 /** The shared docs, and where `copy-shared-docs.mjs` puts them. Kept in step with that script. */
 const SHARED_DOCS = resolve(__dirname, "../../../docs");
 const SHARED_DEST = join(CONTENT_ROOT, "user");
@@ -28,6 +32,8 @@ const SHARED_SKIP = new Set(["README.md"]);
 
 /** Starlight renders every page's Markdown into this container. */
 const CONTENT_REGION = /<div class="sl-markdown-content[^"]*"[^>]*>([\s\S]*?)<footer/;
+/** Astro emits `src/pages/404.astro` here — a file, not a directory index, because that is what a static host looks for. */
+const NOT_FOUND_PAGE = "404.html";
 
 async function contentFiles(dir) {
   const found = [];
@@ -39,8 +45,8 @@ async function contentFiles(dir) {
   return found;
 }
 
-/** The same mapping the link rewrite uses: content path in, site path out. */
-function builtPageFor(file) {
+/** The same mapping the link rewrite uses: content path in, built file out. */
+export function builtPageFor(file) {
   const slug = relative(CONTENT_ROOT, file)
     .split(sep)
     .join(posix.sep)
@@ -49,57 +55,70 @@ function builtPageFor(file) {
   return join(DIST, slug, "index.html");
 }
 
-const sources = await contentFiles(CONTENT_ROOT);
-if (sources.length === 0) {
-  console.error(`[check-built-pages] no content found in ${CONTENT_ROOT} — did the copy step run?`);
-  process.exit(1);
-}
-
-// Checking only what reached the content directory would miss the copy step
-// failing: the site still builds, the splash page still has a body, and the
-// entire user guide is quietly absent from the deploy.
-const notCopied = [];
-for (const entry of await readdir(SHARED_DOCS, { withFileTypes: true })) {
-  if (!entry.isFile() || !entry.name.endsWith(".md") || SHARED_SKIP.has(entry.name)) continue;
-  if (!sources.includes(join(SHARED_DEST, entry.name))) notCopied.push(`docs/${entry.name}`);
-}
-if (notCopied.length > 0) {
-  console.error(`[check-built-pages] ${notCopied.length} shared doc(s) never reached the site:`);
-  for (const line of notCopied.sort()) console.error(`  ${line}`);
-  console.error("  → scripts/copy-shared-docs.mjs runs as `prebuild`; it did not copy these.");
-  process.exit(1);
-}
-
-const missing = [];
-const empty = [];
-
-for (const source of sources) {
-  const page = builtPageFor(source);
-  let html;
-  try {
-    html = await readFile(page, "utf8");
-  } catch {
-    missing.push(`${relative(CONTENT_ROOT, source)} → ${relative(DIST, page)}`);
-    continue;
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  const sources = await contentFiles(CONTENT_ROOT);
+  if (sources.length === 0) {
+    console.error(`[check-built-pages] no content found in ${CONTENT_ROOT} — did the copy step run?`);
+    process.exit(1);
   }
-  const rendered = html.match(CONTENT_REGION)?.[1] ?? "";
-  // Whitespace only is what a failed render leaves behind. A page with a real
-  // body always carries at least one element.
-  if (!/<\w/.test(rendered)) empty.push(`${relative(CONTENT_ROOT, source)} → ${relative(DIST, page)}`);
-}
 
-if (missing.length > 0 || empty.length > 0) {
-  if (missing.length > 0) {
-    console.error(`[check-built-pages] ${missing.length} doc(s) produced no page:`);
-    for (const line of missing.sort()) console.error(`  ${line}`);
+  // Checking only what reached the content directory would miss the copy step
+  // failing: the site still builds, the splash page still has a body, and the
+  // entire user guide is quietly absent from the deploy.
+  const notCopied = [];
+  for (const entry of await readdir(SHARED_DOCS, { withFileTypes: true })) {
+    if (!entry.isFile() || !entry.name.endsWith(".md") || SHARED_SKIP.has(entry.name)) continue;
+    if (!sources.includes(join(SHARED_DEST, entry.name))) notCopied.push(`docs/${entry.name}`);
   }
-  if (empty.length > 0) {
-    console.error(`[check-built-pages] ${empty.length} doc(s) were published with an empty body:`);
-    for (const line of empty.sort()) console.error(`  ${line}`);
-    console.error("  → the page failed to render. Starlight logs that error above and exits 0,");
-    console.error("    so this is the only thing standing between it and the published site.");
+  if (notCopied.length > 0) {
+    console.error(`[check-built-pages] ${notCopied.length} shared doc(s) never reached the site:`);
+    for (const line of notCopied.sort()) console.error(`  ${line}`);
+    console.error("  → scripts/copy-shared-docs.mjs runs as `prebuild`; it did not copy these.");
+    process.exit(1);
   }
-  process.exit(1);
-}
 
-console.log(`[check-built-pages] ${sources.length} doc(s) built with content, served under ${BASE}/.`);
+  const missing = [];
+  const empty = [];
+
+  for (const source of sources) {
+    const page = builtPageFor(source);
+    let html;
+    try {
+      html = await readFile(page, "utf8");
+    } catch {
+      missing.push(`${relative(CONTENT_ROOT, source)} → ${relative(DIST, page)}`);
+      continue;
+    }
+    const rendered = html.match(CONTENT_REGION)?.[1] ?? "";
+    // Whitespace only is what a failed render leaves behind. A page with a real
+    // body always carries at least one element.
+    if (!/<\w/.test(rendered)) empty.push(`${relative(CONTENT_ROOT, source)} → ${relative(DIST, page)}`);
+  }
+
+  if (missing.length > 0 || empty.length > 0) {
+    if (missing.length > 0) {
+      console.error(`[check-built-pages] ${missing.length} doc(s) produced no page:`);
+      for (const line of missing.sort()) console.error(`  ${line}`);
+    }
+    if (empty.length > 0) {
+      console.error(`[check-built-pages] ${empty.length} doc(s) were published with an empty body:`);
+      for (const line of empty.sort()) console.error(`  ${line}`);
+      console.error("  → the page failed to render. Starlight logs that error above and exits 0,");
+      console.error("    so this is the only thing standing between it and the published site.");
+    }
+    process.exit(1);
+  }
+
+  // The not-found page is not in the content collection, so the loop above never
+  // sees it, and nothing links to it, so the link check never walks into it. A
+  // regression would surface only when a visitor hit a dead URL. Name it here.
+  const notFound = await readFile(join(DIST, NOT_FOUND_PAGE), "utf8").catch(() => null);
+  if (notFound === null || !/<title>[^<]+<\/title>/.test(notFound)) {
+    console.error(`[check-built-pages] dist/${NOT_FOUND_PAGE} is missing or has no title.`);
+    console.error("  \u2192 a static host serves this file for every unknown URL. It has to exist and say what it is.");
+    console.error("    It is built from src/pages/404.astro; Starlight's own route is off (#339).");
+    process.exit(1);
+  }
+
+  console.log(`[check-built-pages] ${sources.length} doc(s) built with content, served under ${BASE}/.`);
+}

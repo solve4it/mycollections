@@ -21,6 +21,11 @@ export default defineConfig({
     starlight({
       title: "MyCollections",
       description: "Local-first personal collection management with a plugin architecture.",
+      // The not-found page is `src/pages/404.astro` instead. Starlight's own
+      // injected route would render `src/content/docs/404.md`, but its
+      // `[...slug]` catch-all does not exclude that entry, so both routes claim
+      // `/404` and every build warns about the conflict (#339).
+      disable404Route: true,
       social: [
         {
           icon: "github",

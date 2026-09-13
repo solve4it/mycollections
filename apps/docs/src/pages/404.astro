@@ -1,0 +1,40 @@
+---
+/**
+ * The site's not-found page (#339).
+ *
+ * Starlight offers two ways to have one and they cannot both be used: it injects
+ * its own `/404` route, which renders `src/content/docs/404.md` when that file
+ * exists — but its `[...slug]` catch-all does not exclude that same entry, so the
+ * documented file makes two routes claim `/404` and every build warns
+ * `Could not render /404 from route /[...slug]`. Verified against Starlight
+ * 0.42.0: `dist/utils/routing/index.js` builds `paths` from the whole `docs`
+ * collection, `404` included.
+ *
+ * So the injected route is turned off (`disable404Route` in `astro.config.mjs`)
+ * and the page is written here instead, as an ordinary Astro page. Astro emits
+ * `src/pages/404.astro` as `dist/404.html`, which is the file a static host —
+ * GitHub Pages here — serves for every unknown URL. `StarlightPage` gives it the
+ * site's own chrome, so it is a Starlight page in everything but where it lives.
+ */
+import StarlightPage from "@astrojs/starlight/components/StarlightPage.astro";
+// biome-ignore lint/correctness/noUnusedImports: used in the template below, which Biome does not parse
+import { BASE } from "../../site.mjs";
+---
+
+<StarlightPage
+  frontmatter={{
+    title: "Page not found",
+    description: "That page is not here. Start again from the user guide.",
+    template: "splash",
+  }}
+>
+  <p>
+    There is nothing at this address. The page may have been renamed, or the link that brought you
+    here may have been written against an older version of the guide.
+  </p>
+  <ul>
+    <li><a href={`${BASE}/user/`}>Start from the user guide</a></li>
+    <li><a href={`${BASE}/user/getting-started/`}>Getting started</a></li>
+    <li><a href="https://github.com/solve4it/mycollections/issues/new">Report a broken link</a></li>
+  </ul>
+</StarlightPage>
