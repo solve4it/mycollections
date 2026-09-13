@@ -66,7 +66,7 @@ function EditCollectionPage() {
           <Icon name="back" />
           {t("back_to_collections")}
         </Link>
-        <CollectionDetailSkeleton label={t("loading")} />
+        <CollectionDetailSkeleton label={t("collection_loading")} />
       </div>
     );
   }
@@ -81,7 +81,7 @@ function EditCollectionPage() {
   if (!countsKnown && !countsFailed) {
     return (
       <div className="edit-collection-page">
-        <CollectionDetailSkeleton label={t("loading")} />
+        <CollectionDetailSkeleton label={t("collection_loading")} />
       </div>
     );
   }

@@ -64,6 +64,12 @@ Tests passing is CI's evidence, not yours. Before "done" or "fixed":
   ```
   Paste the token on the setup screen. NEVER use the default DB path when testing — the
   working-tree `data/app.db` holds real collections. Never delete it.
+- **A query-failure screen cannot be reached by driving Chrome from a tool.** React Query
+  pauses retries while `document.visibilityState` is `"hidden"`, which a driven tab always
+  is, so the query fetches once, fails, and waits forever — the screen sits on its skeleton
+  and reads as an app bug. Check `document.visibilityState` before concluding anything about
+  a loading state, and prove failure states through `pnpm test:e2e` instead. Everything that
+  does not depend on a retry — copy, focus, landmarks, a render-time throw — drives fine.
 - **Reproduce bugs before and after.** A bug fix without a pre-fix reproduction is a guess.
   Reproduce at the public surface (curl, browser), apply the fix, rerun the exact same
   commands, paste both outputs.

@@ -223,6 +223,11 @@ That does not remove the paused state entirely (a hidden tab still pauses a retr
 - Keep "failed to load" and "loaded, and there is nothing" as separate outcomes. Falling back to `data ?? []` tells the user their collection is empty when the request actually failed.
 - Once data has loaded, keep it on screen if a later reload fails and show a warning alongside it, rather than replacing it with an error page.
 
+Two consequences for how a failure is verified, both learned the hard way (#347):
+
+- **A failure surface arrives about seven seconds after the navigation, not with it.** Nothing overrides `retry`, so React Query's default three attempts run at 1s, 2s and 4s first. Any test or manual check that gives up sooner concludes the screen has no error state. It is also why those screens announce themselves with `role="alert"` rather than by taking focus — by the time they mount, focus has long since settled somewhere else.
+- **You cannot reproduce a query failure by driving Chrome from a tool.** React Query pauses *retries* while `document.visibilityState` is `"hidden"`, and a tab driven in the background always is: the query fetches once, fails, and then waits — no retries, no error state, indefinitely. The screen sits on its skeleton and looks like a bug in the app. Verify these states through `pnpm test:e2e`, where Playwright's page is visible, or by clicking through a browser you are actually looking at.
+
 ## Working on the docs site
 
 The docs site at `apps/docs` is an [Astro Starlight](https://starlight.astro.build/) project that renders the shared markdown in `docs/` at the repo root, plus its own Starlight-native landing page.

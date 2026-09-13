@@ -112,7 +112,7 @@ function CollectionDetailPage() {
       <div className="collection-detail">
         <Link to="/collections" className="back-link">
           <Icon name="back" />
-          {t("back_to_collections")}
+          {tCollections("back_to_collections")}
         </Link>
         <CollectionDetailSkeleton label={t("loading")} />
       </div>
@@ -123,7 +123,7 @@ function CollectionDetailPage() {
     <div className="collection-detail">
       <Link to="/collections" className="back-link">
         <Icon name="back" />
-        {t("back_to_collections")}
+        {tCollections("back_to_collections")}
       </Link>
       <div className="collection-detail-header">
         <h1>{collection.name}</h1>

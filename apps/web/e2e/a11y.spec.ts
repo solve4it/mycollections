@@ -310,11 +310,12 @@ test.describe("accessibility", () => {
   });
 
   /**
-   * A full-page load failure (#347) — the state no scan reached, on a screen
-   * whose copy nothing was asserting. Its twin, the editor, renders the same
-   * markup with the same strings and is covered by `edit.test.tsx`; repeating it
-   * here would buy one more identical axe pass for another seven seconds of
-   * backoff.
+   * The two full-page load failures (#347) — the states no scan reached, and the
+   * screens whose copy nothing was asserting. The editor is scanned as well as
+   * the detail screen because the editor is the one that was wrong, and this is
+   * the only place either is proven in a browser: a query failure cannot be
+   * reproduced by driving Chrome directly, since React Query pauses retries
+   * while `document.visibilityState` is "hidden" and a driven tab always is.
    *
    * Seven seconds because `lib/query-client.ts` overrides only `networkMode`, so
    * React Query's default three retries apply and the failure surface arrives
@@ -330,7 +331,7 @@ test.describe("accessibility", () => {
    * The collection request is aborted and its `/items` left alone: the glob
    * matches `/api/collections/<id>` and not the path below it.
    */
-  test("a collection that will not load", async ({ page, api }) => {
+  test("a collection that will not load, on both screens that need it", async ({ page, api }) => {
     await api.reset();
     const collection = await api.createCollection({ name: "Vinyl records", fields: FIELDS });
     await page.route("**/api/collections/*", (route) => route.abort());
@@ -345,6 +346,15 @@ test.describe("accessibility", () => {
     );
 
     await expectNoAccessibilityViolations(page);
+
+    // The editor, which took the dashboard's plural copy for a single collection
+    // until #347. Same markup, so no second axe pass — the words are the point.
+    await page.goto(`/collections/${collection.id}/edit`);
+    await expect(page).toHaveURL(`/collections/${collection.id}/edit`);
+    await expect(alert).toContainText("Could not load this collection", { timeout: 20_000 });
+    await expect(alert, "the editor edits one collection, not the list").not.toContainText(
+      "Could not load collections",
+    );
   });
 
   /**

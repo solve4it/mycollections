@@ -9,6 +9,8 @@
   "error_description": "Your collections are safe. The app could not reach its server — check that it is running, then try again.",
   "collection_error_title": "Could not load this collection",
   "collection_error_description": "Your data is safe. The app could not reach its server — check that it is running, then try again.",
+  "back_to_collections": "All collections",
+  "collection_loading": "Loading this collection…",
   "reload_error": "Could not refresh from the server. These are the collections from the last successful load.",
   "items_count_one": "{{count}} item",
   "items_count_other": "{{count}} items",

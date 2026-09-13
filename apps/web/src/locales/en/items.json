@@ -18,7 +18,6 @@
   "create_error": "Could not add this item. The app could not reach its server — check that it is running, then try again.",
   "update_error": "Could not save your changes to this item. Your edits are still here — check that the app's server is running, then try again.",
   "delete_error": "Could not delete this item. It is still in your collection — check that the app's server is running, then try again.",
-  "back_to_collections": "All collections",
   "items_heading": "Items",
   "value_yes": "Yes",
   "value_no": "No",
