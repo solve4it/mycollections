@@ -8,7 +8,11 @@
     "dev": {
       "dependsOn": ["^build"],
       "cache": false,
-      "persistent": true
+      "persistent": true,
+      // Turbo's default env mode is strict: a task sees only the variables named here,
+      // so without this list `PORT=… pnpm dev` starts a server on 3001 and says nothing.
+      // Every variable the local servers read has to be passed through by name.
+      "passThroughEnv": ["API_TOKEN", "DB_PATH", "DEV_ORIGINS", "HOST", "LOG_LEVEL", "PORT", "VITE_API_URL"]
     },
     "test": {
       "dependsOn": ["build"]

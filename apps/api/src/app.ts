@@ -5,7 +5,7 @@ import fastifySensible from "@fastify/sensible";
 import { createErrorReporter, type ErrorReporter, toReportableError } from "@mycollections/core";
 import type { DatabaseHandle } from "@mycollections/db";
 import Fastify from "fastify";
-import { isLoopbackHost } from "./config.js";
+import { DEFAULT_DEV_ORIGINS, isLoopbackHost, normalizeDevOrigins } from "./config.js";
 import { registerCollectionRoutes } from "./routes/collections.js";
 import { registerExportRoutes } from "./routes/export.js";
 import { registerItemRoutes } from "./routes/items.js";
@@ -26,23 +26,14 @@ export interface AppOptions {
    * know which name a LAN client will use. See `resolveServerConfig`.
    */
   allowedHosts?: string[] | false;
+  /**
+   * Browser origins accepted in development, defaulting to `DEFAULT_DEV_ORIGINS`.
+   * Every entry must be a loopback origin — `normalizeDevOrigins` rejects anything
+   * else, so no caller can widen this into a wildcard. Ignored entirely unless
+   * `isDev`: outside development the API answers no CORS request at all.
+   */
+  devOrigins?: readonly string[];
 }
-
-/**
- * Browser origins allowed to call the API in development. The web app is served by
- * Vite (5173 `dev`, 4173 `preview`) on a different origin from the API, so this is
- * load-bearing rather than decorative — there is no dev proxy.
- *
- * This replaced `/^http:\/\/localhost(:\d+)?$/`, which trusted every port on
- * localhost. Any local process can bind a high port, and with `credentials: true`
- * that becomes a CSRF hole the moment a cookie session replaces the bearer header.
- */
-const DEV_ORIGINS = [
-  "http://localhost:5173",
-  "http://127.0.0.1:5173",
-  "http://localhost:4173",
-  "http://127.0.0.1:4173",
-];
 
 /** Strips the port, brackets, casing and any trailing dot from a Host header value. */
 function hostnameFrom(value: string): string {
@@ -62,6 +53,26 @@ function hostnameFrom(value: string): string {
  * Reads `request.headers.host` rather than `request.hostname`, which Fastify derives
  * from `X-Forwarded-Host` when `trustProxy` is on, which the client can forge.
  */
+/**
+ * The development allowlist, re-validated here as well as at startup so a programmatic
+ * caller cannot hand `buildApp` something @fastify/cors would read as "allow anything":
+ * a single `"*"` in the array collapses the whole option to the wildcard string, which
+ * also drops `Vary: Origin`. `normalizeDevOrigins` rejects it — `new URL("*")` throws.
+ *
+ * An empty list is refused rather than accepted: `origin: []` is truthy, so the plugin
+ * takes it as a valid allowlist that matches nothing, and every call fails with no
+ * error anywhere — the silent breakage #327 is about, inverted.
+ */
+function devCorsOrigins(devOrigins: readonly string[] | undefined): string[] {
+  const origins = normalizeDevOrigins(devOrigins ?? DEFAULT_DEV_ORIGINS);
+  if (origins.length === 0) {
+    throw new Error(
+      "no dev origin is allowed: the development CORS allowlist is empty, so every browser call would fail silently.",
+    );
+  }
+  return origins;
+}
+
 function isAllowedHost(header: string | undefined, extraHosts: string[]): boolean {
   if (header === undefined) {
     // HTTP/1.1 requires a Host header. There is nothing to validate, so refuse.
@@ -115,7 +126,12 @@ export async function buildApp(options: AppOptions) {
   });
 
   await app.register(fastifyCors, {
-    origin: isDev ? DEV_ORIGINS : false,
+    // The ternary is the whole production guarantee: outside development `origin` is
+    // `false`, so no allowlist — configured, defaulted or malformed — is ever consulted
+    // and no `Access-Control-Allow-Origin` is ever sent. Inside development the list is
+    // re-validated here as well as at startup, so a programmatic caller cannot hand
+    // `buildApp` a wildcard or a remote origin (#327).
+    origin: isDev ? devCorsOrigins(options.devOrigins) : false,
     credentials: true,
     // @fastify/cors defaults Access-Control-Allow-Methods to only GET, HEAD and
     // POST, which makes browsers block our PATCH/DELETE routes in preflight.
