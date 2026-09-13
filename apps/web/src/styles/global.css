@@ -590,10 +590,10 @@ button[type="submit"]:disabled {
   margin-bottom: 0;
 }
 
-/* Failure surfaces (#264). Attached to the role rather than to a class, so all
-   eleven alert sites across five routes pick the treatment up at once and a new
-   route cannot forget it. role="status" is deliberately untouched — it carries
-   loading and success messages, and danger styling on those would be a lie. */
+/* Failure surfaces (#264). Attached to the role rather than to a class, so every
+   alert site picks the treatment up at once and a new route — or a new failure
+   screen (#319) — cannot forget it. role="status" is deliberately untouched — it
+   carries loading and success messages, and danger styling on those would be a lie. */
 [role="alert"] {
   color: var(--danger);
 }
@@ -628,6 +628,7 @@ p[role="alert"] {
 .failure-actions {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   gap: var(--space-3);
   margin-top: var(--space-4);
 }
