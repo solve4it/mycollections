@@ -345,6 +345,17 @@ test.describe("accessibility", () => {
       "Could not load collections",
     );
 
+    // The other half of the #349 split, and the only place it is proven in a
+    // browser: this surface shares a component with the crash screen below,
+    // which *does* take focus. A load failure must not — it arrives seven
+    // seconds after the navigation, with focus wherever the user left it, so
+    // moving it here would be a hazard rather than a recovery. The assertion is
+    // on the body still holding focus rather than merely on the alert not having
+    // it, so a surface that handed focus to something else inside itself could
+    // not pass either.
+    await expect(alert, "a load failure announces through the role, it does not seize focus").not.toBeFocused();
+    await expect(page.locator("body")).toBeFocused();
+
     await expectNoAccessibilityViolations(page);
 
     // The editor, which took the dashboard's plural copy for a single collection

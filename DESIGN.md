@@ -154,8 +154,9 @@ Two shapes exist, and they are styled differently on purpose:
   danger text, a 3px `--danger` left border, and a `--danger-surface` tint. The **border** is the
   non-color cue that satisfies WCAG 1.4.1; the tint carries nothing (~1.05:1 against both
   surfaces, by design — a tint readable enough to clear 3:1 would no longer be a tint).
-- **A `<div role="alert">`** — the full-page states, the two failure screens (#319) and the items
-  region — gets no strip; it already owns the screen. Its **title** keeps the danger ink and its
+- **A `<div role="alert">`** — the full-page states, every one of which now renders through the
+  single `FailureSurface` component (#349), and the items region — gets no strip; it already owns
+  the screen. Its **title** keeps the danger ink and its
   **explanation** drops to `--ink-muted` via `> p:last-of-type`, which picks the explanation out
   of both shapes (`<h1>` + `<p>`, and the region's `<p>` + `<p>`) without either route needing a
   class. This was decided

@@ -2,6 +2,7 @@ import { createRoute, Link, redirect } from "@tanstack/react-router";
 import { useTranslation } from "react-i18next";
 import { CollectionCard } from "../../components/CollectionCard.js";
 import { EmptyState } from "../../components/EmptyState.js";
+import { FailureSurface } from "../../components/ErrorScreen.js";
 import { Icon } from "../../components/Icon.js";
 import { CollectionGridSkeleton } from "../../components/Skeleton.js";
 import { getToken } from "../../lib/api-client.js";
@@ -27,13 +28,7 @@ function CollectionsPage() {
   // false and `data` undefined — never let that reach the empty state and tell
   // the user their collections are gone (#228); it gets the skeleton below.
   if (collections === undefined) {
-    if (error)
-      return (
-        <div role="alert">
-          <h1>{t("error_title")}</h1>
-          <p>{t("error_description")}</p>
-        </div>
-      );
+    if (error) return <FailureSurface title={t("error_title")} description={t("error_description")} />;
   }
 
   if (collections?.length === 0)

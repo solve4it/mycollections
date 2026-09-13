@@ -1,6 +1,7 @@
 import { createRoute, Link, redirect, useNavigate } from "@tanstack/react-router";
 import { type FormEvent, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { FailureSurface } from "../../components/ErrorScreen.js";
 import { buildField, type FieldDraft, FieldSchemaBuilder, fieldToDraft } from "../../components/FieldSchemaBuilder.js";
 import { Icon } from "../../components/Icon.js";
 import { CollectionDetailSkeleton } from "../../components/Skeleton.js";
@@ -51,15 +52,10 @@ function EditCollectionPage() {
 
   if (collection === undefined || draft === null) {
     if (collectionQuery.error)
-      return (
-        <div role="alert">
-          {/* The single-collection copy, not the dashboard's plural pair (#347):
-              this screen is editing one collection, and `error_title` in this
-              namespace is about the list. */}
-          <h1>{t("collection_error_title")}</h1>
-          <p>{t("collection_error_description")}</p>
-        </div>
-      );
+      // The single-collection copy, not the dashboard's plural pair (#347): this
+      // screen is editing one collection, and `error_title` in this namespace is
+      // about the list. Naming both strings at the call site is what #349 bought.
+      return <FailureSurface title={t("collection_error_title")} description={t("collection_error_description")} />;
     return (
       <div className="edit-collection-page">
         <Link to="/collections" className="back-link">

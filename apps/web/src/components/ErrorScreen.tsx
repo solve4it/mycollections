@@ -4,8 +4,8 @@ import { useTranslation } from "react-i18next";
 import { usePageTitle } from "../lib/page-title.js";
 
 /**
- * The app's two failure screens (#319), sharing one surface and one set of
- * strings.
+ * The app's two crash screens (#319) and the surface all five of its failure
+ * screens share (#349).
  *
  * `RouteError` replaces the screen inside the shell; `AppErrorScreen` replaces
  * everything, and is what both the root route's boundary and the top-level
@@ -21,12 +21,30 @@ import { usePageTitle } from "../lib/page-title.js";
  */
 
 interface FailureSurfaceProps {
-  children: ReactNode;
+  /** Names the failure. Already translated — see the note on the component. */
+  title: string;
+  /** The reassuring half, under the title. Already translated. */
+  description: string;
+  /**
+   * Take focus on mount if the surface arrives to find none. True for a crash,
+   * which orphans focus in the same tick; false for a load failure, which does
+   * not. See the component's note.
+   */
+  claimFocus?: boolean;
+  /** The controls under the copy. Omitted where the screen has nothing to offer. */
+  children?: ReactNode;
 }
 
 /**
- * The `<h1>` + explanation + controls block, with the focus half of its
- * announcement.
+ * The `<h1>` + explanation + controls block behind every full-page failure in
+ * the app: the two crash screens below, and the three route-level load failures
+ * that each hand-rolled this markup until #349. Two of those three bugs fixed in
+ * #347 were namespace mistakes at those call sites, which is why the copy is
+ * taken as two already-translated strings rather than as keys — a wrong pair is
+ * then visible as an argument, instead of hiding behind a bare `t("error_title")`
+ * that reads identically in every namespace. It is also what keeps the `t()`
+ * calls in the route files, where `locale-keys.integration.test.ts` can still
+ * bind them to a namespace.
  *
  * `role="alert"` because that is how every failure in this app is written, the
  * danger treatment hangs off the role rather than a class (`global.css`,
@@ -36,35 +54,51 @@ interface FailureSurfaceProps {
  * filled afterwards. #319 claimed it was an exception to that rule; it was never
  * subject to it (#347).
  *
- * So the role is the announcement, and the focus below is for two other things.
- * A crash destroys whatever was focused: focus falls to `<body>` and the tab
- * order restarts at the top of the document (WCAG 2.4.3), and where the crash
- * was a re-render rather than a navigation the shell's own recovery never runs,
+ * So the role is the announcement, and `claimFocus` is for two other things. A
+ * crash destroys whatever was focused: focus falls to `<body>` and the tab order
+ * restarts at the top of the document (WCAG 2.4.3), and where the crash was a
+ * re-render rather than a navigation the shell's own recovery never runs,
  * because no pathname changed. And browsers suppress live-region events until
  * the document has loaded — which is exactly `AppErrorScreen` on a first paint,
  * the one case where the role alone would say nothing.
  *
- * Guarded on `document.activeElement` being `<body>` or nothing, the same guard
- * `Shell.tsx` uses: where focus survived — a nav link, the link that was clicked
- * — it is left where the user put it.
+ * It is a prop, and off by default, because the load failures are the opposite
+ * case: they arrive seconds after the navigation, once React Query's retries are
+ * exhausted, with focus wherever the user left it. Moving it then is a hazard
+ * rather than a help, and the role has already announced them. A screen that
+ * forgets the prop therefore degrades to "announced but does not move focus",
+ * which is the safe way round.
  *
- * Focus lands on the container, not the `<h1>`: the container is the alert, and
- * focusing something inside it makes VoiceOver read the title twice.
+ * The claim is guarded on `document.activeElement` being `<body>` or nothing,
+ * the same guard `Shell.tsx` uses: where focus survived — a nav link, the link
+ * that was clicked — it is left where the user put it. And it lands on the
+ * container, not the `<h1>`: the container is the alert, and focusing something
+ * inside it makes VoiceOver read the title twice.
  */
-function FailureSurface({ children }: FailureSurfaceProps) {
-  const { t } = useTranslation("common");
+export function FailureSurface({ title, description, claimFocus = false, children }: FailureSurfaceProps) {
   const surfaceRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    if (!claimFocus) return;
     const focused = document.activeElement;
     if (focused === null || focused === document.body) surfaceRef.current?.focus();
-  }, []);
+  }, [claimFocus]);
 
   return (
-    <div className="failure-surface" role="alert" tabIndex={-1} ref={surfaceRef}>
-      <h1>{t("error_title")}</h1>
-      <p>{t("error_message")}</p>
-      <div className="failure-actions">{children}</div>
+    <div
+      className="failure-surface"
+      role="alert"
+      // Only focusable where focus is actually claimed: a screen nothing ever
+      // focuses should not carry a programmatic focus target.
+      tabIndex={claimFocus ? -1 : undefined}
+      ref={surfaceRef}
+    >
+      <h1>{title}</h1>
+      <p>{description}</p>
+      {/* Omitted rather than rendered empty: the three load failures offer no
+          controls, and an empty flex container is a node in the accessibility
+          tree that says nothing. `EmptyState` renders its children the same way. */}
+      {children && <div className="failure-actions">{children}</div>}
     </div>
   );
 }
@@ -95,7 +129,7 @@ export function RouteError() {
   usePageTitle({ status: "unnamed" });
 
   return (
-    <FailureSurface>
+    <FailureSurface title={t("error_title")} description={t("error_message")} claimFocus>
       <Link to="/collections" className="touch-target">
         {t("error_back_to_collections")}
       </Link>
@@ -127,7 +161,7 @@ export function AppErrorScreen() {
 
   return (
     <main className="shell-main" id="main-content">
-      <FailureSurface>
+      <FailureSurface title={t("error_title")} description={t("error_message")} claimFocus>
         <ReloadButton />
       </FailureSurface>
     </main>
