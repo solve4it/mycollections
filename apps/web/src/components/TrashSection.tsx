@@ -61,8 +61,9 @@ export function TrashSection() {
   //
   // Deriving it from the mutation and clearing it with `reset()` on a timer
   // looks equivalent and is not. A second empty inside the window can resolve
-  // before React re-renders, so `isSuccess` would go true → true with no pending
-  // state in between and the first timer would survive — clearing the second
+  // before React re-renders, so `isSuccess` would go from true straight back to
+  // true with no pending state in between and the first timer would survive,
+  // clearing the second
   // confirmation early, or firing mid-flight, where `reset()` detaches the
   // observer from the running mutation and its result never arrives at all.
   // Each success stores a new object here instead, so the effect restarts on

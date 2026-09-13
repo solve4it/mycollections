@@ -323,7 +323,8 @@ describe("Settings empty trash", () => {
     // A timer left over from the first empty must not reach the second
     // confirmation. Keying the window on the mutation's success flag would let
     // it: a second empty that resolves before React re-renders never commits a
-    // pending state, so the flag goes true → true and the first timer survives —
+    // pending state, so the flag goes from true straight back to true and the
+    // first timer survives —
     // wiping the new message early, or firing mid-flight where a `reset()`
     // detaches the observer from the running mutation and its result never
     // arrives. Each success has to start a window of its own.
