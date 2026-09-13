@@ -17,9 +17,11 @@ export const appVersion: string = JSON.parse(
 export default defineConfig({
   plugins: [react()],
   define: { __APP_VERSION__: JSON.stringify(appVersion) },
-  // The API's dev CORS allowlist names these exact origins (#242). Without
+  // The API's dev CORS allowlist names these exact origins by default (#242). Without
   // strictPort a busy 5173 makes Vite silently move to 5174, and every API call
   // then fails as an opaque browser CORS error; refusing to start is clearer.
+  // To run beside another instance, pass `--port` here and name that origin in the
+  // API's DEV_ORIGINS — see "Running a second instance side by side" (#327).
   server: { port: 5173, strictPort: true },
   preview: { port: 4173, strictPort: true },
 });

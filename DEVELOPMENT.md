@@ -102,7 +102,7 @@ packages are compiled before any server starts, and the buildable packages
 fresh. The two apps you'll usually want:
 
 - **API (Fastify)** on `http://127.0.0.1:3001` — runs from TypeScript source via `tsx watch` and restarts on change. Note it imports the workspace packages from their compiled `dist/`, which is why `pnpm dev` builds and watches them; running `tsx` against `apps/api` alone with a stale `dist` will serve old code.
-- **Web app (Vite + React)** on `http://localhost:5173`. The port is pinned with `strictPort`, so if something else holds 5173 Vite fails loudly instead of moving to 5174 — the API's dev CORS allowlist names these exact origins (#242).
+- **Web app (Vite + React)** on `http://localhost:5173`. The port is pinned with `strictPort`, so if something else holds 5173 Vite fails loudly instead of moving to 5174 — the API's dev CORS allowlist names these exact origins (#242). To run on another port, name it in `DEV_ORIGINS` as well; see [Running a second instance](#running-a-second-instance-side-by-side).
 
 Or start them individually — but a single app's `dev` won't rebuild its workspace
 dependencies, so build them first (`pnpm build`) or run the full `pnpm dev`:
@@ -152,6 +152,40 @@ API_TOKEN=dev-local-token pnpm --filter @mycollections/api dev
 > This placeholder is for loopback development only. The server refuses to bind a non-loopback `HOST` unless `API_TOKEN` is set explicitly *and* is at least 32 characters, so a memorable token can never end up guarding a network-reachable API (#242).
 
 The SQLite database is created automatically at `apps/api/data/app.db` on first run (override with `DB_PATH`). This location is anchored to the app directory, so it's the same file no matter which directory you launch from, and the resolved path is printed on startup (`Database: …`). The `data/` directory is gitignored.
+
+### Running a second instance side by side
+
+Two checkouts at once — a second worktree, or two branches being verified in parallel — means two web dev servers, and only one of them can have port 5173. The API's dev CORS allowlist is an **exact-origin** list, so a web server on any other port is blocked by the browser: the page loads, every API call fails, and neither side says why. `DEV_ORIGINS` names the origins the second instance uses (#327):
+
+```bash
+# instance two: API on 3141, web on 5199
+DB_PATH=/tmp/second.db API_TOKEN=dev-local-token PORT=3141 \
+  DEV_ORIGINS=http://localhost:5199,http://127.0.0.1:5199 \
+  pnpm --filter @mycollections/api dev
+
+VITE_API_URL=http://localhost:3141 pnpm --filter @mycollections/web dev --port 5199
+```
+
+A second instance needs **three** changes, not one — `DEV_ORIGINS` alone is not enough:
+
+1. a free API `PORT`,
+2. `VITE_API_URL` pointing the web app at that port (it defaults to `http://localhost:3001`),
+3. `--port` on Vite *and* that origin in `DEV_ORIGINS`.
+
+Point `DB_PATH` somewhere scratch too, or both instances write to the same database. Turbo runs tasks in strict env mode, so these variables reach the servers through `pnpm dev` only because `turbo.json` lists them in the `dev` task's `passThroughEnv`; a variable missing from that list is silently dropped before the server ever sees it.
+
+Overriding the allowlist is reported at startup (`WARNING: DEV_ORIGINS replaces the default dev CORS allowlist…`), so the reason 5173 stopped working is on screen rather than in a browser console.
+
+Rules `DEV_ORIGINS` follows, all of them deliberate:
+
+- **Development only.** It is read only when `NODE_ENV` is not `production`. Outside development the API sends no CORS headers at all (`origin: false`), and no value of this variable changes that.
+- **It replaces the default list**, it does not extend it — name every origin the instance needs, including the `127.0.0.1` spelling if you use it.
+- **Loopback origins only.** Each entry is parsed as a URL and checked structurally: `http`/`https`, a loopback host, and no credentials, path, query or fragment. `http://localhost:5173.evil.example.com` and `http://evil.example.com#localhost:5173` are remote origins and are rejected, not matched.
+- **It fails closed.** Unset or empty falls back to today's 5173/4173 list; anything malformed or non-loopback refuses to start, naming the offending entry. There is no value that widens CORS, and the allowlist never contains a wildcard — `credentials: true` is on, so a wildcard or a reflected origin would be a CSRF hole.
+- **`strictPort` still applies**, so pass `--port` to Vite explicitly rather than letting it drift onto a port the allowlist does not name.
+- **An empty allowlist is refused too.** `origin: []` would accept nothing while looking configured, which is the same silent breakage from the other side, so the server refuses to start.
+
+If your browser is not on the same machine as the API — a VM, WSL, a devcontainer, a forwarded Codespace — the browser's origin is not loopback and `DEV_ORIGINS` will refuse it. Forward the port instead (`ssh -L`, or your container tool's port forwarding) so the page really is served from `localhost`; do not widen the allowlist or the API's `origin` option to reach it.
 
 ## Observability
 
