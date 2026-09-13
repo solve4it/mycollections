@@ -1,8 +1,9 @@
 import type { Collection, DeletedItem } from "@mycollections/core";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createMemoryHistory, createRouter, RouterProvider } from "@tanstack/react-router";
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { TRASH_CONFIRMATION_MS } from "../../components/TrashSection.js";
 import { rootRoute } from "../__root.js";
 import { setupRoute } from "../setup/index.js";
 import { settingsRoute } from "./index.js";
@@ -108,6 +109,10 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   localStorage.clear();
+  // A fake clock left installed by one test makes the next one hang in
+  // `waitFor`, which is timer-driven — an order-dependent failure that reads
+  // like a flake. Restored here rather than in the tests that install it.
+  vi.useRealTimers();
 });
 
 describe("Settings trash listing", () => {
@@ -278,6 +283,93 @@ describe("Settings empty trash", () => {
     expect(trashLiveRegion(), "the message must land in the node that was already there").toBe(before);
     // And the message inside carries no role of its own, for the same reason.
     expect(within(before).getByText(/emptied the trash/i)).not.toHaveAttribute("role");
+  });
+
+  it("clears the confirmation once its window is up, emptying the region in place (#336)", async () => {
+    // The message used to have no life span at all: nothing reset the mutation,
+    // so "Emptied the trash: removed …" stayed on screen under a list that had
+    // gone back to saying "The trash is empty.", until a navigation unmounted it.
+    //
+    // The sequence is asserted by node identity at both ends. Clearing the
+    // message by tearing down the region would satisfy every "the text is gone"
+    // assertion and reintroduce #326 on the next empty, when the region would
+    // arrive again with its text already inside.
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    vi.mocked(emptyTrash).mockResolvedValue({ collections: 2, items: 5 });
+    vi.mocked(listTrash)
+      .mockResolvedValueOnce({ collections: [RECORDS], items: [DUNE] })
+      .mockResolvedValue({ collections: [], items: [] });
+
+    renderSettings();
+    const section = await trashSection();
+    const before = trashLiveRegion();
+
+    fireEvent.click(await within(section).findByRole("button", { name: "Empty trash" }));
+    fireEvent.click(within(section).getByRole("button", { name: "Empty trash" }));
+    await waitFor(() => expect(trashLiveRegion()).toHaveTextContent("Emptied the trash"));
+    expect(trashLiveRegion()).toBe(before);
+
+    await act(async () => {
+      vi.advanceTimersByTime(TRASH_CONFIRMATION_MS);
+    });
+
+    expect(trashLiveRegion(), "the confirmation must not outlive its window").toBeEmptyDOMElement();
+    expect(trashLiveRegion(), "and the region itself has to stay: emptying it by unmounting is #326 again").toBe(
+      before,
+    );
+  });
+
+  it("does not let a first confirmation's timer cut a second one short (#336)", async () => {
+    // A timer left over from the first empty must not reach the second
+    // confirmation. Keying the window on the mutation's success flag would let
+    // it: a second empty that resolves before React re-renders never commits a
+    // pending state, so the flag goes true → true and the first timer survives —
+    // wiping the new message early, or firing mid-flight where a `reset()`
+    // detaches the observer from the running mutation and its result never
+    // arrives. Each success has to start a window of its own.
+    //
+    // The trash keeps refilling here because something has to put the button
+    // back: `useTrash` reloads after every successful empty, and on a real
+    // page a window-focus refetch can do the same inside the window.
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    vi.mocked(listTrash).mockResolvedValue({ collections: [RECORDS], items: [DUNE] });
+    vi.mocked(emptyTrash)
+      .mockResolvedValueOnce({ collections: 2, items: 5 })
+      .mockResolvedValue({ collections: 1, items: 1 });
+
+    renderSettings();
+    const section = await trashSection();
+    const before = trashLiveRegion();
+
+    fireEvent.click(await within(section).findByRole("button", { name: "Empty trash" }));
+    fireEvent.click(within(section).getByRole("button", { name: "Empty trash" }));
+    await waitFor(() =>
+      expect(trashLiveRegion()).toHaveTextContent("Emptied the trash: removed 2 collections and 5 items."),
+    );
+
+    await act(async () => {
+      vi.advanceTimersByTime(TRASH_CONFIRMATION_MS / 2);
+    });
+
+    fireEvent.click(await within(section).findByRole("button", { name: "Empty trash" }));
+    fireEvent.click(within(section).getByRole("button", { name: "Empty trash" }));
+    await waitFor(() =>
+      expect(trashLiveRegion()).toHaveTextContent("Emptied the trash: removed 1 collection and 1 item."),
+    );
+
+    // Past the first timer's deadline, well short of the second's.
+    await act(async () => {
+      vi.advanceTimersByTime(TRASH_CONFIRMATION_MS / 2 + 1000);
+    });
+    expect(trashLiveRegion(), "the second confirmation keeps its own full window").toHaveTextContent(
+      "removed 1 collection and 1 item.",
+    );
+
+    await act(async () => {
+      vi.advanceTimersByTime(TRASH_CONFIRMATION_MS);
+    });
+    expect(trashLiveRegion()).toBeEmptyDOMElement();
+    expect(trashLiveRegion()).toBe(before);
   });
 
   it("keeps the live region out of the branch that swaps between loading, error, and the lists", async () => {

@@ -1,5 +1,7 @@
 import type { Collection, DeletedItem } from "@mycollections/core";
+import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
+import type { EmptyTrashResult } from "../lib/api-client.js";
 import { formatDate } from "../lib/intl.js";
 import {
   useEmptyTrash,
@@ -11,6 +13,26 @@ import {
 } from "../lib/queries.js";
 import { ConfirmButton } from "./ConfirmButton.js";
 import { Icon } from "./Icon.js";
+
+/**
+ * How long the "emptied the trash" confirmation stays on screen (#336).
+ *
+ * It needs a life span because nothing else can give it one: on success the
+ * trash is empty, so the button that would have cleared the message on the next
+ * interaction — the way the import and the undo toast clear theirs — is gone
+ * from the page with it. Without a timer the sentence simply stayed, and the
+ * section read "The trash is empty." with "Emptied the trash: removed …" still
+ * underneath it for the life of the mount.
+ *
+ * On WCAG 2.2.1: the window limits the *restatement*, never the outcome. The
+ * emptying has already happened, it cannot be undone, and the list above is the
+ * durable record of it — nothing is lost by missing this sentence, and there is
+ * no control inside it to reach in time. That is also why it has no hover/focus
+ * hold like `UndoToast`: there is nothing here to hover towards. Ten seconds is
+ * the same figure as `UNDO_WINDOW_MS`, by the same judgment rather than by any
+ * dependency between them, so the two are separate constants.
+ */
+export const TRASH_CONFIRMATION_MS = 10_000;
 
 /**
  * Trash management in Settings (#35): what soft delete has hidden, with the two
@@ -30,11 +52,51 @@ export function TrashSection() {
   const emptyTrash = useEmptyTrash();
   const locale = i18n.resolvedLanguage ?? i18n.language;
 
+  // What the last empty removed, held here rather than read from
+  // `emptyTrash.isSuccess` — the same shape the undo toast holds its message in,
+  // for the same reason (`routes/collections/$id.tsx`). The confirmation needs a
+  // life span of its own, and a mutation's success state has none: it lasts
+  // until something resets it, which is why this sentence used to stay on screen
+  // for the life of the mount (#336).
+  //
+  // Deriving it from the mutation and clearing it with `reset()` on a timer
+  // looks equivalent and is not. A second empty inside the window can resolve
+  // before React re-renders, so `isSuccess` would go true → true with no pending
+  // state in between and the first timer would survive — clearing the second
+  // confirmation early, or firing mid-flight, where `reset()` detaches the
+  // observer from the running mutation and its result never arrives at all.
+  // Each success stores a new object here instead, so the effect restarts on
+  // exactly the event that should restart it.
+  const [emptied, setEmptied] = useState<EmptyTrashResult | null>(null);
+
+  // Retires the confirmation once it has been up long enough to read (#336).
+  // Only the message goes: the region below stays mounted and becomes empty
+  // again in place, because a region torn down when it has nothing to say is a
+  // region re-inserted *with its text already inside it* on the next empty —
+  // the bug #326 fixed. Emptying it announces nothing either way, since
+  // `aria-relevant` defaults to additions and text, not removals.
+  useEffect(() => {
+    if (!emptied) return;
+    const timer = setTimeout(() => setEmptied(null), TRASH_CONFIRMATION_MS);
+    return () => clearTimeout(timer);
+  }, [emptied]);
+
   return (
     <section className="settings-trash">
       <h2>{t("trash_label")}</h2>
       <p>{t("trash_description")}</p>
-      <TrashContents locale={locale} query={trash} onEmpty={() => emptyTrash.mutate()} pending={emptyTrash.isPending} />
+      <TrashContents
+        locale={locale}
+        query={trash}
+        onEmpty={() => {
+          // Drop the previous confirmation as the next empty starts: it describes
+          // an older event, and leaving it up would let it sit beside this one's
+          // failure as though it had just succeeded.
+          setEmptied(null);
+          emptyTrash.mutate(undefined, { onSuccess: (result) => setEmptied(result) });
+        }}
+        pending={emptyTrash.isPending}
+      />
       {/* Always rendered, never conditional (#326). The confirmation used to be a
           `role="status"` node created with its text already inside it, and a live
           region inserted with content is announced by VoiceOver but usually not by
@@ -53,11 +115,11 @@ export function TrashSection() {
           the failure below stays outside, keeping `role="alert"` as a live region
           of its own rather than inheriting a polite owner. */}
       <div className="trash-live" aria-live="polite">
-        {emptyTrash.isSuccess && (
+        {emptied && (
           <p>
             {t("trash_emptied", {
-              collections: t("trash_count_collections", { count: emptyTrash.data.collections }),
-              items: t("trash_count_items", { count: emptyTrash.data.items }),
+              collections: t("trash_count_collections", { count: emptied.collections }),
+              items: t("trash_count_items", { count: emptied.items }),
             })}
           </p>
         )}
