@@ -349,11 +349,26 @@ test.describe("accessibility", () => {
     await expectNoAccessibilityViolations(page);
   });
 
-  test("the emptied trash, announced on Settings", async ({ page, api }) => {
+  /**
+   * Mirrors `TRASH_CONFIRMATION_MS` in `src/components/TrashSection.tsx`, rather
+   * than importing it: these specs run in Node, and one import from `src/` pulls
+   * the app's whole module graph — `import.meta.env` included — in with it.
+   */
+  const TRASH_CONFIRMATION_MS = 10_000;
+
+  test("the emptied trash, announced on Settings, and cleared when its window is up", async ({ page, api }) => {
     await api.reset();
     const collection = await api.createCollection({ name: "Vinyl records", fields: FIELDS });
     const item = await api.createItem(collection.id, { title: "Kind of Blue" });
     await api.deleteItem(collection.id, item.id);
+
+    // The confirmation retires itself after TRASH_CONFIRMATION_MS (#336), and the
+    // axe scan below is the slowest thing in this spec — on a loaded runner it
+    // could finish after the message had gone and still pass, scanning an empty
+    // region and proving nothing. Freezing the clock removes the race instead of
+    // narrowing it, and then lets the self-clear be proven in a real browser,
+    // which jsdom cannot do for a live region at all.
+    await page.clock.install();
 
     await page.goto("/settings");
     await expect(page).toHaveURL(/\/settings$/);
@@ -371,5 +386,11 @@ test.describe("accessibility", () => {
 
     await expect(region).toContainText("Emptied the trash: removed 0 collections and 1 item.");
     await expectNoAccessibilityViolations(page);
+
+    await page.clock.fastForward(TRASH_CONFIRMATION_MS + 1_000);
+    await expect(region, "the confirmation must not outlive its window").toBeEmpty();
+    // The region itself stays: one that is torn down when it has nothing to say
+    // is one that arrives with its text already inside it next time (#326).
+    await expect(region).toHaveAttribute("aria-live", "polite");
   });
 });
