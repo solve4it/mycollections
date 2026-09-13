@@ -33,6 +33,7 @@ What **does not** live here:
 ```
 docs/
 ├── README.md            # this file (maintainer notes, not rendered)
+├── assets/              # images the docs below reference (created when the first one lands)
 ├── index.md             # docs landing page
 ├── getting-started.md   # first-run walkthrough
 ├── collections.md       # working with collections
@@ -48,18 +49,18 @@ New top-level sections should be added as sibling markdown files. Nested sub-sec
 - **Plain Markdown.** Keep frontmatter minimal (`title:` and `description:`) so the content is portable across renderers. Starlight-specific features (tabs, asides, etc.) should be used sparingly — in-app Help may not support them.
 - **No absolute paths to other docs.** Use relative links (`./collections.md`) so they work regardless of the base URL. The docs site rewrites them to real page URLs when it builds, and its build fails on any it cannot resolve — including a link that points outside this directory, which should be an absolute GitHub URL instead.
 - **No references to renderer-specific chrome.** Don't write "click the button in the top-right of the docs site" — the in-app Help won't have that button.
-- **Images.** Put images in `docs/assets/` and reference them with relative paths. Both renderers will copy them to their output.
+- **Images.** Put images in `docs/assets/` (subdirectories are fine) and reference them with Markdown image syntax and a relative path — `![Shelf view](./assets/shelf.png)` — the form GitHub resolves against the file itself. The docs site copies `docs/assets/` in alongside the generated Markdown and hands every referenced image to Astro's image pipeline, which content-hashes it and re-encodes raster formats: `./assets/shelf.png` is published as `/mycollections/_astro/shelf.<hash>.webp`. So write the relative reference and let the build rewrite it — never hardcode a URL under `_astro/`, and don't count on the original filename or format surviving. Two consequences worth knowing: an image the pipeline cannot find fails the build instead of shipping a broken page, and a raw `<img src="./assets/…">` tag bypasses the pipeline entirely and *would* ship broken, so don't write one.
 - **Update `CHANGELOG`-worthy content only when behavior changes.** Cosmetic doc edits don't need a feature flag or migration note.
 
 ## How Starlight consumes this directory
 
-`apps/docs/scripts/copy-shared-docs.mjs` copies every markdown file here into `apps/docs/src/content/docs/user/` before the site builds, and a Markdown plugin registered in `apps/docs/astro.config.mjs` rewrites the relative links between them. The copied directory is generated and gitignored — this directory stays the only source.
+`apps/docs/scripts/copy-shared-docs.mjs` copies every markdown file here, plus the whole of `assets/`, into `apps/docs/src/content/docs/user/` before the site builds, and a Markdown plugin registered in `apps/docs/astro.config.mjs` rewrites the relative links between them. Images take a different route: relative image references are left alone in the Markdown and resolved by Astro against the copied `assets/` directory, which is why it has to travel with the pages. The copied directory is generated and gitignored — this directory stays the only source.
 
 ## How the in-app Help will consume this directory (Phase 1)
 
 Planned pattern:
 
-1. At build time, the app bundles the `docs/` directory as a static asset (or fetches it from the gh-pages site at runtime — TBD).
+1. At build time, the app bundles the `docs/` directory — `assets/` included — as a static asset (or fetches it from the gh-pages site at runtime — TBD).
 2. A lightweight markdown renderer inside the app displays the content.
 3. Contextual links from the UI point at specific doc anchors (e.g. the collection settings screen links to `docs/settings.md#per-collection-settings`).
 
