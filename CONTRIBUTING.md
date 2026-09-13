@@ -113,7 +113,7 @@ Before marking a PR ready for review, tick every item:
 - [ ] **Docs are updated in the same PR** — README, CONTRIBUTING, DEVELOPMENT, CLAUDE.md, the docs site, and any package-level docs affected by the change. Docs are part of Done, never a follow-up. If the change has no doc impact, state that explicitly in the PR body.
 - [ ] User-facing strings are extracted for i18n (once the i18n pipeline is in place)
 - [ ] A11y rules pass (Biome's built-in a11y rules must be green; screen-reader and keyboard flows considered for UI work)
-- [ ] New routes declare `staticData.titleKey` so the page is named and its arrival announced (see DEVELOPMENT.md), and no new live region is mounted with its text already inside — hidden messages go through the shell's announcer, and a message that must be visible or carries a control gets a region of its own that is rendered unconditionally and filled afterwards
+- [ ] New routes declare `staticData.titleKey` so the page is named and its arrival announced (see DEVELOPMENT.md), and no new live region is mounted with its text already inside — hidden messages go through the shell's announcer, a message that must be visible or carries a control gets a class-named region of its own that is rendered unconditionally and filled afterwards, and a notice that can never change is not a live region at all
 - [ ] For UI changes, `pnpm test:e2e` is green — the axe sweep over every route, at both viewports and both color schemes. New routes and new interactive states get a scan in `apps/web/e2e/a11y.spec.ts`; see DEVELOPMENT.md for the one-time browser install.
 - [ ] For new dependencies: `depscore` was checked (see CLAUDE.md)
 - [ ] CI is green on the PR

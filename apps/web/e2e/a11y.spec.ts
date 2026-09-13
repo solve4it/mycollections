@@ -308,4 +308,68 @@ test.describe("accessibility", () => {
 
     await expectNoAccessibilityViolations(page);
   });
+
+  /**
+   * The two Settings states no route-level sweep reaches, and the two regions
+   * #326 gave a persistent host (#308's rule, applied to the rest of the app).
+   *
+   * The assertions before each scan are the announcement's mechanism, in a real
+   * browser rather than in jsdom, which has no accessibility tree at all: the
+   * region is on the page and empty *before* the action, and the words arrive in
+   * that region afterwards. A region inserted with its text already inside it is
+   * announced by VoiceOver but usually not by NVDA or JAWS.
+   *
+   * Both locators are class-scoped for the reason the navigation spec above
+   * records: /settings now owns three polite regions — the shell's announcer,
+   * the import's and the trash's — so a bare `[aria-live]` locator is ambiguous.
+   */
+  test("the import's result, announced on Settings", async ({ page, api }) => {
+    await api.reset();
+    const collection = await api.createCollection({ name: "Vinyl records", fields: FIELDS });
+    await api.createItem(collection.id, { title: "Kind of Blue", year: 1959, signed: true }, "owned");
+    // Taken from the server, then restored into an empty database, so the file
+    // the picker is handed is one the app itself produced.
+    const backup = await api.exportDocument();
+    await api.reset();
+
+    await page.goto("/settings");
+    await expect(page).toHaveURL(/\/settings$/);
+
+    const region = page.locator(".import-live");
+    await expect(region).toHaveAttribute("aria-live", "polite");
+    await expect(region, "the region must be on the page, and empty, before the import").toBeEmpty();
+
+    await page.getByLabel("Choose backup file").setInputFiles({
+      name: "mycollections-export.json",
+      mimeType: "application/json",
+      buffer: Buffer.from(backup),
+    });
+
+    await expect(region).toContainText("Imported 1 collections and 1 items");
+    await expectNoAccessibilityViolations(page);
+  });
+
+  test("the emptied trash, announced on Settings", async ({ page, api }) => {
+    await api.reset();
+    const collection = await api.createCollection({ name: "Vinyl records", fields: FIELDS });
+    const item = await api.createItem(collection.id, { title: "Kind of Blue" });
+    await api.deleteItem(collection.id, item.id);
+
+    await page.goto("/settings");
+    await expect(page).toHaveURL(/\/settings$/);
+    await expect(page.getByText("Kind of Blue")).toBeVisible();
+
+    const region = page.locator(".trash-live");
+    await expect(region).toHaveAttribute("aria-live", "polite");
+    await expect(region, "the region must be on the page, and empty, before the trash is emptied").toBeEmpty();
+
+    // The trigger is replaced by its own confirmation, so the same name is
+    // clicked twice: once to ask, once to answer.
+    const emptyTrash = page.getByRole("button", { name: "Empty trash" });
+    await emptyTrash.click();
+    await emptyTrash.click();
+
+    await expect(region).toContainText("Emptied the trash: removed 0 collections and 1 item.");
+    await expectNoAccessibilityViolations(page);
+  });
 });
