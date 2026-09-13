@@ -1,7 +1,7 @@
 import type { Collection } from "@mycollections/core";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createMemoryHistory, createRouter, RouterProvider } from "@tanstack/react-router";
-import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { routeTree } from "../routeTree.js";
 
@@ -25,6 +25,19 @@ const COLLECTION: Collection = {
 };
 
 /**
+ * A second collection, differing from the first in the one thing the title is
+ * supposed to carry (#309). Two fixtures rather than one: a title built from a
+ * constant, or from the route rather than the data, passes every assertion that
+ * only ever sees "Games".
+ */
+const OTHER_COLLECTION: Collection = { ...COLLECTION, id: "22222222-2222-2222-2222-222222222222", name: "Books" };
+
+const COLLECTIONS_BY_ID: Record<string, Collection> = {
+  [COLLECTION.id]: COLLECTION,
+  [OTHER_COLLECTION.id]: OTHER_COLLECTION,
+};
+
+/**
  * Every export the six screens reach for. Listed rather than partially mocked:
  * a missing one does not fail as a missing mock, it renders the router's error
  * boundary in place of the whole shell — which is a *passing* shell test away
@@ -38,7 +51,7 @@ vi.mock("../lib/api-client.js", () => ({
   listCollections: vi.fn(async () => []),
   createCollection: vi.fn(),
   updateCollection: vi.fn(),
-  getCollection: vi.fn(async () => COLLECTION),
+  getCollection: vi.fn(async (id: string) => COLLECTIONS_BY_ID[id] ?? COLLECTION),
   listItems: vi.fn(async () => []),
   createItem: vi.fn(),
   updateItem: vi.fn(),
@@ -53,6 +66,8 @@ vi.mock("../lib/api-client.js", () => ({
   importData: vi.fn(),
 }));
 
+import { getCollection } from "../lib/api-client.js";
+
 function renderAt(path: string) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const router = createRouter({ routeTree, history: createMemoryHistory({ initialEntries: [path] }) });
@@ -61,17 +76,23 @@ function renderAt(path: string) {
       <RouterProvider router={router} />
     </QueryClientProvider>,
   );
-  return router;
+  return { router, queryClient };
 }
 
 beforeEach(() => {
   localStorage.setItem("api_token", "test-token");
   document.title = "MyCollections";
+  // Restored here rather than left to the last test that overrode it: a
+  // one-shot implementation that its own test never consumed would otherwise
+  // surface in whichever test ran next.
+  vi.mocked(getCollection).mockImplementation(async (id: string) => COLLECTIONS_BY_ID[id] ?? COLLECTION);
 });
 
 afterEach(() => {
   cleanup();
   localStorage.clear();
+  for (const observer of observers) observer.disconnect();
+  observers.length = 0;
 });
 
 describe("the document title", () => {
@@ -83,7 +104,7 @@ describe("the document title", () => {
   it.each([
     ["/collections", "Collections · MyCollections"],
     ["/collections/new", "New collection · MyCollections"],
-    [`/collections/${COLLECTION.id}`, "Collection · MyCollections"],
+    [`/collections/${COLLECTION.id}`, "Games · MyCollections"],
     [`/collections/${COLLECTION.id}/edit`, "Edit collection · MyCollections"],
     ["/settings", "Settings · MyCollections"],
   ])("names %s in the title", async (path, expected) => {
@@ -120,6 +141,41 @@ function announcer(): HTMLElement {
   return region;
 }
 
+const observers: MutationObserver[] = [];
+
+/**
+ * Everything the announcer says from now on, in order (#309).
+ *
+ * Counting is the assertion, not the final text. A title that arrives after the
+ * navigation invites saying it twice — the route's generic name on arrival, the
+ * collection's own name when the query lands — and a screen reader reads both.
+ * Every "the region holds the right words" assertion passes against that bug,
+ * so the test has to watch the region rather than read it at the end.
+ *
+ * One entry per mutation batch: an observer is called once per microtask
+ * checkpoint, so a single React commit is one entry however many nodes it
+ * touched, while two commits are two. Empty text is the region being cleared,
+ * not something said.
+ */
+function recordAnnouncements(): string[] {
+  const spoken: string[] = [];
+  const region = announcer();
+  const observer = new MutationObserver(() => {
+    const text = region.textContent?.trim() ?? "";
+    if (text && text !== spoken[spoken.length - 1]) spoken.push(text);
+  });
+  observer.observe(region, { childList: true, characterData: true, subtree: true });
+  observers.push(observer);
+  return spoken;
+}
+
+/** Lets anything still queued — a settling query, the effects it wakes — land before counting. */
+async function settle(): Promise<void> {
+  await act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
+}
+
 describe("announcing route changes", () => {
   /**
    * A screen reader is told nothing when a client-side navigation swaps the
@@ -147,7 +203,7 @@ describe("announcing route changes", () => {
   });
 
   it("announces the page it navigated to, by name", async () => {
-    const router = renderAt("/collections");
+    const { router } = renderAt("/collections");
     expect(await screen.findByRole("main")).toBeInTheDocument();
 
     await router.navigate({ to: "/settings" });
@@ -164,7 +220,7 @@ describe("announcing route changes", () => {
   });
 
   it("keeps announcing as the user moves on", async () => {
-    const router = renderAt("/collections");
+    const { router } = renderAt("/collections");
     expect(await screen.findByRole("main")).toBeInTheDocument();
 
     await router.navigate({ to: "/settings" });
@@ -183,6 +239,136 @@ describe("announcing route changes", () => {
   });
 });
 
+/**
+ * A title `staticData` cannot know (#309). The route can only say "Collection";
+ * which collection is in the query, and it arrives after the navigation does.
+ */
+describe("a screen that names itself", () => {
+  it("tells two collections apart by name", async () => {
+    renderAt(`/collections/${OTHER_COLLECTION.id}`);
+    // The other fixture, deliberately: a title built from the route, or from
+    // whichever collection the mock happens to return first, reads "Games".
+    expect(await screen.findByRole("heading", { level: 1, name: "Books" })).toBeInTheDocument();
+    await waitFor(() => expect(document.title).toBe("Books · MyCollections"));
+  });
+
+  it("stands the route's own title in until the name arrives", async () => {
+    let arrive: (collection: Collection) => void = () => {};
+    vi.mocked(getCollection).mockImplementationOnce(
+      () =>
+        new Promise<Collection>((resolve) => {
+          arrive = resolve;
+        }),
+    );
+
+    renderAt(`/collections/${COLLECTION.id}`);
+    expect(await screen.findByRole("main")).toBeInTheDocument();
+    // Not the app name and not the previous page's title: a page with no title
+    // is a page a screen reader user cannot place, loading or not (WCAG 2.4.2).
+    await waitFor(() => expect(document.title).toBe("Collection · MyCollections"));
+
+    await act(async () => {
+      arrive(COLLECTION);
+    });
+    await waitFor(() => expect(document.title).toBe("Games · MyCollections"));
+  });
+
+  it("keeps the route's own title when the collection cannot be loaded", async () => {
+    vi.mocked(getCollection).mockRejectedValueOnce(new Error("network is down"));
+
+    renderAt(`/collections/${COLLECTION.id}`);
+    expect(await screen.findByRole("alert")).toBeInTheDocument();
+    await settle();
+    expect(document.title).toBe("Collection · MyCollections");
+  });
+});
+
+describe("announcing a page whose name arrives late", () => {
+  it("announces the collection moved to, and says it once", async () => {
+    const { router } = renderAt(`/collections/${COLLECTION.id}`);
+    expect(await screen.findByRole("heading", { level: 1, name: "Games" })).toBeInTheDocument();
+    await waitFor(() => expect(document.title).toBe("Games · MyCollections"));
+
+    const spoken = recordAnnouncements();
+    await router.navigate({ to: "/collections/$id", params: { id: OTHER_COLLECTION.id } });
+
+    // Both halves matter. Moving between two collections announced nothing
+    // before this, because the two routes share one title key; and the obvious
+    // fix — announce whenever the title changes — says "Collection ·
+    // MyCollections" on arrival and "Books · MyCollections" a moment later,
+    // which is the same page read out twice.
+    expect(await screen.findByRole("heading", { level: 1, name: "Books" })).toBeInTheDocument();
+    await waitFor(() => expect(spoken).toEqual(["Books · MyCollections"]));
+    await settle();
+    expect(spoken).toEqual(["Books · MyCollections"]);
+  });
+
+  it("announces once when the name never comes, rather than waiting forever", async () => {
+    const { router } = renderAt("/collections");
+    expect(await screen.findByRole("main")).toBeInTheDocument();
+    vi.mocked(getCollection).mockRejectedValueOnce(new Error("network is down"));
+
+    const spoken = recordAnnouncements();
+    await router.navigate({ to: "/collections/$id", params: { id: COLLECTION.id } });
+
+    // A failed load still moved the user to a new page, and the route's own
+    // title is the most that page can be called.
+    expect(await screen.findByRole("alert")).toBeInTheDocument();
+    await waitFor(() => expect(spoken).toEqual(["Collection · MyCollections"]));
+    await settle();
+    expect(spoken).toEqual(["Collection · MyCollections"]);
+  });
+
+  it("announces the name, not the route's stand-in, when arriving from another page", async () => {
+    const { router } = renderAt("/settings");
+    expect(await screen.findByRole("main")).toBeInTheDocument();
+
+    const spoken = recordAnnouncements();
+    await router.navigate({ to: "/collections/$id", params: { id: COLLECTION.id } });
+
+    // The case a guard that merely *looks* settled gets wrong: on the first
+    // commit of this navigation the page has not published anything yet, and
+    // reading that silence as "settled" announces "Collection · MyCollections"
+    // and latches — the document title corrects itself a commit later, the
+    // announcement never does.
+    expect(await screen.findByRole("heading", { level: 1, name: "Games" })).toBeInTheDocument();
+    await waitFor(() => expect(spoken).toEqual(["Games · MyCollections"]));
+    await settle();
+    expect(spoken).toEqual(["Games · MyCollections"]);
+  });
+
+  it("does not hold the announcement for a page that never names itself", async () => {
+    const { router } = renderAt(`/collections/${COLLECTION.id}`);
+    expect(await screen.findByRole("heading", { level: 1, name: "Games" })).toBeInTheDocument();
+
+    const spoken = recordAnnouncements();
+    await router.navigate({ to: "/settings" });
+
+    // Waiting for a name is only right on a page that has one coming. Settings
+    // publishes nothing ever, so a wait that is not scoped to the routes that
+    // opted in leaves this navigation silent forever.
+    expect(await screen.findByRole("heading", { level: 1, name: "Settings" })).toBeInTheDocument();
+    await waitFor(() => expect(spoken).toEqual(["Settings · MyCollections"]));
+  });
+
+  it("says nothing when the name changed but the page did not", async () => {
+    const { queryClient } = renderAt(`/collections/${COLLECTION.id}`);
+    expect(await screen.findByRole("heading", { level: 1, name: "Games" })).toBeInTheDocument();
+
+    const spoken = recordAnnouncements();
+    // A rename landing on a refetch retitles the page the user is already on.
+    // Announcing it would talk over whatever they were reading — the reason the
+    // announcement follows the navigation and not the title.
+    await act(async () => {
+      queryClient.setQueryData(["collections", COLLECTION.id], { ...COLLECTION, name: "Video games" });
+    });
+
+    await waitFor(() => expect(document.title).toBe("Video games · MyCollections"));
+    await settle();
+    expect(spoken).toEqual([]);
+  });
+});
+
 describe("where focus goes on a route change", () => {
   /**
    * __root.tsx keys the screen wrapper by pathname so the entrance animation
@@ -192,7 +378,7 @@ describe("where focus goes on a route change", () => {
    * cursor drops to the start of the page (WCAG 2.4.3).
    */
   it("lands focus on the page when the navigation unmounted what had it", async () => {
-    const router = renderAt("/settings");
+    const { router } = renderAt("/settings");
     const main = await screen.findByRole("main");
     const insideThePage = within(main).getAllByRole("button")[0];
     if (!insideThePage) throw new Error("settings should render a button inside main");
@@ -225,7 +411,7 @@ describe("where focus goes on a route change", () => {
    * <main> would cost them their place in the nav on every single click.
    */
   it("leaves focus alone when the navigation did not take it away", async () => {
-    const router = renderAt("/settings");
+    const { router } = renderAt("/settings");
     await screen.findByRole("main");
     const navLink = screen.getAllByRole("link", { name: "Collections" })[0];
     if (!navLink) throw new Error("the shell should render a Collections nav link");
@@ -246,6 +432,20 @@ describe("route titles as data", () => {
     expect(named.length, "the route tree should still have screens in it").toBeGreaterThan(5);
     for (const route of named) {
       expect(route.options.staticData?.titleKey, `${route.fullPath} needs a staticData.titleKey`).toBeTruthy();
+    }
+  });
+
+  it("declares which routes name themselves, so the shell knows what to wait for", () => {
+    // The flag is what tells the shell that a title is still coming (#309), and
+    // it has to be readable from the route rather than from the screen: the
+    // screen can only report upward after it has rendered, by which time the
+    // announcement decision has already been made.
+    const dynamic = (routeTree.children ?? []).filter((route) => route.options.staticData?.dynamicTitle === true);
+    expect(dynamic.map((route) => route.fullPath)).toEqual(["/collections/$id"]);
+    for (const route of dynamic) {
+      // Still a key, because the key is what the page is called until the name
+      // lands and if it never does.
+      expect(route.options.staticData?.titleKey, `${route.fullPath} still needs a fallback title`).toBeTruthy();
     }
   });
 });

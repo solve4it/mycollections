@@ -1,6 +1,7 @@
 import { Link, useRouterState } from "@tanstack/react-router";
-import { type ReactNode, useEffect, useRef, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { isSamePageName, type PageName, PageNameProvider } from "../lib/page-title.js";
 import { Icon, type IconName } from "./Icon.js";
 
 const NAV_ITEM_DEFS: Array<{ to: "/collections" | "/settings"; labelKey: string; icon: IconName }> = [
@@ -35,16 +36,74 @@ function usePageTitleKey(): string | undefined {
   });
 }
 
+/**
+ * Which page is on screen (#309), as the deepest match's own interpolated
+ * pathname — `/collections/<id>`, telling two collections apart where the title
+ * key cannot, since they share one.
+ *
+ * The match's pathname, emphatically not `state.location.pathname`: the two are
+ * separate stores, and the location is pushed before the matches resolve, which
+ * is what makes a location-based guard describe the page being left. A match's
+ * pathname is interpolated when the match itself is built, so it is never ahead
+ * of the `staticData` read beside it here.
+ *
+ * A separate `select` from the two around it rather than one returning an
+ * object: each returns a primitive, so the subscription compares by value
+ * instead of re-rendering the shell on every router state change. All three are
+ * evaluated during the same render, so they cannot disagree about which page
+ * this is.
+ */
+function usePageId(): string | undefined {
+  return useRouterState({ select: (state) => state.matches[state.matches.length - 1]?.pathname });
+}
+
+/** Whether the matched route's screen publishes a title of its own (#309). */
+function useHasDynamicTitle(): boolean {
+  return useRouterState({ select: (state) => state.matches.some((match) => match.staticData.dynamicTitle === true) });
+}
+
 export function Shell({ children }: ShellProps) {
   const { t } = useTranslation("common");
   const titleKey = usePageTitleKey();
+  const pageId = usePageId();
+  const hasDynamicTitle = useHasDynamicTitle();
   const [announcement, setAnnouncement] = useState("");
+
+  /**
+   * The name the screen published for itself, if it has one yet (#309).
+   *
+   * Reset here, during render, rather than in an effect: an effect would leave
+   * one commit in which this still holds the *previous* page's answer while
+   * `pageId` already names the new one, and that commit is exactly where the
+   * announcement below is decided. Adjusting state when a value it derives from
+   * changes is React's documented alternative to that effect, and it costs a
+   * second render pass of this component before anything is committed.
+   */
+  const [pageName, setPageName] = useState<PageName>({ status: "pending" });
+  const [namedPageId, setNamedPageId] = useState(pageId);
+  if (namedPageId !== pageId) {
+    setNamedPageId(pageId);
+    setPageName({ status: "pending" });
+  }
+
+  // Compared by value, so a screen re-publishing the name it published last
+  // render — `usePageTitle` builds a fresh object every time — is not a state
+  // change and does not re-render the shell.
+  const publishPageName = useCallback((next: PageName) => {
+    setPageName((current) => (isSamePageName(current, next) ? current : next));
+  }, []);
 
   // Every route is a page for WCAG 2.4.2, and index.html has one static <title>
   // for all of them. The keys are namespaced ("settings:title"), which i18next
   // resolves through any `t`. Depending on the built string rather than on the
   // key is what makes the title follow a language change.
-  const pageTitle = titleKey ? t("page_title", { page: t(titleKey) }) : t("app_name");
+  //
+  // A published name wins over the route's key, which is the stand-in for as
+  // long as the screen has nothing better — while the query is in flight, and
+  // for good if it fails.
+  const routeTitle = titleKey ? t(titleKey) : undefined;
+  const page = pageName.status === "named" ? pageName.name : routeTitle;
+  const pageTitle = page ? t("page_title", { page }) : t("app_name");
   useEffect(() => {
     document.title = pageTitle;
   }, [pageTitle]);
@@ -59,27 +118,39 @@ export function Shell({ children }: ShellProps) {
    * text already inside is announced by VoiceOver but usually not by NVDA or
    * JAWS.
    *
-   * Guarded on the previous key rather than an `isFirstRender` ref, which would
+   * Guarded on the previous page rather than an `isFirstRender` ref, which would
    * not survive StrictMode: the simulated remount preserves refs, so the second
    * pass would see `false` and announce the page the user just loaded. Comparing
    * values is idempotent — the replay finds them equal and returns.
    *
-   * The key, not the pathname: `location.pathname` updates a render before the
-   * matches resolve, so a pathname guard announces the page being left. And not
-   * the translated title either, which would announce the current page again
-   * every time the language changes.
+   * That page is `pageId`, the matched route's own pathname, and was the title
+   * key until the title stopped being static (#309): two collections share one
+   * key, so moving between them announced nothing — harmless only for as long as
+   * both were called "Collection". Not `location.pathname`, which updates a
+   * render before the matches resolve and so announces the page being left. And
+   * not the translated title, which would announce the current page again every
+   * time the language changes.
    *
-   * The cost is that moving between two routes that share a key — one collection
-   * to another — announces nothing. It would have announced the same words
-   * either way, and an unchanged live region does not re-fire; the fix is a
-   * title carrying the collection's own name, which is a follow-up on #24.
+   * `settled` is the other half. A page that names itself has published nothing
+   * yet on the commit it arrives in, and announcing the stand-in there would
+   * both say the wrong words and latch the guard, so the collection's real name
+   * would never be announced at all. So the announcement waits — but only where
+   * the route declared `dynamicTitle`, or a page that never publishes would wait
+   * forever. `pageName` is reset above during the render that changes `pageId`,
+   * so this can only ever be reading the current page's answer.
+   *
+   * A query that never settles therefore means no announcement rather than a
+   * wrong one; see "Query state on the web" in DEVELOPMENT.md for what the app
+   * treats as pending indefinitely.
    */
-  const previousTitleKey = useRef(titleKey);
+  const settled = !hasDynamicTitle || pageName.status !== "pending";
+  const announcedPageId = useRef(pageId);
   useEffect(() => {
-    if (previousTitleKey.current === titleKey) return;
-    previousTitleKey.current = titleKey;
+    if (announcedPageId.current === pageId) return;
+    if (!settled) return;
+    announcedPageId.current = pageId;
     setAnnouncement(pageTitle);
-  }, [titleKey, pageTitle]);
+  }, [pageId, settled, pageTitle]);
 
   /**
    * __root.tsx keys the screen wrapper by pathname so the entrance animation
@@ -145,8 +216,11 @@ export function Shell({ children }: ShellProps) {
             scroll to a fragment target but leave focus behind unless the target
             can hold it, so without this the link moves the viewport and nothing
             else (WCAG 2.4.1). -1 keeps it out of the tab order. */}
+        {/* The provider adds no element of its own — it is how the screen inside
+            hands its own name back out to the title and the announcement
+            above (#309). */}
         <main className="shell-main" id="main-content" tabIndex={-1} ref={mainRef}>
-          {children}
+          <PageNameProvider publish={publishPageName}>{children}</PageNameProvider>
         </main>
 
         <nav className="shell-bottom-nav" aria-label={t("aria_bottom_nav")}>
