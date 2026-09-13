@@ -14,7 +14,7 @@
     "predev": "node scripts/copy-shared-docs.mjs",
     "dev": "astro dev",
     "prebuild": "node scripts/copy-shared-docs.mjs",
-    "build": "astro build",
+    "build": "node scripts/build.mjs",
     "postbuild": "node scripts/check-built-links.mjs && node scripts/check-built-pages.mjs",
     "preview": "astro preview",
     "typecheck": "astro check",
