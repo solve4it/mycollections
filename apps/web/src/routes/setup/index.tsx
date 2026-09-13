@@ -38,12 +38,14 @@ function SetupPage() {
       <p>{t("description")}</p>
       {/* Not role="alert": nothing has failed, and the danger treatment in
           global.css is scoped to that role. The token still works — it just
-          will not outlive the tab. */}
-      {!canRemember && (
-        <p role="status" className="form-hint">
-          {t("no_persistence_notice")}
-        </p>
-      )}
+          will not outlive the tab.
+
+          Not role="status" either (#326). Storage is probed once, in the lazy
+          initializer above, so this notice is in the screen's first commit or in
+          none of them — and a live region that arrives with the page announces
+          nothing. The role bought no announcement and made every page-level
+          status query ambiguous. */}
+      {!canRemember && <p className="form-hint">{t("no_persistence_notice")}</p>}
       <form onSubmit={handleSubmit}>
         {/* The row wrapper is not decoration: every input rule in the stylesheet
             is scoped to .form-row, so without it the first screen a new user

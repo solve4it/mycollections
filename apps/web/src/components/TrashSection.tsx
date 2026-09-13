@@ -35,14 +35,33 @@ export function TrashSection() {
       <h2>{t("trash_label")}</h2>
       <p>{t("trash_description")}</p>
       <TrashContents locale={locale} query={trash} onEmpty={() => emptyTrash.mutate()} pending={emptyTrash.isPending} />
-      {emptyTrash.isSuccess && (
-        <p role="status">
-          {t("trash_emptied", {
-            collections: t("trash_count_collections", { count: emptyTrash.data.collections }),
-            items: t("trash_count_items", { count: emptyTrash.data.items }),
-          })}
-        </p>
-      )}
+      {/* Always rendered, never conditional (#326). The confirmation used to be a
+          `role="status"` node created with its text already inside it, and a live
+          region inserted with content is announced by VoiceOver but usually not by
+          NVDA or JAWS — so the one sentence saying how much was destroyed was the
+          one a large share of screen-reader users never heard.
+
+          It lives here, in the section, rather than inside TrashContents: that
+          component returns three different shapes, so a region parked in it would
+          be torn down and rebuilt whenever the branch changed, and a rebuilt
+          region is the bug again.
+
+          No role on the region and none on the message inside it: `role="status"`
+          implies `aria-live`, so a role on the message would make the message the
+          nearest live region for its own insertion and lose the announcement. No
+          `aria-atomic` — the region holds one message at a time either way. And
+          the failure below stays outside, keeping `role="alert"` as a live region
+          of its own rather than inheriting a polite owner. */}
+      <div className="trash-live" aria-live="polite">
+        {emptyTrash.isSuccess && (
+          <p>
+            {t("trash_emptied", {
+              collections: t("trash_count_collections", { count: emptyTrash.data.collections }),
+              items: t("trash_count_items", { count: emptyTrash.data.items }),
+            })}
+          </p>
+        )}
+      </div>
       {emptyTrash.isError && <p role="alert">{t("trash_empty_error")}</p>}
     </section>
   );
@@ -66,7 +85,12 @@ function TrashContents({ query, locale, onEmpty, pending }: TrashContentsProps) 
 
   if (trash === undefined) {
     if (query.error) return <p role="alert">{t("trash_error")}</p>;
-    return <p role="status">{t("trash_loading")}</p>;
+    // Not a live region (#326). `useTrash` keeps its data while it fetches again, so
+    // this branch cannot be reached again once the trash has loaded: the message
+    // is in the section's first commit or in none of them, and a live region
+    // that arrives with the page announces nothing. The role only made
+    // page-level status queries ambiguous.
+    return <p>{t("trash_loading")}</p>;
   }
 
   if (trash.collections.length === 0 && trash.items.length === 0) return <p>{t("trash_empty")}</p>;

@@ -74,14 +74,24 @@ describe("SetupPage", () => {
       throw new DOMException("denied", "SecurityError");
     });
     renderSetup();
-    const notice = await screen.findByRole("status");
-    expect(notice.textContent).toMatch(/will not let mycollections remember your token/i);
+    const notice = await screen.findByText(/will not let mycollections remember your token/i);
+    // A plain hint, not a live region (#326). Whether storage works is probed
+    // once, in a lazy `useState` initializer, so this notice is either in the
+    // screen's first commit or never rendered at all — and a live region that
+    // arrives with the page announces nothing. `role="status"` here bought no
+    // announcement and made every page-level status query ambiguous.
+    expect(notice).not.toHaveAttribute("role");
+    expect(notice).toHaveClass("form-hint");
   });
 
   it("says nothing about persistence when storage works", async () => {
     renderSetup();
     await screen.findByLabelText(/api token/i);
-    expect(screen.queryByRole("status")).toBeNull();
+    // Queried by text, not by role: once the notice is a plain hint, a
+    // `queryByRole("status")` here would pass against a notice rendered
+    // unconditionally — it would be asserting that nothing on /setup has a role
+    // it no longer uses.
+    expect(screen.queryByText(/will not let mycollections remember your token/i)).toBeNull();
   });
 
   it("still lets the user connect when storage is denied", async () => {

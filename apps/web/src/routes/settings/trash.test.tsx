@@ -73,6 +73,20 @@ async function trashSection(): Promise<HTMLElement> {
   return section;
 }
 
+/**
+ * The trash section's live region (#326). Queried by class, not by role or by a
+ * bare `[aria-live]`: the region carries `aria-live` and no `role="status"`, and
+ * this file renders the real root route, so the shell's announcer and the Data
+ * section's import region are both in the same document.
+ */
+function trashLiveRegion(): HTMLElement {
+  const regions = document.querySelectorAll<HTMLElement>(".trash-live");
+  expect(regions, "the page must own exactly one trash live region").toHaveLength(1);
+  const region = regions[0];
+  if (!region) throw new Error("no trash live region");
+  return region;
+}
+
 /** The <li> whose text names `text`, once it has loaded. Row-scoped queries keep one row's buttons out of another's. */
 async function row(text: string): Promise<HTMLElement> {
   const section = await trashSection();
@@ -228,10 +242,70 @@ describe("Settings empty trash", () => {
 
     await waitFor(() => expect(emptyTrash).toHaveBeenCalledTimes(1));
     await waitFor(() =>
-      expect(within(section).getByRole("status")).toHaveTextContent(
-        "Emptied the trash: removed 2 collections and 5 items.",
-      ),
+      expect(trashLiveRegion()).toHaveTextContent("Emptied the trash: removed 2 collections and 5 items."),
     );
+  });
+
+  it("fills a live region that was already in the document, rather than inserting one with its message inside (#326)", async () => {
+    // The sequence is the whole point, so it is asserted as a sequence: a region
+    // that appears already holding its text is announced by VoiceOver but
+    // usually not by NVDA or JAWS, and a test that only inspected the final DOM
+    // would pass against exactly that bug.
+    vi.mocked(emptyTrash).mockResolvedValue({ collections: 2, items: 5 });
+    vi.mocked(listTrash)
+      .mockResolvedValueOnce({ collections: [RECORDS], items: [DUNE] })
+      .mockResolvedValue({ collections: [], items: [] });
+
+    renderSettings();
+    const section = await trashSection();
+    await within(section).findByRole("button", { name: "Empty trash" });
+
+    const before = trashLiveRegion();
+    expect(before).toHaveAttribute("aria-live", "polite");
+    // No role="status" on the region: a role implies `aria-live`, so the message
+    // would become the nearest live region for its own insertion and the
+    // announcement would be lost rather than doubled.
+    expect(before).not.toHaveAttribute("role");
+    expect(before).not.toHaveAttribute("aria-atomic");
+    expect(before, "the region must already be in the document, and empty").toBeEmptyDOMElement();
+
+    fireEvent.click(within(section).getByRole("button", { name: "Empty trash" }));
+    fireEvent.click(within(section).getByRole("button", { name: "Empty trash" }));
+
+    await waitFor(() => expect(trashLiveRegion()).toHaveTextContent("Emptied the trash"));
+    // Identity, not shape: a region torn down and rebuilt with the message in it
+    // satisfies every "the text is there" assertion and announces nothing.
+    expect(trashLiveRegion(), "the message must land in the node that was already there").toBe(before);
+    // And the message inside carries no role of its own, for the same reason.
+    expect(within(before).getByText(/emptied the trash/i)).not.toHaveAttribute("role");
+  });
+
+  it("keeps the live region out of the branch that swaps between loading, error, and the lists", async () => {
+    // The region has to be a direct child of the section, not of the component
+    // that returns three different shapes: parked inside that, it would be torn
+    // down and rebuilt whenever the branch changed, losing the identity the
+    // announcement depends on. Its one constant is the section itself.
+    vi.mocked(listTrash).mockReturnValue(new Promise(() => {}));
+    renderSettings();
+    const section = await trashSection();
+
+    const whileLoading = trashLiveRegion();
+    expect(whileLoading.parentElement).toBe(section);
+    expect(whileLoading).toBeEmptyDOMElement();
+  });
+
+  it("does not make the loading message a live region — it is only ever in the section's first commit (#326)", async () => {
+    // `useTrash` keeps its data while it fetches again, so this branch cannot return
+    // once the trash has loaded: the message is in the section's first commit or
+    // not at all, and a live region that arrives with the page announces
+    // nothing. The role only made page-level status queries ambiguous.
+    vi.mocked(listTrash).mockReturnValue(new Promise(() => {}));
+    renderSettings();
+    const section = await trashSection();
+
+    const loading = await within(section).findByText("Loading the trash…");
+    expect(loading).not.toHaveAttribute("role");
+    expect(loading.closest(".trash-live"), "the loading message is not inside the live region").toBeNull();
   });
 
   it("offers nothing to empty when the trash is already empty", async () => {

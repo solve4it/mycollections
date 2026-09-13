@@ -148,8 +148,31 @@ function SettingsPage() {
             onChange={handleImportFile}
           />
         </div>
-        {importData.isPending && <p role="status">{t("import_pending")}</p>}
-        {importData.isSuccess && <p role="status">{t("import_success", { ...importData.data })}</p>}
+        {/* Always rendered, never conditional (#326). Both messages used to be
+            `role="status"` nodes created with their text already inside them,
+            and a live region inserted with content is announced by VoiceOver but
+            usually not by NVDA or JAWS — so an import's progress, and its
+            result, were announced to a fraction of the readers who needed them.
+            The region is here from the section's first commit, empty, and the
+            words arrive in it.
+
+            No role on the region and none on what lands inside: `role="status"`
+            implies `aria-live`, so a role on the message would make the message
+            the nearest live region for its own insertion and lose the
+            announcement. No `aria-atomic` either — the pending line is replaced
+            in place by the summary, and atomic would re-read the whole region
+            rather than what changed.
+
+            No layout wrapper, unlike the undo toast's: this region is in normal
+            flow with nothing to position, and an empty one is zero-height.
+
+            The failure stays outside it. `role="alert"` is a live region in its
+            own right, and a live region nested in a live region owns its own
+            subtree, so the polite one would never speak for it. */}
+        <div className="import-live" aria-live="polite">
+          {importData.isPending && <p>{t("import_pending")}</p>}
+          {importData.isSuccess && <p>{t("import_success", { ...importData.data })}</p>}
+        </div>
         {importFailed && <p role="alert">{t("import_error")}</p>}
       </section>
 

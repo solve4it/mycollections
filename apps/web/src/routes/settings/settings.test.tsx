@@ -40,15 +40,29 @@ function renderSettings() {
 }
 
 /**
- * The Data section. Import progress is asserted inside it because the page now
- * holds a second live region — the Trash section announces its own load — and a
- * page-wide `role="status"` query would let one answer for the other.
+ * The Data section. Import messages are asserted inside it because the page owns
+ * more than one live region — the Trash section has its own — and a page-wide
+ * query would let one answer for the other.
  */
 async function dataSection(): Promise<HTMLElement> {
   const heading = await screen.findByRole("heading", { name: "Data" });
   const section = heading.closest("section");
   if (!section) throw new Error("Data heading is not inside a section");
   return section;
+}
+
+/**
+ * The import's live region (#326). Queried by class, not by role or by a bare
+ * `[aria-live]`: the region carries `aria-live` and no `role="status"`, and this
+ * file renders the real root route, so the shell's announcer and the Trash
+ * section's region are both in the same document.
+ */
+function importLiveRegion(): HTMLElement {
+  const regions = document.querySelectorAll<HTMLElement>(".import-live");
+  expect(regions, "the page must own exactly one import live region").toHaveLength(1);
+  const region = regions[0];
+  if (!region) throw new Error("no import live region");
+  return region;
 }
 
 function selectFile(input: HTMLElement, contents: string, name = "backup.json") {
@@ -281,9 +295,47 @@ describe("SettingsPage data import", () => {
     selectFile(input, JSON.stringify({ version: 1, exportedAt: "x", collections: [], items: [] }));
 
     await waitFor(() => expect(importData).toHaveBeenCalledTimes(1));
-    const status = await within(await dataSection()).findByRole("status");
-    expect(status).toHaveTextContent(/imported 2 collections and 5 items/i);
-    expect(status).toHaveTextContent(/1 collections and 3 items already present were skipped/i);
+    await waitFor(() => expect(importLiveRegion()).toHaveTextContent(/imported 2 collections and 5 items/i));
+    expect(importLiveRegion()).toHaveTextContent(/1 collections and 3 items already present were skipped/i);
+  });
+
+  it("fills a live region that was already in the document, rather than inserting one with its message inside (#326)", async () => {
+    // The sequence is the whole point, so it is asserted as a sequence: a region
+    // that appears already holding its text is announced by VoiceOver but
+    // usually not by NVDA or JAWS, and a test that only inspected the final DOM
+    // would pass against exactly that bug.
+    const inFlight = deferred<ImportSummary>();
+    vi.mocked(importData).mockReturnValue(inFlight.promise);
+
+    renderSettings();
+    const input = await screen.findByLabelText(/choose backup file/i);
+
+    const before = importLiveRegion();
+    expect(before).toHaveAttribute("aria-live", "polite");
+    // No role="status" on the region: a role implies `aria-live`, so the nearest
+    // live region for the message's own insertion would be the message itself,
+    // and the announcement would be lost rather than doubled. Leaving it off
+    // also keeps `getByRole("status")` pointed at the loading skeletons.
+    expect(before).not.toHaveAttribute("role");
+    // Nor `aria-atomic`: the pending text is replaced in place by the summary,
+    // and atomic would re-read the whole region instead of what changed.
+    expect(before).not.toHaveAttribute("aria-atomic");
+    expect(before, "the region must already be in the document, and empty").toBeEmptyDOMElement();
+
+    selectFile(input, JSON.stringify({ version: 1, exportedAt: "x", collections: [], items: [] }));
+
+    await waitFor(() => expect(importLiveRegion()).toHaveTextContent("Importing your backup…"));
+    // Identity, not shape: a region torn down and rebuilt with the message in it
+    // satisfies every "the text is there" assertion and announces nothing.
+    expect(importLiveRegion(), "the pending message must land in the node that was already there").toBe(before);
+    // And the message inside carries no role of its own, for the same reason.
+    const pending = within(before).getByText("Importing your backup…");
+    expect(pending).not.toHaveAttribute("role");
+
+    inFlight.settle(IMPORT_SUMMARY);
+
+    await waitFor(() => expect(importLiveRegion()).toHaveTextContent(/imported 2 collections and 5 items/i));
+    expect(importLiveRegion(), "the summary must replace the pending text in the same node").toBe(before);
   });
 
   it("rejects a file that is not valid JSON", async () => {
@@ -303,12 +355,12 @@ describe("SettingsPage data import", () => {
     const input = await screen.findByLabelText(/choose backup file/i);
     selectFile(input, JSON.stringify({ version: 1, exportedAt: "x", collections: [], items: [] }));
 
-    const data = within(await dataSection());
-    expect(await data.findByRole("status")).toHaveTextContent("Importing your backup…");
+    await screen.findByLabelText(/choose backup file/i);
+    await waitFor(() => expect(importLiveRegion()).toHaveTextContent("Importing your backup…"));
 
     inFlight.settle(IMPORT_SUMMARY);
 
-    await waitFor(() => expect(data.getByRole("status")).toHaveTextContent(/imported 2 collections and 5 items/i));
+    await waitFor(() => expect(importLiveRegion()).toHaveTextContent(/imported 2 collections and 5 items/i));
     expect(screen.queryByText("Importing your backup…")).not.toBeInTheDocument();
   });
 
@@ -338,12 +390,20 @@ describe("SettingsPage data import", () => {
     selectFile(input, JSON.stringify({ version: 1, exportedAt: "x", collections: [], items: [] }));
 
     const data = within(await dataSection());
-    expect(await data.findByRole("status")).toHaveTextContent("Importing your backup…");
+    const before = importLiveRegion();
+    await waitFor(() => expect(importLiveRegion()).toHaveTextContent("Importing your backup…"));
 
     inFlight.fail(new Error("500"));
 
     expect(await data.findByRole("alert")).toHaveTextContent(/import failed/i);
-    expect(data.queryByRole("status")).not.toBeInTheDocument();
+    // The region stays — the same node, emptied. Asserting "no status role in
+    // the section" would pass vacuously now that nothing here carries one, and
+    // would not notice the region being torn down. Emptying it is also what
+    // stops the announcement: a polite region's default relevance is
+    // "additions text", so removing the pending words says nothing, and the
+    // failure is spoken by the `role="alert"` beside the region instead.
+    expect(importLiveRegion()).toBe(before);
+    expect(importLiveRegion()).toBeEmptyDOMElement();
     expect(input).toBeEnabled();
   });
 
