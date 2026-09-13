@@ -642,6 +642,56 @@ p[role="alert"] {
   outline: none;
 }
 
+/* Not found (#344) — "this address is not filed here".
+
+   Deliberately none of the failure treatment above. A 404 is not a failure of
+   the app: nothing threw, no request failed, and the user's collections are
+   where they left them. So there is no [role="alert"] on this screen and
+   therefore none of the --danger ink — the title stays in --ink and the
+   explanation in --ink-muted, the same calm register as .empty-state. The two
+   are drawn as separate blocks rather than one shared class because they say
+   different things: "there is nothing here yet, here is how to fill it" against
+   "there is nothing at this address". */
+.not-found {
+  text-align: center;
+  padding: var(--space-6) var(--space-4);
+  color: var(--ink-muted);
+}
+
+/* The mark inherits the screen's muted ink through currentColor, so it has no
+   color of its own to keep in step with the theme. */
+.not-found-mark {
+  inline-size: 72px;
+  block-size: 64px;
+  margin-bottom: var(--space-3);
+}
+
+/* The page's only <h1>, so it is sized as one rather than reusing the empty
+   state's 1.25rem: this screen is the whole page and has nothing above it. */
+.not-found h1 {
+  margin: 0 0 var(--space-2);
+  font-size: 1.5rem;
+  color: var(--ink);
+}
+
+/* Measured copy, centered, with air under it for the actions that follow. */
+.not-found p {
+  margin: 0 auto var(--space-4);
+  max-width: 46ch;
+}
+
+/* Centered rather than left-aligned like .failure-actions: everything above it
+   on this screen is centered, and a left-aligned row under centered copy reads
+   as a mistake. Wraps so the two controls stack at 390px instead of shrinking
+   below the 44px target. */
+.not-found-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+}
+
 /* Collection grid + cards (#223). A card is a catalog entry: generated cover on
    top, then the typewritten eyebrow, then the name. 260px rather than 240px
    because the 5:3 cover gives every card real height — at 240 the grid packs
