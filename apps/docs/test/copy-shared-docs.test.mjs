@@ -53,3 +53,37 @@ describe("copySharedDocs", () => {
     expect((await readdir(join(dest, "assets"))).sort()).toEqual(["logo.png", "screens"]);
   });
 });
+
+describe("nested Markdown", () => {
+  it("refuses to skip a Markdown file in a subdirectory, naming it", async () => {
+    await mkdir(join(src, "plugins"), { recursive: true });
+    await writeFile(join(src, "plugins", "lego.md"), "# Lego\n");
+
+    await expect(copySharedDocs(src, dest)).rejects.toThrow(/docs\/plugins\/lego\.md/);
+  });
+
+  it("names every skipped file, however deep", async () => {
+    await mkdir(join(src, "plugins", "sets"), { recursive: true });
+    await writeFile(join(src, "plugins", "audio.md"), "# Audio\n");
+    await writeFile(join(src, "plugins", "sets", "finite.mdx"), "# Finite\n");
+
+    await expect(copySharedDocs(src, dest)).rejects.toThrow(
+      /docs\/plugins\/audio\.md[\s\S]*docs\/plugins\/sets\/finite\.mdx/,
+    );
+  });
+
+  it("says top-level Markdown only, so the message explains the rule", async () => {
+    await mkdir(join(src, "plugins"), { recursive: true });
+    await writeFile(join(src, "plugins", "lego.md"), "# Lego\n");
+
+    await expect(copySharedDocs(src, dest)).rejects.toThrow(/top-level Markdown only/);
+  });
+
+  it("ignores non-Markdown in a subdirectory, and Markdown inside assets/", async () => {
+    await mkdir(join(src, "drafts"), { recursive: true });
+    await writeFile(join(src, "drafts", "notes.txt"), "not a page\n");
+    await writeFile(join(src, "assets", "credits.md"), "image credits, traveling with the assets\n");
+
+    expect(await copySharedDocs(src, dest)).toEqual({ docs: 1, assets: 3 });
+  });
+});
