@@ -50,6 +50,17 @@ export class ApiFixture {
   }
 
   /**
+   * The API's own backup of whatever is currently stored, so a spec that drives
+   * the import UI feeds it a document the server actually produced rather than
+   * a hand-built one that could drift from the schema.
+   */
+  async exportDocument(): Promise<string> {
+    const res = await this.request.get(`${API_URL}/api/export`, { headers: this.headers });
+    expect(res.status(), "exporting a backup").toBe(200);
+    return await res.text();
+  }
+
+  /**
    * Empties the API. "No collections yet" is a fact about the whole database
    * rather than about one spec, so a spec asserting it has to say so first.
    */

@@ -386,9 +386,11 @@ focus to `<main>` when — and only when — that has happened.
 ### Live regions the announcer cannot carry
 
 The announcer is hidden and holds no controls, so a message that has to be **seen**, or that comes
-with something to **press**, needs a region of its own. The undo toast is the one in the app: the
-words "Deleted …" and the Undo button have to stay together on screen. The rule such a region has
-to follow is the same one, met differently — persistent and empty, never conditional:
+with something to **press**, needs a region of its own. There are three: the undo toast, whose
+words "Deleted …" and Undo button have to stay together on screen (`routes/collections/$id.tsx`);
+the import's progress and result on Settings (`.import-live`); and the trash's emptied
+confirmation (`.trash-live`). The rule such a region has to follow is the same one, met
+differently — persistent and empty, never conditional:
 
 - **Render the region unconditionally, and put the message inside it later.** `routes/collections/$id.tsx`
   keeps `.undo-toast-region` in the tree whether or not a toast is open; only the toast inside it is
@@ -401,14 +403,32 @@ to follow is the same one, met differently — persistent and empty, never condi
 - **No role on the region, and none on the thing that arrives in it.** `role="status"` implies
   `aria-live="polite"`, so a role on the toast would make the toast the nearest live region for its
   own insertion — the announcement would be lost, not doubled. Leaving the role off also keeps
-  page-level `getByRole("status")` queries pointed at the loading skeletons, which use it.
+  page-level `getByRole("status")` queries pointed at the loading skeletons, which are now the only
+  thing in the app carrying that role (`components/Skeleton.tsx`).
+- **Give the region a class, and query it by that.** Three polite regions share `/settings` with the
+  shell's announcer, so a bare `[aria-live="polite"]` locator is ambiguous in both Vitest (which
+  renders the real root route) and Playwright. `.undo-toast-live`, `.import-live` and `.trash-live`
+  exist to be named.
+- **A message that cannot change is not a live region at all.** A notice decided once — the setup
+  screen's "storage will not remember your token", Settings' session-only token hint, the trash's
+  loading line — is in its screen's first commit or in none of them, so `role="status"` on it buys
+  no announcement and makes every page-level status query ambiguous. Demote it to a plain `<p>`
+  (`.form-hint` where the styling applies). The test to write is that it carries *no* role, found
+  by its text: a `queryByRole("status")` assertion goes vacuous the moment the role is gone.
+- **Only layout needs a wrapper.** `.undo-toast-region` exists because the toast is `position:
+  fixed` with `pointer-events` juggling. A region in normal flow — the two on Settings — is one
+  element; an empty one is zero-height and its child's margins collapse straight through it.
 - **No `aria-atomic` unless the whole region is one string.** The shell's announcer replaces one
   string wholesale, so atomic is right there. A region whose content is replaced in place — a second
   delete renaming the toast — would re-read the entire toast instead of the name that changed.
 - **Scan the open state.** An interactive state no route-level scan reaches gets its own scan in
   `apps/web/e2e/a11y.spec.ts`, with the region asserted empty before the action and filled after.
-  If the state times out, hold it open (the toast's timer stops while the pointer is over it) rather
-  than racing the scan.
+  This is the only place the mechanism is proven in a real browser — jsdom has no accessibility tree
+  at all. If the state times out, hold it open (the toast's timer stops while the pointer is over
+  it) rather than racing the scan.
+- **Assert the sequence, by node identity.** `expect(region()).toBe(before)` is what fails when a
+  region is torn down and rebuilt with its text inside; every assertion about the final DOM passes
+  against exactly the bug this rule exists to prevent.
 
 ### The document language and direction
 
