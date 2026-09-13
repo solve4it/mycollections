@@ -310,6 +310,64 @@ test.describe("accessibility", () => {
   });
 
   /**
+   * The state a route-level sweep can never reach because it is not a state the
+   * app is supposed to have: a screen that threw while rendering (#319).
+   *
+   * Provoked with a poisoned payload rather than a throwing test route, because
+   * this suite runs the production bundle (`playwright.config.ts` builds and
+   * previews it) and a route that exists only for a test does not exist in it.
+   * `collection.fields.map` in `routes/collections/$id.tsx` throws on null, and
+   * nothing between the response and the render validates the shape. The glob
+   * matches `/api/collections/<id>` and not its `/items`, so everything else on
+   * the screen loads exactly as it always does.
+   *
+   * Worth a scan of its own on two counts: the error surface is the one screen
+   * with no author watching it, and before #319 what rendered here was the
+   * router's built-in fallback — unstyled, untranslated, outside the shell, and
+   * holding the error message.
+   */
+  test("a screen that crashed while rendering", async ({ page, api }) => {
+    await api.reset();
+    const collection = await api.createCollection({ name: "Vinyl records", fields: FIELDS });
+    await api.createItem(collection.id, { title: "Kind of Blue", year: 1959, signed: true }, "owned");
+
+    await page.route("**/api/collections/*", async (route) => {
+      const response = await route.fetch();
+      await route.fulfill({ response, json: { ...(await response.json()), fields: null } });
+    });
+
+    await page.goto(`/collections/${collection.id}`);
+    await expect(page).toHaveURL(`/collections/${collection.id}`);
+
+    const alert = page.getByRole("alert");
+    await expect(alert).toContainText("Something went wrong");
+
+    // Focus is the announcement here, and the only one available: the whole
+    // match subtree is replaced, so there is no persistent region to fill
+    // afterwards the way #308 and #326 require of every other message.
+    await expect(alert, "the crash orphaned focus, so the surface must take it").toBeFocused();
+
+    // The internals stay off the screen. Asserted on the runtime's own words for
+    // this throw, so a fallback that leaked the message could not pass.
+    await expect(page.locator("body")).not.toContainText("Cannot read properties of null");
+    await expect(page.getByRole("button", { name: "Show Error" })).toHaveCount(0);
+
+    // The route's boundary replaces the screen, not the app: the cabinet is
+    // still standing around it. Asserted on the shell rather than on a named
+    // nav, because which of the two the user has depends on the viewport this
+    // project runs at.
+    await expect(page.locator(".shell")).toBeVisible();
+    await expect(page.locator("main#main-content")).toContainText("Something went wrong");
+
+    await expectNoAccessibilityViolations(page);
+
+    // The way out, operated the way a keyboard user operates it.
+    await page.getByRole("link", { name: "Back to collections" }).press("Enter");
+    await expect(page).toHaveURL(/\/collections$/);
+    await expect(page.getByRole("link", { name: /Vinyl records/ })).toBeVisible();
+  });
+
+  /**
    * The two Settings states no route-level sweep reaches, and the two regions
    * #326 gave a persistent host (#308's rule, applied to the rest of the app).
    *

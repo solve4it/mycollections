@@ -26,8 +26,8 @@ function only(selector: string) {
 
 describe("alert styling", () => {
   it("writes every alert in danger ink, whatever element carries the role", () => {
-    // Attached to the role, not a class: eleven alert sites across five routes
-    // pick the treatment up at once, and a new route cannot forget it.
+    // Attached to the role, not a class: every alert site picks the treatment up
+    // at once, and a new route — or a new failure screen (#319) — cannot forget it.
     expect(declaration(only('[role="alert"]').body, "color")).toBe("var(--danger)");
   });
 

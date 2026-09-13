@@ -590,10 +590,10 @@ button[type="submit"]:disabled {
   margin-bottom: 0;
 }
 
-/* Failure surfaces (#264). Attached to the role rather than to a class, so all
-   eleven alert sites across five routes pick the treatment up at once and a new
-   route cannot forget it. role="status" is deliberately untouched — it carries
-   loading and success messages, and danger styling on those would be a lie. */
+/* Failure surfaces (#264). Attached to the role rather than to a class, so every
+   alert site picks the treatment up at once and a new route — or a new failure
+   screen (#319) — cannot forget it. role="status" is deliberately untouched — it
+   carries loading and success messages, and danger styling on those would be a lie. */
 [role="alert"] {
   color: var(--danger);
 }
@@ -619,6 +619,27 @@ p[role="alert"] {
   background: var(--danger-surface);
   padding: var(--space-2) var(--space-3);
   border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+}
+
+/* The two failure screens (#319): the route error inside the shell, and the
+   last-resort screen that replaces it. Only the layout is here — the ink, and
+   the muted explanation under the title, come from the [role="alert"] rules
+   above, which is the point of attaching that treatment to the role. */
+.failure-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+  margin-top: var(--space-4);
+}
+
+/* Focused programmatically when a crash orphans focus (components/ErrorScreen.tsx),
+   never by Tab — the same case as .shell-main above, and the same conclusion: a
+   ring around a page-sized container is a stray stripe, not an indicator, and a
+   tabindex="-1" container is not a user interface component under WCAG 2.4.7.
+   The controls inside it keep every ring they have. */
+.failure-surface:focus {
+  outline: none;
 }
 
 /* Collection grid + cards (#223). A card is a catalog entry: generated cover on

@@ -1,7 +1,7 @@
 import type { ErrorReporter } from "@mycollections/core";
 import { Component, type ErrorInfo, type ReactNode } from "react";
-import { useTranslation } from "react-i18next";
 import { errorReporter } from "../lib/error-reporter.js";
+import { AppErrorScreen } from "./ErrorScreen.js";
 
 interface ErrorBoundaryProps {
   children: ReactNode;
@@ -13,8 +13,11 @@ interface ErrorBoundaryState {
 }
 
 /**
- * Last-resort boundary for errors outside the router (route render errors are
- * caught by TanStack Router first — see defaultOnCatch in router.ts).
+ * Last-resort boundary for errors outside the router — route render errors are
+ * caught by the router's own per-route boundary first (see `defaultErrorComponent`
+ * in router.ts), and a throw in the root route by the root's `errorComponent`.
+ * What is left for this one is a throw from the providers above the router, or
+ * from the router itself.
  */
 export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
   state: ErrorBoundaryState = { hasError: false };
@@ -31,20 +34,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
   }
 
   render(): ReactNode {
-    if (this.state.hasError) return <ErrorFallback />;
+    if (this.state.hasError) return <AppErrorScreen />;
     return this.props.children;
   }
-}
-
-function ErrorFallback() {
-  const { t } = useTranslation("common");
-  return (
-    <div role="alert">
-      <h1>{t("error_title")}</h1>
-      <p>{t("error_message")}</p>
-      <button type="button" className="touch-target" onClick={() => window.location.reload()}>
-        {t("error_reload")}
-      </button>
-    </div>
-  );
 }

@@ -1,11 +1,40 @@
-import { createRouter } from "@tanstack/react-router";
+import { type AnyRoute, createRouter, type RouterHistory } from "@tanstack/react-router";
+import { RouteError } from "./components/ErrorScreen.js";
 import { onRouterCatch } from "./lib/error-reporter.js";
 import { routeTree } from "./routeTree.js";
 
-// The router wraps every route in its own catch boundary, so route render
-// errors never reach a boundary around <RouterProvider>; defaultOnCatch is
-// the hook that sees them.
-export const router = createRouter({ routeTree, defaultOnCatch: onRouterCatch });
+interface AppRouterOverrides {
+  routeTree?: AnyRoute;
+  history?: RouterHistory;
+}
+
+/**
+ * The router, and the seam that lets a test substitute the route tree while
+ * keeping every option that decides what happens to a throw (#319).
+ *
+ * `defaultErrorComponent` is not decoration, and pairing it with
+ * `defaultOnCatch` is not belt-and-braces: TanStack mounts a route's catch
+ * boundary only where an error component resolves for that match
+ * (`Match.js` — `routeErrorComponent ? CatchBoundary : SafeFragment`), and
+ * `defaultOnCatch` *is* that boundary's `componentDidCatch`. Configure only the
+ * handler, as this app did until #319, and it can never be called: the throw
+ * passes every route to the router's own global boundary, which reports nothing
+ * and renders the library's built-in error UI — `error.message` in a red `<pre>`.
+ *
+ * Route render errors therefore never reach the `<ErrorBoundary>` around
+ * `<RouterProvider>`; the root route's own `errorComponent` (routes/__root.tsx)
+ * is what catches a throw in the shell itself.
+ */
+export function createAppRouter({ routeTree: tree = routeTree, history }: AppRouterOverrides = {}) {
+  return createRouter({
+    routeTree: tree,
+    defaultOnCatch: onRouterCatch,
+    defaultErrorComponent: RouteError,
+    ...(history ? { history } : {}),
+  });
+}
+
+export const router = createAppRouter();
 
 declare module "@tanstack/react-router" {
   interface Register {

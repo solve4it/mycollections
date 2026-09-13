@@ -142,20 +142,23 @@ while `--focus-on-cabinet` gives 6.08:1.
 
 ## Failure surfaces (#264)
 
-Error styling attaches to `[role="alert"]`, not to a class, so all eleven alert sites across
-five routes pick it up at once and a new route cannot forget it. `role="status"` is deliberately
-untouched — it carries loading and success messages, and danger styling there would be a lie.
+Error styling attaches to `[role="alert"]`, not to a class, so every alert site in the app picks
+it up at once and a new route — or a new failure screen (#319) — cannot forget it. Written as a
+rule rather than a count on purpose: the count this paragraph used to carry had gone stale.
+`role="status"` is deliberately untouched — it carries loading and success messages, and danger
+styling there would be a lie.
 
 Two shapes exist, and they are styled differently on purpose:
 
-- **A standalone `<p role="alert">`** — the eight that appear beside working UI — gets a strip:
+- **A standalone `<p role="alert">`** — the ones that appear beside working UI — gets a strip:
   danger text, a 3px `--danger` left border, and a `--danger-surface` tint. The **border** is the
   non-color cue that satisfies WCAG 1.4.1; the tint carries nothing (~1.05:1 against both
   surfaces, by design — a tint readable enough to clear 3:1 would no longer be a tint).
-- **A `<div role="alert">`** — the three full-page states and the items region — gets no strip;
-  it already owns the screen. Its **title** keeps the danger ink and its **explanation** drops to
-  `--ink-muted` via `> p:last-of-type`, which picks the explanation out of both shapes (`<h1>` +
-  `<p>`, and the region's `<p>` + `<p>`) without either route needing a class. This was decided
+- **A `<div role="alert">`** — the full-page states, the two failure screens (#319) and the items
+  region — gets no strip; it already owns the screen. Its **title** keeps the danger ink and its
+  **explanation** drops to `--ink-muted` via `> p:last-of-type`, which picks the explanation out
+  of both shapes (`<h1>` + `<p>`, and the region's `<p>` + `<p>`) without either route needing a
+  class. This was decided
   by looking at the running app: the whole block in red made "Your collections are safe…" read
   as an alarm.
 

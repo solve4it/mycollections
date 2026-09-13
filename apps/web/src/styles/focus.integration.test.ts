@@ -34,10 +34,26 @@ describe("focus indication", () => {
     expect(declaration(rule.body, "outline")).toBe("none");
   });
 
+  it("does not ring the failure surface, which is focused the same way", () => {
+    // The same case as <main>, for the same reason (#319): a crash orphans focus,
+    // so the error screen takes it programmatically — it is never tabbed to, and
+    // a ring around the whole surface is the same stray stripe. Its buttons and
+    // links keep every ring they have.
+    const matches = rulesFor(RULES, ".failure-surface:focus");
+    expect(matches, "the failure surface must opt out of the global ring explicitly").toHaveLength(1);
+    const rule = matches[0];
+    if (!rule) throw new Error("no .failure-surface:focus rule");
+    expect(declaration(rule.body, "outline")).toBe("none");
+  });
+
   it("suppresses the ring on nothing else", () => {
     // A blanket `outline: none` is how an app loses every focus cue it has at
-    // once, so the opt-out stays a list of one.
+    // once, so the opt-out stays this list: the two containers that are focused
+    // programmatically and cannot be tabbed to, and nothing operable.
     const suppressed = RULES.filter((rule) => declaration(rule.body, "outline") === "none");
-    expect(suppressed.map((rule) => rule.selector.trim())).toEqual([".shell-main:focus"]);
+    expect(suppressed.map((rule) => rule.selector.trim()).sort()).toEqual([
+      ".failure-surface:focus",
+      ".shell-main:focus",
+    ]);
   });
 });
