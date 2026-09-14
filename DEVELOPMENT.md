@@ -426,6 +426,40 @@ Focus is recovered in the same place. That keyed wrapper unmounts the whole cont
 every navigation, so anything focused inside it takes focus to `<body>` with it; the shell moves
 focus to `<main>` when — and only when — that has happened.
 
+### What says it is the current page
+
+TanStack's `<Link>` decides it is active by **prefix** match, and an active link carries a
+hardcoded `aria-current="page"` and `data-status="active"` — `STATIC_ACTIVE_PROPS` in `link.js`,
+spread *after* the caller's props, so no prop can take them back off. `activeOptions` is the only
+lever there is.
+
+That default is right for the nav and wrong for everything else, which is the whole of the rule:
+
+- **The nav says where you are.** `/collections/<id>` is a page inside the Collections section, and
+  marking the section link is the ordinary reading of `aria-current="page"`. Leave it alone.
+- **A link in a screen's own content says where you can go.** Every back link and every way out of
+  a failure points at an *ancestor* of the current URL by nature, so it matches that prefix always —
+  and announces "current page" about the one link the user is about to follow *away*. Give those
+  `activeOptions={CONTENT_LINK_ACTIVE_OPTIONS}` (`src/lib/links.ts`, which is `{ exact: true }`:
+  the specification's own reading, where a link is current only when it points at the page you are
+  on). The detail screen's "All collections", the editor's two back links, and the recovery links
+  on the 404 and the crash screen were all getting this wrong (#354).
+- **A 404 is inside nothing.** The address matched no route, so `/collections` is not a section the
+  user is in — it is a string their wrong address happens to start with. The splat route declares
+  `staticData: { notFound: true }`, the shell reads it (`useIsNotFound`), and the nav switches to
+  exact matching for that page only: no address the splat catches can *equal* a nav destination, so
+  there the nav links are simply never current. Declared on the route rather than recognized in the
+  shell for the same reason as `dynamicTitle` — the shell has to know during the same render as the
+  route change, and a component-shaped answer arrives a commit after the nav has already spoken.
+
+`Shell.navigation.test.tsx` sweeps every route for links that claim to be the current page and
+asserts the exact list, so a new screen with a back link fails there rather than shipping the bug
+again; the two 404 URLs are pinned in `not-found.test.tsx` and the crash screen's way out in
+`router.test.tsx`. Note what the axe sweep does **not** do here: `aria-current="page"` is valid
+markup on any link, so no automated rule can tell that it is pointing at the wrong page. This one
+is only ever caught by asserting the list.
+
+
 ### Live regions the announcer cannot carry
 
 The announcer is hidden and holds no controls, so a message that has to be **seen**, or that comes

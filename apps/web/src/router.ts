@@ -86,5 +86,16 @@ declare module "@tanstack/react-router" {
      * is what says which of the two it is.
      */
     dynamicTitle?: boolean;
+    /**
+     * This route is the one the router falls back to when the address matched
+     * nothing (#354) — the splat in `routes/not-found.tsx`.
+     *
+     * The shell reads it to stop the nav claiming a section on a 404. Declared
+     * on the route rather than recognized by id in the shell, for the same
+     * reason `dynamicTitle` is: the shell has to know it during the same render
+     * as the route change, and a component-shaped answer arrives a commit late —
+     * by which time the nav has already told a screen reader where the user is.
+     */
+    notFound?: boolean;
   }
 }

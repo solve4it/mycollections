@@ -473,4 +473,63 @@ describe("route titles as data", () => {
       expect(route.options.staticData?.titleKey, `${route.fullPath} still needs a fallback title`).toBeTruthy();
     }
   });
+
+  /**
+   * The flag the shell reads to stop the nav claiming a section on an address
+   * that matched nothing (#354). Pinned to exactly one route: a second route
+   * carrying it would quietly switch that page's nav to exact matching, and no
+   * test of the 404 would see it.
+   */
+  it("declares the one route that means the address matched nothing", () => {
+    const notFound = (routeTree.children ?? []).filter((route) => route.options.staticData?.notFound === true);
+    expect(notFound.map((route) => route.fullPath)).toEqual(["/$"]);
+  });
+});
+
+/**
+ * Which link, on each route, says it is the page the user is on (#354).
+ *
+ * `Link` marks itself active by *prefix* match, and an active link carries a
+ * hardcoded `aria-current="page"` (`link.js`, `STATIC_ACTIVE_PROPS`, spread last
+ * so no caller prop can take it back off). That default is right for the nav —
+ * `/collections/<id>` is a page inside the Collections section, and marking the
+ * section is the common reading of `aria-current="page"` — and wrong for every
+ * back and recovery link in a screen's own content, which shares the same
+ * prefix by nature and was therefore announcing "current page" about the link
+ * the user was about to follow *away*.
+ *
+ * Swept over every route rather than asserted screen by screen, because the
+ * rule is one rule: the nav says where you are, the content links say where you
+ * can go, and a new screen with a back link should fail here rather than ship
+ * the bug again. The 404 — the one route where even the nav must not claim a
+ * section — is pinned in `routes/not-found.test.tsx`.
+ */
+describe("what claims to be the current page", () => {
+  /** Every link on screen that says it is the page the user is on. */
+  function currentLinks(): string[] {
+    return screen
+      .getAllByRole("link")
+      .filter((link) => link.getAttribute("aria-current") !== null)
+      .map((link) => `${link.textContent?.trim()} → ${link.getAttribute("href")}`);
+  }
+
+  // Twice per row: the sidebar nav and the bottom nav are both in the document
+  // at every viewport, and only CSS decides which one is on screen.
+  const COLLECTIONS_NAV = ["Collections → /collections", "Collections → /collections"];
+  const SETTINGS_NAV = ["Settings → /settings", "Settings → /settings"];
+
+  it.each([
+    ["/collections", "Collections", COLLECTIONS_NAV],
+    ["/collections/new", "New collection", COLLECTIONS_NAV],
+    [`/collections/${COLLECTION.id}`, "Games", COLLECTIONS_NAV],
+    [`/collections/${COLLECTION.id}/edit`, "Edit collection", COLLECTIONS_NAV],
+    ["/settings", "Settings", SETTINGS_NAV],
+  ])("marks only the section nav at %s", async (path, heading, expected) => {
+    renderAt(path);
+    await screen.findByRole("heading", { level: 1, name: heading });
+
+    // Listed, not counted: a failure should name the link that lied and say
+    // where it pointed, which is the whole content of the bug.
+    expect(currentLinks()).toEqual(expected);
+  });
 });
