@@ -459,8 +459,23 @@ test.describe("accessibility", () => {
 
     await expectNoAccessibilityViolations(page);
 
+    // Geometry, because axe cannot see it: this screen's actions sit in a
+    // wrapping flex row, and at 390px a row that refused to wrap would push the
+    // page sideways rather than stack. Asserted on the document rather than on
+    // the row, so anything else that overflowed would fail here too. (The same
+    // sweep caught exactly this in the trash row, above.)
+    const overflow = await page.evaluate(() => {
+      const root = document.scrollingElement;
+      return root ? root.scrollWidth - root.clientWidth : 0;
+    });
+    expect(overflow, "the not-found screen must not scroll the page sideways").toBeLessThanOrEqual(0);
+
     // The way out, operated the way a keyboard user operates it.
-    await page.getByRole("link", { name: "Back to collections" }).press("Enter");
+    const out = page.getByRole("link", { name: "Back to collections" });
+    // 44px is the floor for a touch target, and the primary action on the one
+    // screen a user reaches by mistake is the worst place to miss it.
+    expect((await out.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(44);
+    await out.press("Enter");
     await expect(page).toHaveURL(/\/collections$/);
   });
 
