@@ -427,6 +427,79 @@ test.describe("accessibility", () => {
   });
 
   /**
+   * The address that is not in the cabinet (#344), which is the one screen in
+   * the app a user reaches by getting something wrong rather than by following
+   * a link.
+   *
+   * Scanned in a browser because that is where the claim lives: the route has
+   * to be *reachable* by typing a URL, which means the preview server's SPA
+   * fallback has to hand `/nope` to index.html and the router has to rank the
+   * splat below every real route. Neither is visible to a test that renders the
+   * route tree in jsdom.
+   *
+   * The assertion before the scan is what makes it worth having: axe is just as
+   * happy on the router's own untranslated `<p>Not Found</p>`, which is exactly
+   * what this replaced.
+   */
+  test("an address with no page behind it", async ({ page }) => {
+    await page.goto("/nope");
+    await expect(page).toHaveURL(/\/nope$/);
+    await expect(page.getByRole("heading", { level: 1, name: "Page not found" })).toBeVisible();
+    // WCAG 2.4.2, and the half that was missing entirely: without a route of
+    // its own the fallback declared no `titleKey`, so the document kept
+    // whatever name the previous screen had given it.
+    await expect(page).toHaveTitle("Page not found · MyCollections");
+
+    // A 404 is not an error, so it must not be wearing the app's danger
+    // treatment — which in this app hangs off the role rather than a class
+    // (`src/styles/alerts.integration.test.ts`), so the role is what to assert.
+    await expect(page.getByRole("alert"), "a wrong address is not an alert").toHaveCount(0);
+    // The app is still standing around it: the address was wrong, not the app.
+    await expect(page.locator(".shell")).toBeVisible();
+
+    await expectNoAccessibilityViolations(page);
+
+    // The way out, operated the way a keyboard user operates it.
+    await page.getByRole("link", { name: "Back to collections" }).press("Enter");
+    await expect(page).toHaveURL(/\/collections$/);
+  });
+
+  /**
+   * The same screen arrived at the way that actually announces anything: a
+   * client-side navigation. A typed URL is a real page load, which the browser
+   * announces itself and which the shell deliberately stays silent for, so the
+   * spec above proves the title and this one proves the voice.
+   *
+   * Driven with Back rather than with an injected `<a href>`: a plain anchor is
+   * a page load, so it would prove the opposite of what it looks like. Back is
+   * also the honest scenario — someone who lands on a dead link and reaches for
+   * the browser's own way out.
+   */
+  test("a dead link reached without a page load is announced", async ({ page }) => {
+    await page.goto("/nope");
+    await expect(page.getByRole("heading", { level: 1, name: "Page not found" })).toBeVisible();
+
+    const region = page.locator('.visually-hidden[aria-live="polite"]');
+    // Empty on arrival: a live region that already holds its text when it is
+    // inserted is announced by VoiceOver but usually not by NVDA or JAWS, and
+    // the page the user just loaded is not news.
+    await expect(region, "the announcer must be on the page, and empty, on arrival").toBeEmpty();
+
+    await page.getByRole("link", { name: "Back to collections" }).click();
+    await expect(page).toHaveURL(/\/collections$/);
+    await expect(region).toHaveText("Collections · MyCollections");
+
+    await page.goBack();
+
+    await expect(page).toHaveURL(/\/nope$/);
+    await expect(page.getByRole("heading", { level: 1, name: "Page not found" })).toBeVisible();
+    // The words that changed are the assertion: a 404 that announced nothing
+    // would leave "Collections · MyCollections" standing here, on a page that
+    // is no longer the collections list.
+    await expect(region).toHaveText("Page not found · MyCollections");
+  });
+
+  /**
    * The two Settings states no route-level sweep reaches, and the two regions
    * #326 gave a persistent host (#308's rule, applied to the rest of the app).
    *
