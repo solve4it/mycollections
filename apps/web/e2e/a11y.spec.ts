@@ -188,6 +188,12 @@ test.describe("accessibility", () => {
     await expect(page.getByRole("heading", { level: 1, name: "Vinyl records" })).toBeVisible();
     await expect(page.getByText("Kind of Blue")).toBeVisible();
 
+    // What the nav claims, on a page that is inside a section rather than being
+    // one (#355). No rule in axe can see this — `aria-current` is valid markup
+    // with any value — so it is asserted beside the scan rather than by it.
+    await expect(page.locator('[aria-current="page"]'), "nothing here is the page the user is on").toHaveCount(0);
+    await expect(page.locator('.sidebar-nav a[href="/collections"]')).toHaveAttribute("aria-current", "true");
+
     await expectNoAccessibilityViolations(page);
   });
 

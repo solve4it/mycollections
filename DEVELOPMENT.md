@@ -435,15 +435,21 @@ lever there is.
 
 That default is right for the nav and wrong for everything else, which is the whole of the rule:
 
-- **The nav says where you are.** `/collections/<id>` is a page inside the Collections section, and
-  the nav marks that section. Note what this app has *not* settled: ARIA distinguishes
-  `aria-current="page"` ("the current page within a set of pages") from `aria-current="true"`
-  ("the current item within a set"), and the careful reading — MDN's table, and most design
-  systems — is `page` for the page itself and `true` for the section containing it. The nav says
-  `page` for the section, because `<Link>` structurally cannot say anything else:
-  `STATIC_ACTIVE_PROPS` hardcodes the value. Emitting `true` means rendering our own `<a>` from
-  `useLinkProps`, which is a change of its own — tracked in #355. Until then this is a known
-  loose reading, not a checked one.
+- **The nav says where you are, and which of the two things it means.** ARIA has two values and
+  they are not interchangeable: `aria-current="page"` is "the current page within a set of pages"
+  and `aria-current="true"` is "the current item within a set". So the nav says `page` only where
+  the link *is* the page on screen (`/collections`, `/settings`) and `true` where it is the section
+  that page sits in (`/collections/<id>`, `/collections/new`, the editor). Saying `page` for the
+  section — which is what the app did until #355, and what most apps do — tells a screen-reader
+  user they are on a page they are not on.
+
+  This is why the nav is `NavLink` in `Shell.tsx` rather than `<Link>`: `STATIC_ACTIVE_PROPS`
+  hardcodes `"aria-current": "page"` and is spread after the caller's props, so `<Link>`
+  structurally cannot emit anything else. `NavLink` calls `useLinkProps` — the library's own
+  documented hook, which `<Link>` is itself a thin wrapper around — and renders the anchor, which
+  costs dropping `type` and `disabled` (they belong on a button; `Link` strips them for the same
+  reason) and asking the hook twice: once with this page's active rule, once with `exact` to answer
+  the narrower question `page` actually means.
 - **A link in a screen's own content says where you can go.** Every back link and every way out of
   a failure points at an *ancestor* of the current URL by nature, so it matches that prefix always —
   and announces "current page" about the one link the user is about to follow *away*. Give those
@@ -460,8 +466,9 @@ That default is right for the nav and wrong for everything else, which is the wh
   route change, and a component-shaped answer arrives a commit after the nav has already spoken.
 
 `Shell.navigation.test.tsx` sweeps every route for links that claim to be the current page and
-asserts the exact list, so a new screen with a back link fails there rather than shipping the bug
-again; the two 404 URLs are pinned in `not-found.test.tsx` and the crash screen's way out in
+asserts the exact list — including the *value*, since a sweep that only listed the links would pass
+against the bug #355 fixed — so a new screen with a back link fails there rather than shipping the
+bug again; the two 404 URLs are pinned in `not-found.test.tsx` and the crash screen's way out in
 `router.test.tsx`. Note what the axe sweep does **not** do here: `aria-current="page"` is valid
 markup on any link, so no automated rule can tell that it is pointing at the wrong page. This one
 is only ever caught by asserting the list.
