@@ -253,3 +253,37 @@ describe("before the app has been connected", () => {
     expect(screen.getByRole("link", { name: "Back to collections" })).toHaveAttribute("href", "/collections");
   });
 });
+
+/**
+ * What the page tells a screen reader is the *current* page (#354).
+ *
+ * `Link` marks itself active by prefix match, and an active link carries a
+ * hardcoded `aria-current="page"` (`link.js`, `STATIC_ACTIVE_PROPS` — spread
+ * last, so no caller prop can take it back off). On a 404 below a real section
+ * that prefix is still there, and three links said "current page" about a
+ * destination the user was not on: both nav links, and the recovery button they
+ * were about to press.
+ *
+ * A 404 is the one page where the section link cannot be defended as "the
+ * current section". The URL matched no route; the whole point of the screen is
+ * that the address does not exist, so `/collections` is not a section the user
+ * is inside — it is a string their wrong address happens to start with.
+ */
+describe("what claims to be the current page", () => {
+  /** Every link on screen that says it is the page the user is on. */
+  function currentLinks(): string[] {
+    return screen
+      .getAllByRole("link")
+      .filter((link) => link.getAttribute("aria-current") !== null)
+      .map((link) => `${link.textContent?.trim()} → ${link.getAttribute("href")}`);
+  }
+
+  it.each(["/nope", `/collections/${COLLECTION.id}/nope`])("marks no link as the current page at %s", async (path) => {
+    renderAt(path);
+    await screen.findByRole("heading", { level: 1, name: "Page not found" });
+
+    // Listed rather than counted: a failure should say which link lied and
+    // where it pointed, which is the whole content of the bug.
+    expect(currentLinks()).toEqual([]);
+  });
+});

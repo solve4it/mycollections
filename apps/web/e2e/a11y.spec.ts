@@ -488,6 +488,26 @@ test.describe("accessibility", () => {
   });
 
   /**
+   * The half of the 404 that `/nope` cannot show (#354): a wrong address *below*
+   * a real section, where `Link`'s prefix matching had three links telling a
+   * screen-reader user that `/collections` was the page they were on — both nav
+   * links, and the recovery button they were about to press.
+   *
+   * In the browser sweep rather than only in jsdom because this is the one
+   * assertion that survives someone deleting a unit test, and because axe cannot
+   * help: `aria-current="page"` is valid markup on any link, so no rule sees it
+   * pointing at the wrong page. The collection need not exist — the splat
+   * catches the unknown segment below `/collections/<id>` either way, and the
+   * prefix is the whole of the bug.
+   */
+  test("a wrong address below a section claims no current page", async ({ page }) => {
+    await page.goto("/collections/11111111-1111-1111-1111-111111111111/nope");
+    await expect(page.getByRole("heading", { level: 1, name: "Page not found" })).toBeVisible();
+
+    await expect(page.locator("[aria-current]"), "nothing on a 404 is the page the user is on").toHaveCount(0);
+  });
+
+  /**
    * The same screen arrived at the way that actually announces anything: a
    * client-side navigation. A typed URL is a real page load, which the browser
    * announces itself and which the shell deliberately stays silent for, so the

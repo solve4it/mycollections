@@ -1,6 +1,7 @@
 import { Link } from "@tanstack/react-router";
 import { type ReactNode, useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
+import { CONTENT_LINK_ACTIVE_OPTIONS } from "../lib/links.js";
 import { usePageTitle } from "../lib/page-title.js";
 
 /**
@@ -130,7 +131,10 @@ export function RouteError() {
 
   return (
     <FailureSurface title={t("error_title")} description={t("error_message")} claimFocus>
-      <Link to="/collections" className="touch-target">
+      {/* A way out is an action, not a statement about where the user is: a
+          crash inside `/collections` made this link prefix-active, so it
+          announced itself as the current page (#354). */}
+      <Link to="/collections" className="touch-target" activeOptions={CONTENT_LINK_ACTIVE_OPTIONS}>
         {t("error_back_to_collections")}
       </Link>
       <ReloadButton />

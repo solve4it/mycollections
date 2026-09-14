@@ -1,5 +1,6 @@
 import { Link } from "@tanstack/react-router";
 import { useTranslation } from "react-i18next";
+import { CONTENT_LINK_ACTIVE_OPTIONS } from "../lib/links.js";
 import { usePageTitle } from "../lib/page-title.js";
 import { Icon } from "./Icon.js";
 import { Mark } from "./Mark.js";
@@ -54,14 +55,18 @@ export function NotFoundScreen() {
             same link twice. Settings is the other place worth reaching from
             here — it is where a wrong address most often follows a wrong
             server or a stale token. */}
-        <Link to="/collections" className="touch-target button-primary">
+        {/* `activeOptions` so the way out does not claim to be where the user
+            already is: on `/collections/<id>/nope` this link prefix-matches the
+            address that failed, and said "current page" about the button they
+            were about to press (#354). */}
+        <Link to="/collections" className="touch-target button-primary" activeOptions={CONTENT_LINK_ACTIVE_OPTIONS}>
           <Icon name="back" />
           {t("not_found_back_to_collections")}
         </Link>
         {/* `.button-quiet` is the app's secondary skin (DESIGN.md, "Forms,
             buttons and status"); `.touch-target` is sizing only, so a link
             wearing it alone renders as a bare UA link beside a filled button. */}
-        <Link to="/settings" className="touch-target button-quiet">
+        <Link to="/settings" className="touch-target button-quiet" activeOptions={CONTENT_LINK_ACTIVE_OPTIONS}>
           {t("not_found_go_to_settings")}
         </Link>
       </div>

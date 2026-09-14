@@ -35,6 +35,6 @@ import { rootRoute } from "./__root.js";
 export const notFoundRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "$",
-  staticData: { titleKey: "common:not_found_title" },
+  staticData: { titleKey: "common:not_found_title", notFound: true },
   component: NotFoundScreen,
 });

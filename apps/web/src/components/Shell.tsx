@@ -57,6 +57,34 @@ function usePageId(): string | undefined {
   return useRouterState({ select: (state) => state.matches[state.matches.length - 1]?.pathname });
 }
 
+/**
+ * Whether the address matched no route at all (#354) — the splat route in
+ * `routes/not-found.tsx`, which declares `staticData.notFound`.
+ *
+ * The nav's prefix matching is defensible on a real page inside a section:
+ * `/collections/<id>` *is* within Collections. A 404 is within nothing. The URL
+ * matched no route, so `/collections` is not a section the user is inside — it
+ * is a string their wrong address happens to start with, and saying "current
+ * page" about it names a destination they are not at.
+ */
+function useIsNotFound(): boolean {
+  return useRouterState({
+    select: (state) =>
+      state.matches.some(
+        // Two ways to be nowhere, and the shell means the question rather than
+        // either answer. The splat route is what a user actually arrives at, and
+        // carries the flag. `status: "notFound"` is the other path — a URL the
+        // matcher could not decode, or a future `notFound()` from a loader,
+        // which `router.ts` hands to `defaultNotFoundComponent` (`Match.js`
+        // renders it off exactly this field). That one keeps the *real* route's
+        // matches, so without this clause the nav would go back to marking a
+        // section behind a 404 screen, silently: the page would still be named,
+        // because `NotFoundScreen` publishes its own name.
+        (match) => match.staticData.notFound === true || match.status === "notFound",
+      ),
+  });
+}
+
 /** Whether the matched route's screen publishes a title of its own (#309). */
 function useHasDynamicTitle(): boolean {
   return useRouterState({ select: (state) => state.matches.some((match) => match.staticData.dynamicTitle === true) });
@@ -67,6 +95,7 @@ export function Shell({ children }: ShellProps) {
   const titleKey = usePageTitleKey();
   const pageId = usePageId();
   const hasDynamicTitle = useHasDynamicTitle();
+  const isNotFound = useIsNotFound();
   const [announcement, setAnnouncement] = useState("");
 
   /**
@@ -199,9 +228,25 @@ export function Shell({ children }: ShellProps) {
             <Icon name="logo" className="logo-mark" />
             {t("app_name")}
           </div>
+          {/* `activeProps` is not what puts `data-status` on the link — the
+              library sets that unconditionally, after the caller's props, along
+              with the `aria-current` this page has to do without. What passing
+              it suppresses is the library's own `className: "active"` default,
+              which nothing here styles.
+
+              `activeOptions` with `exact` only on a 404: no address the splat
+              catches can *equal* a nav destination, so there the link is simply
+              never current, and prefix matching is untouched everywhere
+              else (#354). */}
           <div className="sidebar-nav">
             {NAV_ITEM_DEFS.map(({ to, labelKey, icon }) => (
-              <Link key={to} to={to} className="touch-target" activeProps={{ "data-status": "active" }}>
+              <Link
+                key={to}
+                to={to}
+                className="touch-target"
+                activeOptions={{ exact: isNotFound }}
+                activeProps={{ "data-status": "active" }}
+              >
                 <Icon name={icon} />
                 {t(labelKey)}
               </Link>
@@ -225,7 +270,13 @@ export function Shell({ children }: ShellProps) {
 
         <nav className="shell-bottom-nav" aria-label={t("aria_bottom_nav")}>
           {NAV_ITEM_DEFS.map(({ to, labelKey, icon }) => (
-            <Link key={to} to={to} className="bottom-nav-item touch-target" activeProps={{ "data-status": "active" }}>
+            <Link
+              key={to}
+              to={to}
+              className="bottom-nav-item touch-target"
+              activeOptions={{ exact: isNotFound }}
+              activeProps={{ "data-status": "active" }}
+            >
               <Icon name={icon} />
               <span>{t(labelKey)}</span>
             </Link>
