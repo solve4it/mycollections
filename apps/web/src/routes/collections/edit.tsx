@@ -6,6 +6,7 @@ import { buildField, type FieldDraft, FieldSchemaBuilder, fieldToDraft } from ".
 import { Icon } from "../../components/Icon.js";
 import { CollectionDetailSkeleton } from "../../components/Skeleton.js";
 import { getToken } from "../../lib/api-client.js";
+import { CONTENT_LINK_ACTIVE_OPTIONS } from "../../lib/links.js";
 import { useCollection, useItems, useTrash, useUpdateCollection } from "../../lib/queries.js";
 import { rootRoute } from "../__root.js";
 
@@ -58,7 +59,7 @@ function EditCollectionPage() {
       return <FailureSurface title={t("collection_error_title")} description={t("collection_error_description")} />;
     return (
       <div className="edit-collection-page">
-        <Link to="/collections" className="back-link">
+        <Link to="/collections" className="back-link" activeOptions={CONTENT_LINK_ACTIVE_OPTIONS}>
           <Icon name="back" />
           {t("back_to_collections")}
         </Link>
@@ -109,7 +110,7 @@ function EditCollectionPage() {
 
   return (
     <div className="edit-collection-page">
-      <Link to="/collections/$id" params={{ id }} className="back-link">
+      <Link to="/collections/$id" params={{ id }} className="back-link" activeOptions={CONTENT_LINK_ACTIVE_OPTIONS}>
         <Icon name="back" />
         {t("back_to_collection")}
       </Link>

@@ -10,6 +10,7 @@ import { Icon } from "../../components/Icon.js";
 import { CollectionDetailSkeleton, ItemListSkeleton } from "../../components/Skeleton.js";
 import { UndoToast } from "../../components/UndoToast.js";
 import { getToken } from "../../lib/api-client.js";
+import { CONTENT_LINK_ACTIVE_OPTIONS } from "../../lib/links.js";
 import { type PageName, usePageTitle } from "../../lib/page-title.js";
 import {
   useCollection,
@@ -111,7 +112,7 @@ function CollectionDetailPage() {
     // it: a slow load must never be a screen with no way off it.
     return (
       <div className="collection-detail">
-        <Link to="/collections" className="back-link">
+        <Link to="/collections" className="back-link" activeOptions={CONTENT_LINK_ACTIVE_OPTIONS}>
           <Icon name="back" />
           {tCollections("back_to_collections")}
         </Link>
@@ -122,7 +123,7 @@ function CollectionDetailPage() {
 
   return (
     <div className="collection-detail">
-      <Link to="/collections" className="back-link">
+      <Link to="/collections" className="back-link" activeOptions={CONTENT_LINK_ACTIVE_OPTIONS}>
         <Icon name="back" />
         {tCollections("back_to_collections")}
       </Link>

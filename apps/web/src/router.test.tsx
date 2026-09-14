@@ -64,7 +64,7 @@ function lastReport(): { context: Record<string, unknown> } {
  * holds the route-change announcement until such a screen publishes a name, and
  * a screen that threw never will.
  */
-function renderThrowingRoute({ arriveFromAnotherPage = false } = {}) {
+function renderThrowingRoute({ arriveFromAnotherPage = false, path = "/boom" } = {}) {
   const rootRoute = createRootRoute({
     component: () => (
       <Shell>
@@ -82,13 +82,13 @@ function renderThrowingRoute({ arriveFromAnotherPage = false } = {}) {
   });
   const boomRoute = createRoute({
     getParentRoute: () => rootRoute,
-    path: "/boom",
+    path,
     staticData: { titleKey: "collections:title", dynamicTitle: true },
     component: ExplodingScreen,
   });
   const router = createAppRouter({
     routeTree: rootRoute.addChildren([startRoute, boomRoute]),
-    history: createMemoryHistory({ initialEntries: [arriveFromAnotherPage ? "/" : "/boom"] }),
+    history: createMemoryHistory({ initialEntries: [arriveFromAnotherPage ? "/" : path] }),
   });
   render(<RouterProvider router={router} />);
 }
@@ -175,5 +175,25 @@ describe("the app router's handling of a route render error", () => {
     await expect
       .poll(() => document.querySelector('.visually-hidden[aria-live="polite"]')?.textContent)
       .toBe("Collections · MyCollections");
+  });
+
+  /**
+   * The way out is an action, not a statement about where the user is (#354).
+   *
+   * A crash at a path inside `/collections` leaves the URL in that section, so
+   * `Link`'s prefix match makes the recovery link active — and an active link
+   * carries a hardcoded `aria-current="page"` (`link.js`, `STATIC_ACTIVE_PROPS`,
+   * spread last so no caller prop can take it back off). The screen then tells a
+   * screen-reader user that the button they are about to press is the page they
+   * are already on, at the moment they can least afford a wrong answer.
+   *
+   * Crashed inside the section rather than at `/boom`, because a path sharing no
+   * prefix with the link cannot reproduce this.
+   */
+  it("does not tell the user the way out is where they already are", async () => {
+    renderThrowingRoute({ path: "/collections/boom" });
+    await screen.findByRole("alert");
+
+    expect(screen.getByRole("link", { name: "Back to collections" })).not.toHaveAttribute("aria-current");
   });
 });
