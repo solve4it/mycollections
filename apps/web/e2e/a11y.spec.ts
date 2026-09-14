@@ -457,6 +457,14 @@ test.describe("accessibility", () => {
     // The app is still standing around it: the address was wrong, not the app.
     await expect(page.locator(".shell")).toBeVisible();
 
+    // And it does not seize focus. `FailureSurface` does, because a crash
+    // orphans focus in the same tick; arriving at a wrong address does not, and
+    // on a hard load nothing has been focused yet — so taking it here would put
+    // the skip link and the whole nav behind the user's first Tab. Asserted on
+    // <body> still holding focus rather than on the screen merely not having it,
+    // so a surface that handed focus to something inside itself would fail too.
+    await expect(page.locator("body")).toBeFocused();
+
     await expectNoAccessibilityViolations(page);
 
     // Geometry, because axe cannot see it: this screen's actions sit in a

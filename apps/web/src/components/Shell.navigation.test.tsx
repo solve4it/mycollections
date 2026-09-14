@@ -107,6 +107,10 @@ describe("the document title", () => {
     [`/collections/${COLLECTION.id}`, "Games · MyCollections"],
     [`/collections/${COLLECTION.id}/edit`, "Edit collection · MyCollections"],
     ["/settings", "Settings · MyCollections"],
+    // The address no route claims (#344). In the same table as the rest on
+    // purpose: it is a page like any other, and the bug it was added to fix was
+    // precisely that it had no name of its own.
+    ["/nope", "Page not found · MyCollections"],
   ])("names %s in the title", async (path, expected) => {
     renderAt(path);
     // The shell has to be on screen for its title to mean anything: a route that
@@ -335,6 +339,27 @@ describe("announcing a page whose name arrives late", () => {
     await waitFor(() => expect(spoken).toEqual(["Games · MyCollections"]));
     await settle();
     expect(spoken).toEqual(["Games · MyCollections"]);
+  });
+
+  /**
+   * The 404 (#344), counted here rather than asserted with `waitFor` in its own
+   * file: a poll steps straight over a wrong intermediate value, and this screen
+   * publishes a name of its own — so "announced once, by the right words" is
+   * exactly the claim a poll cannot make. `announcer()` is also the singleton
+   * guard, which is what proves the screen did not bring a second live region
+   * with it.
+   */
+  it("announces the page for an address that has none", async () => {
+    const { router } = renderAt("/settings");
+    expect(await screen.findByRole("main")).toBeInTheDocument();
+
+    const spoken = recordAnnouncements();
+    await router.navigate({ to: "/$", params: { _splat: "nope" } });
+
+    expect(await screen.findByRole("heading", { level: 1, name: "Page not found" })).toBeInTheDocument();
+    await waitFor(() => expect(spoken).toEqual(["Page not found · MyCollections"]));
+    await settle();
+    expect(spoken).toEqual(["Page not found · MyCollections"]);
   });
 
   it("does not hold the announcement for a page that never names itself", async () => {

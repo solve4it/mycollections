@@ -1,5 +1,6 @@
 import { type AnyRoute, createRouter, type RouterHistory } from "@tanstack/react-router";
 import { RouteError } from "./components/ErrorScreen.js";
+import { NotFoundScreen } from "./components/NotFoundScreen.js";
 import { onRouterCatch } from "./lib/error-reporter.js";
 import { routeTree } from "./routeTree.js";
 
@@ -24,12 +25,31 @@ interface AppRouterOverrides {
  * Route render errors therefore never reach the `<ErrorBoundary>` around
  * `<RouterProvider>`; the root route's own `errorComponent` (routes/__root.tsx)
  * is what catches a throw in the shell itself.
+ *
+ * `defaultNotFoundComponent` is the same argument again, for the other kind of
+ * miss (#344). The splat route in `routes/not-found.js` answers every unknown
+ * URL the router can *match*, and is the form that carries `staticData` — so it
+ * is what names and announces the page, and it is not replaced by this. But a
+ * URL the matcher cannot decode never reaches ranking at all: `findRouteMatch`
+ * catches the `URIError` and returns null, so `/%` or a link truncated
+ * mid-escape ends up a global not-found. Without this it renders the library's
+ * own `<p>Not Found</p>` and logs the warning about it, exactly as the whole
+ * app did before the splat landed. Any future `notFound()` thrown from a loader
+ * lands here too.
+ *
+ * Worth knowing how far that reaches today: a malformed path never gets as far
+ * as the app under the current static host — Vite answers `/%E0%A4%A` with a
+ * bare 404 and never serves index.html — so this covers the router being handed
+ * such a location from inside the app, not someone typing one. It is a backstop
+ * for a path that exists, not a screen with a URL you can visit; `NotFoundScreen`
+ * is reached for real through the splat route.
  */
 export function createAppRouter({ routeTree: tree = routeTree, history }: AppRouterOverrides = {}) {
   return createRouter({
     routeTree: tree,
     defaultOnCatch: onRouterCatch,
     defaultErrorComponent: RouteError,
+    defaultNotFoundComponent: NotFoundScreen,
     ...(history ? { history } : {}),
   });
 }

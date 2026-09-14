@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { Mark } from "./Mark.js";
 
 /**
  * The "cabinet is empty" state (#225): the drawer mark with a drawer pulled
@@ -9,7 +10,8 @@ import type { ReactNode } from "react";
  * the icon set: it is drawn on its own canvas at an illustrative size, and
  * nothing else in the app wants it at 1.25em. It follows the same rules as the
  * icons otherwise — one stroke weight, round caps, `currentColor` only — so it
- * takes the empty state's muted ink and inverts with the theme for free.
+ * takes the empty state's muted ink and inverts with the theme for free. Those
+ * rules live in `Mark.tsx`, shared with the not-found screen's mark (#344).
  */
 
 /**
@@ -19,17 +21,7 @@ import type { ReactNode } from "react";
  */
 function EmptyMark() {
   return (
-    <svg
-      className="empty-mark"
-      viewBox="0 0 72 64"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-      focusable="false"
-    >
+    <Mark className="empty-mark">
       <rect x="12" y="6" width="44" height="30" rx="4" />
       <line x1="12" y1="21" x2="56" y2="21" />
       <line x1="28" y1="13.5" x2="40" y2="13.5" />
@@ -37,7 +29,7 @@ function EmptyMark() {
       <path d="M6 42h56v14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2z" />
       <path d="M6 42l6-6h56l-6 6" />
       <line x1="26" y1="50" x2="42" y2="50" />
-    </svg>
+    </Mark>
   );
 }
 

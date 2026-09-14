@@ -65,8 +65,8 @@ When the PWA service worker lands (#34/#64), the precache glob must include `**/
 Hand-rolled inline SVG in `apps/web/src/components/Icon.tsx` — no dependency, no sprite, no
 request to make offline. One 24px grid, 1.5px strokes, round caps and joins, `currentColor`
 only, so an icon takes the color of whatever text it sits in and inverts with the theme for
-free. Eleven icons: `collections`, `settings`, `add`, `back`, `edit`, `delete`, `import`,
-`export`, `logo` (the three-drawer mark), `check`, `cross`.
+free. Twelve icons: `collections`, `settings`, `add`, `back`, `edit`, `delete`, `import`,
+`restore`, `export`, `logo` (the three-drawer mark), `check`, `cross`.
 
 Sizing is em-based (`.icon` = 1.25em), so icons track the type scale; a context that needs a
 different optical size sets `font-size` on the icon rather than a pixel width, keeping the
@@ -167,6 +167,10 @@ Measured: `--danger` 5.81:1 on paper / 6.25:1 on card (light), 7.19 / 6.41 (dark
 `--danger-surface` 5.56 / 6.34. All enforced by `tokens.integration.test.ts`;
 `alerts.integration.test.ts` pins the rules themselves.
 
+What is deliberately **outside** this treatment is the not-found screen (#344): a wrong address
+is not a failure of the app, so it takes no `[role="alert"]` and therefore none of this. See
+"Not found" below — that distinction is the same one #335 draws for confirmations.
+
 ## Not found (#344)
 
 A 404 is the one screen a user reaches by getting something wrong, and it is **not** a failure of
@@ -185,8 +189,17 @@ non-color cue, so the absence still reads in forced-colors mode. Deliberately *n
 filed yet, which on a 404 is a lie about their data.
 
 It is the second illustration in the app, and it keeps every rule the first one does (see
-"Waiting and emptiness" below): its own 72×64 canvas at 2px strokes rather than a member of
-`ICON_NAMES`, `fill="none"`, `currentColor` only, round caps, `aria-hidden`.
+"Waiting and emptiness" below). Those rules now live in one place — `components/Mark.tsx`, the
+shared 72×64 canvas at 2px strokes with `fill="none"`, `currentColor`, round caps and
+`aria-hidden` — because they are what make an illustration take its surroundings' ink and invert
+with the theme for free, and a second copy is a second place for one of them to go missing. The
+one override is the dashed rectangle's `stroke-linecap: butt`: a round cap extends each dash by
+half the stroke width at both ends, so at 2px a `4 4` pattern paints 6 on and 2 off and the gap
+closes up into a solid fourth drawer.
+
+The screen itself shares `.empty-state`'s rule rather than restating it — one presentational
+role, the calm centered mark-over-copy surface — and adds only what is genuinely different: a
+page-sized `<h1>`, and a centered row of controls.
 
 ## Forms, buttons and status (#224)
 

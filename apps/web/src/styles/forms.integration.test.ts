@@ -138,6 +138,19 @@ describe("buttons", () => {
     expect(paints(button, "border")).toContain("var(--line)");
   });
 
+  it("gives the quiet skin to a link as well as to a button", () => {
+    // Every caller was a <button> until the not-found screen's secondary action
+    // (#344), and a <button> has no underline of its own — so the skin could
+    // omit text-decoration and nobody would see it. On an <a> the omission is
+    // an underlined label inside a bordered button.
+    const link = mount('<a href="/settings" class="touch-target button-quiet">Go to settings</a>');
+    expect(paints(link, "text-decoration")).toBe("none");
+    // The rest of the skin still reaches it: a rule that only matched buttons
+    // would leave a bare link that merely happens not to be underlined.
+    expect(paints(link, "background")).toBe("var(--paper)");
+    expect(paints(link, "border")).toContain("var(--line)");
+  });
+
   it("marks the destructive variant in danger ink, not in the quiet skin", () => {
     // The button that goes through with a permanent delete (#35). Sharing the
     // quiet skin would make "Delete forever" look like "Cancel".

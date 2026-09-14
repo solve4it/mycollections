@@ -58,6 +58,17 @@ const BINDING = /const\s*\{\s*t(?::\s*(\w+))?\s*\}\s*=\s*useTranslation\("(\w+)"
 const CALL = /\b(t[A-Z]\w*|t)\(\s*"([\w.]+)"/g;
 
 /**
+ * `staticData: { titleKey: "settings:title" }` — a route naming itself (#24).
+ *
+ * These are translation keys that never pass through a `t("…")` call in the
+ * source, so the sweep below would not see them: `Shell.tsx` resolves them
+ * outside React, from the router's own state. A wrong one is the #348 bug on the
+ * one string every screen has — the document title and the route-change
+ * announcement would then read the key itself out loud.
+ */
+const TITLE_KEY = /titleKey:\s*"([\w.]+):([\w.]+)"/g;
+
+/**
  * A count makes i18next look for the plural suffixes instead of the bare key —
  * `items_count_one` / `items_count_other` — so the bare key is absent by design.
  * English has these two; a language with more declares them in its own file.
@@ -102,5 +113,29 @@ describe("translation keys", () => {
     }
 
     expect(missing, "i18next renders a missing key as the key, so these print raw on screen").toEqual([]);
+  });
+
+  it("resolves every title key a route names itself with", () => {
+    const missing: string[] = [];
+    let found = 0;
+
+    for (const file of sourceFiles(SRC)) {
+      const source = readFileSync(file, "utf8");
+      for (const match of source.matchAll(TITLE_KEY)) {
+        const [, namespace, key] = match;
+        if (!namespace || !key) continue;
+        found++;
+        const keys = namespaces.get(namespace);
+        if (keys && resolves(keys, key)) continue;
+
+        const line = source.slice(0, match.index).split("\n").length;
+        missing.push(`${relative(SRC, file)}:${line} — titleKey "${namespace}:${key}" resolves to nothing`);
+      }
+    }
+
+    // Guards the guard: a regex that stopped matching would make the assertion
+    // below vacuously true, and every route declares one of these.
+    expect(found, "every route with a screen declares a titleKey").toBeGreaterThanOrEqual(7);
+    expect(missing, "an unresolved title key is read out as the key, on every page change").toEqual([]);
   });
 });

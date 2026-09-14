@@ -12,7 +12,7 @@
   "error_back_to_collections": "Back to collections",
   "error_reload": "Reload",
   "not_found_title": "Page not found",
-  "not_found_description": "There is no page at this address. The link may be out of date, or it may point at a collection that has since been deleted. Your own collections are safe.",
+  "not_found_description": "There is no page at this address. The link may be out of date, or it may have been typed by hand. Your own collections are safe.",
   "not_found_back_to_collections": "Back to collections",
   "not_found_go_to_settings": "Go to settings"
 }

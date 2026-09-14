@@ -3,6 +3,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createMemoryHistory, createRouter, RouterProvider } from "@tanstack/react-router";
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { createAppRouter } from "../router.js";
 import { routeTree } from "../routeTree.js";
 
 /**
@@ -52,6 +53,24 @@ vi.mock("../lib/api-client.js", () => ({
 function renderAt(path: string) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const router = createRouter({ routeTree, history: createMemoryHistory({ initialEntries: [path] }) });
+  render(
+    <QueryClientProvider client={queryClient}>
+      <RouterProvider router={router} />
+    </QueryClientProvider>,
+  );
+  return { router };
+}
+
+/**
+ * The same tree through `createAppRouter`, so the router's *own* options are
+ * under test rather than a bare `createRouter`'s defaults. Only the
+ * `defaultNotFoundComponent` cases need this — the splat is a property of the
+ * route tree and is the same either way — and keeping the two apart is what
+ * makes those cases fail for the right reason.
+ */
+function renderAppAt(path: string) {
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const router = createAppRouter({ history: createMemoryHistory({ initialEntries: [path] }) });
   render(
     <QueryClientProvider client={queryClient}>
       <RouterProvider router={router} />
@@ -184,27 +203,53 @@ describe("what the catch-all must not catch", () => {
   });
 });
 
-describe("arriving at a dead link from inside the app", () => {
-  /**
-   * The announcement, which is the whole reason this is a route and not a
-   * `defaultNotFoundComponent`: only a route carries `staticData`, and
-   * `staticData.titleKey` is what the shell announces (`Shell.tsx`).
-   *
-   * A client-side navigation, because that is the only thing the shell
-   * announces — it deliberately says nothing about the page a user arrived on,
-   * where the browser's own page load has already done it.
-   */
-  it("announces the page, the same way every other route is announced", async () => {
-    const { router } = renderAt("/settings");
-    expect(await screen.findByRole("main")).toBeInTheDocument();
-    const announcer = document.querySelector('.visually-hidden[aria-live="polite"]');
-    expect(announcer, "the shell's announcer must be in the document before the navigation").toBeEmptyDOMElement();
-
-    await router.navigate({ to: "/$", params: { _splat: "nope" } });
+/**
+ * The URLs the splat cannot catch, because they never reach route ranking at
+ * all: `findRouteMatch` decodes each segment and returns null on a `URIError`,
+ * so a truncated escape is a *global* not-found. That is the path
+ * `defaultNotFoundComponent` in `router.ts` exists for — the splat alone left
+ * these two rendering the library's `<p>Not Found</p>`, which is what the first
+ * draft of this change shipped.
+ */
+describe("an address the router cannot even read", () => {
+  it.each(["/%", "/%E0%A4%A"])("still gets the app's own screen at %s", async (path) => {
+    renderAppAt(path);
 
     expect(await screen.findByRole("heading", { level: 1, name: "Page not found" })).toBeInTheDocument();
-    // The same words as the document title: a screen-reader user is already
-    // trained to hear that string on a page change.
-    await waitFor(() => expect(announcer).toHaveTextContent("Page not found · MyCollections"));
+    const warnings = (warn.mock.calls as unknown[][]).map((args) => String(args[0]));
+    expect(warnings.filter((message) => message.includes("overly generic"))).toEqual([]);
+  });
+
+  /**
+   * The backstop has no route and therefore no `staticData`, so the shell has
+   * no key to name it with — the screen publishes its own name instead
+   * (`NotFoundScreen`'s `usePageTitle`). Without that the document would be
+   * called "MyCollections" here, which is the same WCAG 2.4.2 gap one layer
+   * down.
+   */
+  it("names the page even with no route to take the name from", async () => {
+    renderAppAt("/%");
+    await screen.findByRole("heading", { level: 1, name: "Page not found" });
+
+    await waitFor(() => expect(document.title).toBe("Page not found · MyCollections"));
+  });
+});
+
+/**
+ * A wrong address is wrong whether or not the app has been connected yet, so
+ * this route carries no token guard — unlike `/collections`. The recovery link
+ * is still useful: it lands on `/collections`, whose guard sends an unconnected
+ * user on to `/setup`.
+ */
+describe("before the app has been connected", () => {
+  it("still says the address is wrong, rather than redirecting to setup", async () => {
+    localStorage.clear();
+    renderAt("/nope");
+
+    expect(await screen.findByRole("heading", { level: 1, name: "Page not found" })).toBeInTheDocument();
+    // The screen the guard would have sent them to, asserted by its own heading
+    // so a redirect could not pass as a 404.
+    expect(screen.queryByRole("heading", { level: 1, name: /connect/i })).toBeNull();
+    expect(screen.getByRole("link", { name: "Back to collections" })).toHaveAttribute("href", "/collections");
   });
 });
