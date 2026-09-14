@@ -68,7 +68,21 @@ function usePageId(): string | undefined {
  * page" about it names a destination they are not at.
  */
 function useIsNotFound(): boolean {
-  return useRouterState({ select: (state) => state.matches.some((match) => match.staticData.notFound === true) });
+  return useRouterState({
+    select: (state) =>
+      state.matches.some(
+        // Two ways to be nowhere, and the shell means the question rather than
+        // either answer. The splat route is what a user actually arrives at, and
+        // carries the flag. `status: "notFound"` is the other path — a URL the
+        // matcher could not decode, or a future `notFound()` from a loader,
+        // which `router.ts` hands to `defaultNotFoundComponent` (`Match.js`
+        // renders it off exactly this field). That one keeps the *real* route's
+        // matches, so without this clause the nav would go back to marking a
+        // section behind a 404 screen, silently: the page would still be named,
+        // because `NotFoundScreen` publishes its own name.
+        (match) => match.staticData.notFound === true || match.status === "notFound",
+      ),
+  });
 }
 
 /** Whether the matched route's screen publishes a title of its own (#309). */
@@ -214,7 +228,13 @@ export function Shell({ children }: ShellProps) {
             <Icon name="logo" className="logo-mark" />
             {t("app_name")}
           </div>
-          {/* `activeOptions` with `exact` only on a 404: no address the splat
+          {/* `activeProps` is not what puts `data-status` on the link — the
+              library sets that unconditionally, after the caller's props, along
+              with the `aria-current` this page has to do without. What passing
+              it suppresses is the library's own `className: "active"` default,
+              which nothing here styles.
+
+              `activeOptions` with `exact` only on a 404: no address the splat
               catches can *equal* a nav destination, so there the link is simply
               never current, and prefix matching is untouched everywhere
               else (#354). */}

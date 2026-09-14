@@ -514,7 +514,9 @@ describe("what claims to be the current page", () => {
   }
 
   // Twice per row: the sidebar nav and the bottom nav are both in the document
-  // at every viewport, and only CSS decides which one is on screen.
+  // at every viewport, and `display: none` is what keeps one of them out of the
+  // accessibility tree (`global.css` — the bottom nav below 768px, the sidebar
+  // above it). So this is one claim to a user, and two nodes to a query.
   const COLLECTIONS_NAV = ["Collections → /collections", "Collections → /collections"];
   const SETTINGS_NAV = ["Settings → /settings", "Settings → /settings"];
 

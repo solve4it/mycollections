@@ -436,7 +436,14 @@ lever there is.
 That default is right for the nav and wrong for everything else, which is the whole of the rule:
 
 - **The nav says where you are.** `/collections/<id>` is a page inside the Collections section, and
-  marking the section link is the ordinary reading of `aria-current="page"`. Leave it alone.
+  the nav marks that section. Note what this app has *not* settled: ARIA distinguishes
+  `aria-current="page"` ("the current page within a set of pages") from `aria-current="true"`
+  ("the current item within a set"), and the careful reading — MDN's table, and most design
+  systems — is `page` for the page itself and `true` for the section containing it. The nav says
+  `page` for the section, because `<Link>` structurally cannot say anything else:
+  `STATIC_ACTIVE_PROPS` hardcodes the value. Emitting `true` means rendering our own `<a>` from
+  `useLinkProps`, which is a change of its own — tracked in #355. Until then this is a known
+  loose reading, not a checked one.
 - **A link in a screen's own content says where you can go.** Every back link and every way out of
   a failure points at an *ancestor* of the current URL by nature, so it matches that prefix always —
   and announces "current page" about the one link the user is about to follow *away*. Give those
