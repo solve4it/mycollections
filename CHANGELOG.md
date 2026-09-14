@@ -1,5 +1,31 @@
 # Changelog
 
+## [0.0.5](https://github.com/solve4it/mycollections/compare/mycollections-v0.0.4...mycollections-v0.0.5) (2026-09-14)
+
+
+### Features
+
+* **web:** a branded, announced not-found route ([#351](https://github.com/solve4it/mycollections/issues/351)) ([1f970f8](https://github.com/solve4it/mycollections/commit/1f970f8cc8263961aeb6c395f579864bf970cdda))
+* **web:** a collection's page title carries its own name ([#329](https://github.com/solve4it/mycollections/issues/329)) ([b079e9d](https://github.com/solve4it/mycollections/commit/b079e9d7e92e0a6d18d26aa6139928501423c06d))
+
+
+### Bug Fixes
+
+* **api:** make the dev CORS allowlist configurable for parallel instances ([#333](https://github.com/solve4it/mycollections/issues/333)) ([bb143d8](https://github.com/solve4it/mycollections/commit/bb143d8fc40123b73f828561b32f05bb8fb11198))
+* **deps:** update all non-major dependencies ([#352](https://github.com/solve4it/mycollections/issues/352)) ([b7f6016](https://github.com/solve4it/mycollections/commit/b7f601642c49d207e9b3f65fbf0e8a2480211748))
+* **docs-site:** copy docs/assets/ and prove a documented image renders ([#330](https://github.com/solve4it/mycollections/issues/330)) ([eb8fa91](https://github.com/solve4it/mycollections/commit/eb8fa917b60a870e28062b1b871dc5007c0af295))
+* **docs-site:** fail the build on Markdown docs/ will never publish ([#340](https://github.com/solve4it/mycollections/issues/340)) ([5ec6e89](https://github.com/solve4it/mycollections/commit/5ec6e89aac44ad95e8dca3d649c7ecc1040f849f))
+* **web:** announce route changes, name every page, and land focus deliberately ([#307](https://github.com/solve4it/mycollections/issues/307)) ([08a7e07](https://github.com/solve4it/mycollections/commit/08a7e077118e2deddabff6116fa5ef28779a924b))
+* **web:** capture componentStack for route render errors ([#318](https://github.com/solve4it/mycollections/issues/318)) ([7c7de41](https://github.com/solve4it/mycollections/commit/7c7de41bb10c97046557bce64190d309081a7f9d))
+* **web:** fill live regions that were already on the page ([#334](https://github.com/solve4it/mycollections/issues/334)) ([4ecfc24](https://github.com/solve4it/mycollections/commit/4ecfc244186df11794de5774d2f79ac2b3c1fb46))
+* **web:** follow the resolved language in &lt;html dir&gt; too ([#323](https://github.com/solve4it/mycollections/issues/323)) ([205e5c0](https://github.com/solve4it/mycollections/commit/205e5c0e9e78526162f3a345481eca51f6641030))
+* **web:** give route render errors a screen, so they are caught at all ([#345](https://github.com/solve4it/mycollections/issues/345)) ([3a83f6a](https://github.com/solve4it/mycollections/commit/3a83f6a1b5479699114ec5a58efd1c48740c9c0d))
+* **web:** give the emptied-trash confirmation a life span ([#338](https://github.com/solve4it/mycollections/issues/338)) ([2af0d80](https://github.com/solve4it/mycollections/commit/2af0d80ab1a69fe478b41b43b24fa44c53cb9351))
+* **web:** group the language and theme controls under an Interface heading ([#321](https://github.com/solve4it/mycollections/issues/321)) ([f1928df](https://github.com/solve4it/mycollections/commit/f1928df7e924493f4902266b02da48736f54b420))
+* **web:** the editor printed a raw translation key and the dashboard's copy ([#348](https://github.com/solve4it/mycollections/issues/348)) ([2fee460](https://github.com/solve4it/mycollections/commit/2fee4606f18d882084dbadfb64349e1c95221ea9))
+* **web:** the nav says aria-current="page" for a section it is not ([#358](https://github.com/solve4it/mycollections/issues/358)) ([ae45e09](https://github.com/solve4it/mycollections/commit/ae45e092ab3a31db1269f5f9807ea488ee561e65))
+* **web:** three links claimed to be the current page on a 404 ([#357](https://github.com/solve4it/mycollections/issues/357)) ([b2a0559](https://github.com/solve4it/mycollections/commit/b2a0559097d870058d00b085acc17722fe2b3974))
+
 ## [0.0.4](https://github.com/solve4it/mycollections/compare/mycollections-v0.0.3...mycollections-v0.0.4) (2026-08-29)
 
 
