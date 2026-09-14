@@ -367,6 +367,35 @@ pathname (`/collections/<id>`) — not `location.pathname`, which the router upd
 the matches resolve, so a guard on it announces the page being *left*; and not the translated
 title, which would announce the current page again on every language change.
 
+#### The address that matches nothing
+
+`routes/not-found.tsx` is a **route**, `path: "$"`, added last in `routeTree.ts` — not the
+router's `defaultNotFoundComponent`. That is the same rule as above read backwards: only a route
+carries `staticData`, so only a route can be named and announced, and a component-shaped 404
+leaves the document title saying whatever the previous screen was called. It is also why the
+router's development warning about "TanStack Router's overly generic defaultNotFoundComponent"
+(`renderRouteNotFound.js`) is gone rather than suppressed — an unknown URL now *matches* a route,
+so no notFound error is raised at all.
+
+A wildcard ranks below every static and dynamic path, so the catch-all takes only what nothing
+else claims; `not-found.test.tsx` pins that, URL by URL, because a splat that outranked a real
+route would replace a working screen with "Page not found" and no test of the 404 itself would
+notice.
+
+The splat is not the whole story, and the part that is easy to get wrong is the part that has no
+route at all. A URL the matcher cannot **decode** — `/%`, or a link truncated mid-escape — throws
+a `URIError` inside `findRouteMatch`, which returns null, so it never reaches ranking and becomes
+a *global* not-found. `router.ts` therefore also configures `defaultNotFoundComponent` with the
+same screen, and `NotFoundScreen` publishes its own name through `usePageTitle` — because that
+path has no `staticData` to be named from, and without it the document would be called
+"MyCollections". A `notFound()` thrown from a loader lands on the same backstop.
+
+How far that reaches today is worth being exact about: under the current static host a malformed
+path never gets to the app at all — Vite answers `/%E0%A4%A` with a bare 404 rather than
+index.html — so the backstop covers the router being handed such a location from inside the app,
+and every future `notFound()`. It is not a URL you can visit. The splat route is what a user
+actually arrives at, and is the only one of the two that is named by `staticData`.
+
 #### A page whose name is in the data
 
 Some pages cannot be named by their route: `/collections/$id` is "Collection" until the query says

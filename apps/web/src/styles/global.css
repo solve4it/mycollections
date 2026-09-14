@@ -508,6 +508,11 @@ button[type="submit"]:hover {
   border-radius: var(--radius-sm);
   background: var(--paper);
   color: var(--ink);
+  /* Matching .button-primary above. Every caller was a <button> until the
+     not-found screen's secondary action (#344), which is a <a>: the skin has to
+     carry this or the first link to wear it renders an underlined label inside a
+     bordered button. A skin that only works on one element is not a skin. */
+  text-decoration: none;
   font: inherit;
   cursor: pointer;
 }
@@ -549,19 +554,28 @@ button[type="submit"]:disabled {
   cursor: not-allowed;
 }
 
-/* Empty state (#225) — "the cabinet is empty". The mark sits above a title in
-   body ink and an explanation in muted ink, so the block reads as calm
-   information rather than as a failure; the failure surfaces are the only thing
-   in the app that speaks in --danger. */
-.empty-state {
+/* Empty state (#225) — "the cabinet is empty" — and not found (#344) — "this
+   address is not filed here". The mark sits above a title in body ink and an
+   explanation in muted ink, so the block reads as calm information rather than
+   as a failure; the failure surfaces are the only thing in the app that speaks
+   in --danger.
+
+   One rule for both, per the class-roles rule: they are one presentational role
+   — the calm, centered, mark-over-copy surface, the non-danger counterpart to
+   .failure-surface — however differently the two read in words. What is genuinely
+   different between them is written once, below: the 404 owns its page, so its
+   title is sized as a page title and it carries a row of controls. */
+.empty-state,
+.not-found {
   text-align: center;
   padding: var(--space-6) var(--space-4);
   color: var(--ink-muted);
 }
 
-/* The mark inherits the empty state's muted ink through currentColor, so it has
-   no color of its own to keep in step with the theme. */
-.empty-mark {
+/* Both marks inherit their surface's muted ink through currentColor, so neither
+   has a color of its own to keep in step with the theme. */
+.empty-mark,
+.not-found-mark {
   inline-size: 72px;
   block-size: 64px;
   margin-bottom: var(--space-3);
@@ -581,7 +595,8 @@ button[type="submit"]:disabled {
 /* Measured copy, centered, with air under it for the CTA that follows on the
    dashboard. The items empty state has no CTA — its action is the add-item form
    below — so its explanation is the last thing in the block and drops the gap. */
-.empty-state p {
+.empty-state p,
+.not-found p {
   margin: 0 auto var(--space-4);
   max-width: 42ch;
 }
@@ -640,6 +655,30 @@ p[role="alert"] {
    The controls inside it keep every ring they have. */
 .failure-surface:focus {
   outline: none;
+}
+
+/* Not found (#344). Everything this screen shares with the empty state is up
+   there, on one rule; only the two real differences are here.
+
+   The first: this title owns its page, where .empty-state-title is sized for a
+   block that usually sits inside one. The second: two controls in a row, which
+   no empty state has. */
+.not-found h1 {
+  margin: 0 0 var(--space-2);
+  font-size: 1.5rem;
+  color: var(--ink);
+}
+
+/* Centered rather than left-aligned like .failure-actions: everything above it
+   on this screen is centered, and a left-aligned row under centered copy reads
+   as a mistake. Wraps so the two controls stack at 390px instead of shrinking
+   below the 44px target. */
+.not-found-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
 }
 
 /* Collection grid + cards (#223). A card is a catalog entry: generated cover on

@@ -65,8 +65,8 @@ When the PWA service worker lands (#34/#64), the precache glob must include `**/
 Hand-rolled inline SVG in `apps/web/src/components/Icon.tsx` — no dependency, no sprite, no
 request to make offline. One 24px grid, 1.5px strokes, round caps and joins, `currentColor`
 only, so an icon takes the color of whatever text it sits in and inverts with the theme for
-free. Eleven icons: `collections`, `settings`, `add`, `back`, `edit`, `delete`, `import`,
-`export`, `logo` (the three-drawer mark), `check`, `cross`.
+free. Twelve icons: `collections`, `settings`, `add`, `back`, `edit`, `delete`, `import`,
+`restore`, `export`, `logo` (the three-drawer mark), `check`, `cross`.
 
 Sizing is em-based (`.icon` = 1.25em), so icons track the type scale; a context that needs a
 different optical size sets `font-size` on the icon rather than a pixel width, keeping the
@@ -166,6 +166,40 @@ Two shapes exist, and they are styled differently on purpose:
 Measured: `--danger` 5.81:1 on paper / 6.25:1 on card (light), 7.19 / 6.41 (dark); on
 `--danger-surface` 5.56 / 6.34. All enforced by `tokens.integration.test.ts`;
 `alerts.integration.test.ts` pins the rules themselves.
+
+What is deliberately **outside** this treatment is the not-found screen (#344): a wrong address
+is not a failure of the app, so it takes no `[role="alert"]` and therefore none of this. See
+"Not found" below — that distinction is the same one #335 draws for confirmations.
+
+## Not found (#344)
+
+A 404 is the one screen a user reaches by getting something wrong, and it is **not** a failure of
+the app: nothing threw, no request failed, and their collections are where they left them. So it
+takes none of the treatment above — no `[role="alert"]`, and therefore none of the `--danger`
+ink, since in this app the role *is* the danger treatment. Its register is `.empty-state`'s: title
+in `--ink`, explanation in `--ink-muted`, centered, calm. The same distinction #335 draws for
+confirmations.
+
+The **motif** is the shared one for "not filed here", and it is defined here once so the docs
+site's 404 (#343) can draw the same thing rather than invent a second: **the cabinet with the
+asked-for drawer missing** — a body with three drawer bands, a pull on the top and bottom ones,
+and a dashed outline in the gap where the middle drawer front should be. The dashes are the
+non-color cue, so the absence still reads in forced-colors mode. Deliberately *not*
+`EmptyState`'s mark, which is a drawer pulled open and empty: that one says the user has nothing
+filed yet, which on a 404 is a lie about their data.
+
+It is the second illustration in the app, and it keeps every rule the first one does (see
+"Waiting and emptiness" below). Those rules now live in one place — `components/Mark.tsx`, the
+shared 72×64 canvas at 2px strokes with `fill="none"`, `currentColor`, round caps and
+`aria-hidden` — because they are what make an illustration take its surroundings' ink and invert
+with the theme for free, and a second copy is a second place for one of them to go missing. The
+one override is the dashed rectangle's `stroke-linecap: butt`: a round cap extends each dash by
+half the stroke width at both ends, so at 2px a `4 4` pattern paints 6 on and 2 off and the gap
+closes up into a solid fourth drawer.
+
+The screen itself shares `.empty-state`'s rule rather than restating it — one presentational
+role, the calm centered mark-over-copy surface — and adds only what is genuinely different: a
+page-sized `<h1>`, and a centered row of controls.
 
 ## Forms, buttons and status (#224)
 
@@ -284,8 +318,9 @@ in `--ink`, an explanation in `--ink-muted`, and — where the screen has one �
 fills it. The dashboard's empty state owns the page, so its title is the page's `<h1>`; the
 items one sits under two headings already and its title is a `<p>`, because a third heading
 would claim an outline level it does not own (`EmptyState`'s `titleAs` prop, `"p"` by default).
-The illustration is the **one exception** to the icon rules above: it lives in `EmptyState.tsx`
-rather than `ICON_NAMES`, on a 72×64 canvas at 2px strokes — nothing else wants it at 1.25em.
+The illustration is one of the app's two **exceptions** to the icon rules above — the other is
+the not-found mark (#344) — and it lives in `EmptyState.tsx` rather than `ICON_NAMES`, on a 72×64
+canvas at 2px strokes: nothing else wants it at 1.25em.
 It keeps every other rule (`fill="none"`, `currentColor`, round caps, `aria-hidden`), so it
 takes the empty state's muted ink for free and survives forced-colors mode.
 
