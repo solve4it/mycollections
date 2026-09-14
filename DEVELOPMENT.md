@@ -367,6 +367,22 @@ pathname (`/collections/<id>`) — not `location.pathname`, which the router upd
 the matches resolve, so a guard on it announces the page being *left*; and not the translated
 title, which would announce the current page again on every language change.
 
+#### The address that matches nothing
+
+`routes/not-found.tsx` is a **route**, `path: "$"`, added last in `routeTree.ts` — not the
+router's `defaultNotFoundComponent`. That is the same rule as above read backwards: only a route
+carries `staticData`, so only a route can be named and announced, and a component-shaped 404
+leaves the document title saying whatever the previous screen was called. It is also why the
+router's development warning about "TanStack Router's overly generic defaultNotFoundComponent"
+(`renderRouteNotFound.js`) is gone rather than suppressed — an unknown URL now *matches* a route,
+so no notFound error is raised at all.
+
+A wildcard ranks below every static and dynamic path, so the catch-all takes only what nothing
+else claims; `not-found.test.tsx` pins that, URL by URL, because a splat that outranked a real
+route would replace a working screen with "Page not found" and no test of the 404 itself would
+notice. If you ever call `notFound()` from a loader, that is a *different* path — it would reach
+the library's `<p>Not Found</p>` — so give the route a `notFoundComponent` at the same time.
+
 #### A page whose name is in the data
 
 Some pages cannot be named by their route: `/collections/$id` is "Collection" until the query says

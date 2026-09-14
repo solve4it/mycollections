@@ -167,6 +167,27 @@ Measured: `--danger` 5.81:1 on paper / 6.25:1 on card (light), 7.19 / 6.41 (dark
 `--danger-surface` 5.56 / 6.34. All enforced by `tokens.integration.test.ts`;
 `alerts.integration.test.ts` pins the rules themselves.
 
+## Not found (#344)
+
+A 404 is the one screen a user reaches by getting something wrong, and it is **not** a failure of
+the app: nothing threw, no request failed, and their collections are where they left them. So it
+takes none of the treatment above — no `[role="alert"]`, and therefore none of the `--danger`
+ink, since in this app the role *is* the danger treatment. Its register is `.empty-state`'s: title
+in `--ink`, explanation in `--ink-muted`, centered, calm. The same distinction #335 draws for
+confirmations.
+
+The **motif** is the shared one for "not filed here", and it is defined here once so the docs
+site's 404 (#343) can draw the same thing rather than invent a second: **the cabinet with the
+asked-for drawer missing** — a body with three drawer bands, a pull on the top and bottom ones,
+and a dashed outline in the gap where the middle drawer front should be. The dashes are the
+non-color cue, so the absence still reads in forced-colors mode. Deliberately *not*
+`EmptyState`'s mark, which is a drawer pulled open and empty: that one says the user has nothing
+filed yet, which on a 404 is a lie about their data.
+
+It is the second illustration in the app, and it keeps every rule the first one does (see
+"Waiting and emptiness" below): its own 72×64 canvas at 2px strokes rather than a member of
+`ICON_NAMES`, `fill="none"`, `currentColor` only, round caps, `aria-hidden`.
+
 ## Forms, buttons and status (#224)
 
 **Controls.** The text-like control rule is written as *exclusions*
@@ -284,8 +305,9 @@ in `--ink`, an explanation in `--ink-muted`, and — where the screen has one �
 fills it. The dashboard's empty state owns the page, so its title is the page's `<h1>`; the
 items one sits under two headings already and its title is a `<p>`, because a third heading
 would claim an outline level it does not own (`EmptyState`'s `titleAs` prop, `"p"` by default).
-The illustration is the **one exception** to the icon rules above: it lives in `EmptyState.tsx`
-rather than `ICON_NAMES`, on a 72×64 canvas at 2px strokes — nothing else wants it at 1.25em.
+The illustration is one of the app's two **exceptions** to the icon rules above — the other is
+the not-found mark (#344) — and it lives in `EmptyState.tsx` rather than `ICON_NAMES`, on a 72×64
+canvas at 2px strokes: nothing else wants it at 1.25em.
 It keeps every other rule (`fill="none"`, `currentColor`, round caps, `aria-hidden`), so it
 takes the empty state's muted ink for free and survives forced-colors mode.
 

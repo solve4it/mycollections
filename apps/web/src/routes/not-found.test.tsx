@@ -143,7 +143,7 @@ describe("an address with no page behind it", () => {
     renderAt("/nope");
     await screen.findByRole("heading", { level: 1 });
 
-    const warnings = warn.mock.calls.map((args) => String(args[0]));
+    const warnings = (warn.mock.calls as unknown[][]).map((args) => String(args[0]));
     expect(warnings.filter((message) => message.includes("overly generic"))).toEqual([]);
   });
 });
