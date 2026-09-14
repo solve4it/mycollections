@@ -505,33 +505,48 @@ describe("route titles as data", () => {
  * section — is pinned in `routes/not-found.test.tsx`.
  */
 describe("what claims to be the current page", () => {
-  /** Every link on screen that says it is the page the user is on. */
+  /**
+   * Every link that claims to be current, and *what* it claims — the value is
+   * the whole of #355, so a sweep that only listed the links would pass against
+   * the bug it exists to catch.
+   */
   function currentLinks(): string[] {
     return screen
       .getAllByRole("link")
       .filter((link) => link.getAttribute("aria-current") !== null)
-      .map((link) => `${link.textContent?.trim()} → ${link.getAttribute("href")}`);
+      .map(
+        (link) => `${link.textContent?.trim()} → ${link.getAttribute("href")} = ${link.getAttribute("aria-current")}`,
+      );
   }
 
   // Twice per row: the sidebar nav and the bottom nav are both in the document
   // at every viewport, and `display: none` is what keeps one of them out of the
   // accessibility tree (`global.css` — the bottom nav below 768px, the sidebar
   // above it). So this is one claim to a user, and two nodes to a query.
-  const COLLECTIONS_NAV = ["Collections → /collections", "Collections → /collections"];
-  const SETTINGS_NAV = ["Settings → /settings", "Settings → /settings"];
+  const at = (label: string, href: string, value: string) => [
+    `${label} → ${href} = ${value}`,
+    `${label} → ${href} = ${value}`,
+  ];
+
+  // `page` only where the link *is* the page on screen; `true` where it is the
+  // section that page sits in. ARIA's own distinction: "the current page within
+  // a set of pages" against "the current item within a set".
+  const COLLECTIONS_PAGE = at("Collections", "/collections", "page");
+  const COLLECTIONS_SECTION = at("Collections", "/collections", "true");
+  const SETTINGS_PAGE = at("Settings", "/settings", "page");
 
   it.each([
-    ["/collections", "Collections", COLLECTIONS_NAV],
-    ["/collections/new", "New collection", COLLECTIONS_NAV],
-    [`/collections/${COLLECTION.id}`, "Games", COLLECTIONS_NAV],
-    [`/collections/${COLLECTION.id}/edit`, "Edit collection", COLLECTIONS_NAV],
-    ["/settings", "Settings", SETTINGS_NAV],
-  ])("marks only the section nav at %s", async (path, heading, expected) => {
+    ["/collections", "Collections", COLLECTIONS_PAGE],
+    ["/collections/new", "New collection", COLLECTIONS_SECTION],
+    [`/collections/${COLLECTION.id}`, "Games", COLLECTIONS_SECTION],
+    [`/collections/${COLLECTION.id}/edit`, "Edit collection", COLLECTIONS_SECTION],
+    ["/settings", "Settings", SETTINGS_PAGE],
+  ])("says what the nav is current for at %s", async (path, heading, expected) => {
     renderAt(path);
     await screen.findByRole("heading", { level: 1, name: heading });
 
-    // Listed, not counted: a failure should name the link that lied and say
-    // where it pointed, which is the whole content of the bug.
+    // Listed, not counted: a failure should name the link that lied, say where
+    // it pointed and what it called itself.
     expect(currentLinks()).toEqual(expected);
   });
 });

@@ -1,5 +1,5 @@
-import { Link, useRouterState } from "@tanstack/react-router";
-import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
+import { useLinkProps, useRouterState } from "@tanstack/react-router";
+import { type ComponentPropsWithRef, type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { isSamePageName, type PageName, PageNameProvider } from "../lib/page-title.js";
 import { Icon, type IconName } from "./Icon.js";
@@ -8,6 +8,83 @@ const NAV_ITEM_DEFS: Array<{ to: "/collections" | "/settings"; labelKey: string;
   { to: "/collections", labelKey: "nav_collections", icon: "collections" },
   { to: "/settings", labelKey: "nav_settings", icon: "settings" },
 ];
+
+/** One nav destination, which both the sidebar and the bottom bar render. */
+type NavTo = (typeof NAV_ITEM_DEFS)[number]["to"];
+
+/**
+ * A nav link that says what it is current *for* (#355).
+ *
+ * ARIA has two values and they are not interchangeable: `aria-current="page"`
+ * is "the current page within a set of pages" — the link to the document you
+ * are reading — and `aria-current="true"` is "the current item within a set".
+ * A section link on `/collections/<id>` is the second of those, and saying
+ * `page` tells a screen-reader user they are on a page they are not on. It is
+ * the same false claim #354 removed from the 404, one step quieter.
+ *
+ * Hand-rolled from `useLinkProps` rather than rendered as a `<Link>` because
+ * `<Link>` structurally cannot say anything else: `STATIC_ACTIVE_PROPS` in
+ * `link.js` hardcodes `"aria-current": "page"` and is spread *after* the
+ * caller's props, so no prop can change or remove it. `useLinkProps` is the
+ * library's own documented hook for this — it returns the identical props
+ * object, typed as anchor props — and `<Link>` itself is a thin wrapper around
+ * it, which is also where the two keys dropped below come from: `type` and
+ * `disabled` belong on a button, not an anchor, and `Link` strips them for the
+ * same reason.
+ *
+ * Asked twice, because there are two questions. The first call carries this
+ * page's active rule — prefix matching, except on a 404, where `exact` makes it
+ * never active because no address the splat catches can *equal* a nav
+ * destination (#354). The second asks the narrower question the `page` value
+ * actually means: is this link the page on screen. Both are selector
+ * subscriptions on the same location store, so the pair costs a comparison, not
+ * a render.
+ */
+function NavLink({
+  to,
+  className,
+  isNotFound,
+  children,
+}: {
+  to: NavTo;
+  className: string;
+  isNotFound: boolean;
+  children: ReactNode;
+}) {
+  const {
+    "aria-current": _libraryValue,
+    type: _type,
+    disabled: _disabled,
+    ...props
+  } = useLinkProps({
+    to,
+    activeOptions: { exact: isNotFound },
+    // Not what puts `data-status` on the link — the library does that
+    // unconditionally. What passing it suppresses is the library's own
+    // `className: "active"` default, which nothing here styles.
+    activeProps: { "data-status": "active" },
+    // `disabled` is in the object the hook returns but not in the anchor props
+    // it claims to return, so it has to be named here to be dropped.
+  }) as ComponentPropsWithRef<"a"> & { disabled?: boolean };
+  const onThisPage = isLinkActive(useLinkProps({ to, activeOptions: { exact: true } }));
+
+  return (
+    <a {...props} className={className} aria-current={onThisPage ? "page" : isLinkActive(props) ? "true" : undefined}>
+      {children}
+    </a>
+  );
+}
+
+/**
+ * Whether `useLinkProps` considered the link active.
+ *
+ * Read through a cast because the hook types its result as plain anchor props,
+ * which carry no `data-*` keys — `data-status` is nonetheless what the library
+ * sets, and what `global.css` styles the active item from.
+ */
+function isLinkActive(props: object): boolean {
+  return (props as { "data-status"?: string })["data-status"] === "active";
+}
 
 interface ShellProps {
   children: ReactNode;
@@ -228,28 +305,12 @@ export function Shell({ children }: ShellProps) {
             <Icon name="logo" className="logo-mark" />
             {t("app_name")}
           </div>
-          {/* `activeProps` is not what puts `data-status` on the link — the
-              library sets that unconditionally, after the caller's props, along
-              with the `aria-current` this page has to do without. What passing
-              it suppresses is the library's own `className: "active"` default,
-              which nothing here styles.
-
-              `activeOptions` with `exact` only on a 404: no address the splat
-              catches can *equal* a nav destination, so there the link is simply
-              never current, and prefix matching is untouched everywhere
-              else (#354). */}
           <div className="sidebar-nav">
             {NAV_ITEM_DEFS.map(({ to, labelKey, icon }) => (
-              <Link
-                key={to}
-                to={to}
-                className="touch-target"
-                activeOptions={{ exact: isNotFound }}
-                activeProps={{ "data-status": "active" }}
-              >
+              <NavLink key={to} to={to} className="touch-target" isNotFound={isNotFound}>
                 <Icon name={icon} />
                 {t(labelKey)}
-              </Link>
+              </NavLink>
             ))}
           </div>
           {/* The version is build-time injected (see vite.config.ts), so it is
@@ -270,16 +331,10 @@ export function Shell({ children }: ShellProps) {
 
         <nav className="shell-bottom-nav" aria-label={t("aria_bottom_nav")}>
           {NAV_ITEM_DEFS.map(({ to, labelKey, icon }) => (
-            <Link
-              key={to}
-              to={to}
-              className="bottom-nav-item touch-target"
-              activeOptions={{ exact: isNotFound }}
-              activeProps={{ "data-status": "active" }}
-            >
+            <NavLink key={to} to={to} className="bottom-nav-item touch-target" isNotFound={isNotFound}>
               <Icon name={icon} />
               <span>{t(labelKey)}</span>
-            </Link>
+            </NavLink>
           ))}
         </nav>
       </div>
