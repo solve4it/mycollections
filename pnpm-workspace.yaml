@@ -12,7 +12,7 @@ allowBuilds:
 # workspace resolves one deterministic, release-age-gated version (avoids pulling
 # a <24h-old release and the resulting minimumReleaseAge exclusion).
 overrides:
-  "@types/node": "24.13.4"
+  "@types/node": "24.13.6"
 
 # The docs site's `prebuild`/`postbuild` hooks are load-bearing: `prebuild` copies
 # the shared docs in from the repo root, and `postbuild` fails the build on a
