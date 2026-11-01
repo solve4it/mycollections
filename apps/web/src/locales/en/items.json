@@ -8,6 +8,8 @@
   "cancel": "Cancel",
   "edit": "Edit",
   "delete": "Delete",
+  "edit_item": "Edit “{{name}}”",
+  "delete_item": "Delete “{{name}}”",
   "empty_items": "No items yet",
   "empty_items_description": "Add your first item using the form below.",
   "loading": "Loading…",

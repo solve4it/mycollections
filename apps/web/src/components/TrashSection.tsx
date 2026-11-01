@@ -273,6 +273,9 @@ function CollectionRow({
             type="button"
             className="touch-target button-quiet"
             data-trash-restore=""
+            // Names the row it restores (#375): "Restore" alone is what every
+            // row in the list says, and is also where a purge hands focus.
+            aria-label={t("trash_restore_row", { name: collection.name })}
             // `aria-disabled` rather than `disabled` (#368) — see ConfirmButton.
             aria-disabled={restore.isPending || undefined}
             onClick={() => {
@@ -285,6 +288,7 @@ function CollectionRow({
           </button>
           <ConfirmButton
             label={t("trash_delete_forever")}
+            accessibleLabel={t("trash_delete_forever_row", { name: collection.name })}
             icon="delete"
             prompt={t("trash_delete_collection_prompt", { name: collection.name })}
             confirmLabel={t("trash_delete_forever")}
@@ -336,6 +340,8 @@ function ItemRow({ item, locale, onPurging }: { item: DeletedItem; locale: strin
             type="button"
             className="touch-target button-quiet"
             data-trash-restore=""
+            // Names the row it restores (#375) — see CollectionRow above.
+            aria-label={t("trash_restore_row", { name })}
             // `aria-disabled` rather than `disabled` (#368) — see ConfirmButton.
             aria-disabled={restore.isPending || undefined}
             onClick={() => {
@@ -348,6 +354,7 @@ function ItemRow({ item, locale, onPurging }: { item: DeletedItem; locale: strin
           </button>
           <ConfirmButton
             label={t("trash_delete_forever")}
+            accessibleLabel={t("trash_delete_forever_row", { name })}
             icon="delete"
             prompt={t("trash_delete_item_prompt", { name })}
             confirmLabel={t("trash_delete_forever")}

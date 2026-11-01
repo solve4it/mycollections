@@ -376,6 +376,9 @@ function ItemRow({ collection, item, onDeleting, onDeleted }: ItemRowProps) {
   // Opening and closing the editor both remove the control that was pressed, so
   // both hand focus on (#367). This row survives either, so the handoff lives
   // here; the delete, which takes the row itself, is handled by the page.
+  // What this row is called, which four things need: the editor's name, both of
+  // the row's controls (#375), and the toast if it is deleted.
+  const name = itemLabel(collection, item, t("untitled"));
   const handOffFocus = useFocusHandoff();
   const editRef = useRef<HTMLButtonElement>(null);
   // The APG dialog rule, return-to-invoker: whatever closes the editor — Cancel
@@ -399,7 +402,7 @@ function ItemRow({ collection, item, onDeleting, onDeleted }: ItemRowProps) {
             // The editor takes the item's own fields off the screen, so it has
             // to carry the name itself — and it is what a user entering it
             // hears first (#367).
-            label={t("editing_item", { name: itemLabel(collection, item, t("untitled")) })}
+            label={t("editing_item", { name })}
             focusOnOpen
             pending={updateItem.isPending}
             // Cancelling discards the whole editing session, the failed save
@@ -453,6 +456,12 @@ function ItemRow({ collection, item, onDeleting, onDeleted }: ItemRowProps) {
             type="button"
             ref={editRef}
             data-row-edit=""
+            // Names the row it edits (#375). Every row says "Edit" otherwise,
+            // so a screen-reader user hears the same word once per item with
+            // nothing tying a press to a record — and this is also where a
+            // delete, an undo and a cancelled editor all hand focus, where
+            // arriving on an unnamed "Edit" says nothing about what happened.
+            aria-label={t("edit_item", { name })}
             className="touch-target button-quiet"
             onClick={() => setEditing(true)}
           >
@@ -461,6 +470,7 @@ function ItemRow({ collection, item, onDeleting, onDeleted }: ItemRowProps) {
           </button>
           <button
             type="button"
+            aria-label={t("delete_item", { name })}
             className="touch-target button-quiet"
             onClick={() => {
               // Asked for before the mutation, while the row is still on screen

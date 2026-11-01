@@ -24,17 +24,52 @@ import { expect, focusedControl, NOTHING_FOCUSED, tabOrder, test } from "./fixtu
  * Two states this file traverses are knowingly wrong in ways it does not assert:
  * a row's open editor collides DOM ids with the add-item form, so one form's
  * labels double up and the other's vanish (#369), and a collection card is
- * announced code-then-count-then-name (#370). A third is that the per-row
- * controls are not told apart by name — every row offers `button "Edit"` and
- * `button "Delete"`, every trash row `button "Restore"` — so the destinations
- * the focus block asserts place the user correctly without yet *saying* which
- * row they are on (#375).
+ * announced code-then-count-then-name (#370).
  */
 
 const FIELDS = [
   { id: "title", label: "Title", type: "text", required: true },
   { id: "year", label: "Year", type: "number" },
 ];
+
+/**
+ * A row's controls, which now name the row they act on (#375).
+ *
+ * Said once here because every one of them appears in both a tab-order
+ * expectation and a selector: the sweep's whole contract is that the expected
+ * stop and the element a spec reaches for are the same string, so a change to
+ * the pattern is one edit rather than forty.
+ *
+ * The visible label comes first and the row's name after it, which is not
+ * merely tidier. WCAG 2.5.3 Label in Name (Level A) requires the visible label
+ * to appear in the accessible name as a contiguous run, so
+ * `Delete forever “Kind of Blue”` passes where the issue's own suggestion,
+ * "Delete Kind of Blue forever", splits "Delete forever" and does not. That is
+ * machine-checkable rather than a matter of taste: axe's
+ * `label-content-name-mismatch` is tagged `wcag21a`, which `fixtures.ts`
+ * includes, so the wrong shape would turn the scans in `a11y.spec.ts` red on
+ * every row.
+ */
+const editName = (item: string) => `Edit “${item}”`;
+const deleteName = (item: string) => `Delete “${item}”`;
+const restoreName = (row: string) => `Restore “${row}”`;
+const purgeName = (row: string) => `Delete forever “${row}”`;
+
+/**
+ * The same controls as tab stops, which carry one more thing than a selector
+ * does: Playwright appends an element's text content to the stop when the
+ * accessible name differs from it, so a stop reads
+ * `button "Edit “Kind of Blue”": Edit`.
+ *
+ * That is the 2.5.3 relationship written out — announced name on the left,
+ * visible label on the right — so these expectations fail both if a row stops
+ * naming itself and if the visible label drifts out of the name it is supposed
+ * to be contained in.
+ */
+const editStop = (item: string) => `button "${editName(item)}": Edit`;
+const deleteStop = (item: string) => `button "${deleteName(item)}": Delete`;
+const restoreStop = (row: string) => `button "${restoreName(row)}": Restore`;
+const purgeStop = (row: string) => `button "${purgeName(row)}": Delete forever`;
 
 const SKIP_LINK = 'link "Skip to main content"';
 const NAV = ['link "Collections"', 'link "Settings"'];
@@ -205,10 +240,10 @@ test.describe("keyboard traversal of every screen", () => {
     await expectTabOrder(page, "a collection with items", [
       'link "All collections"',
       'link "Edit collection"',
-      'button "Edit"',
-      'button "Delete"',
-      'button "Edit"',
-      'button "Delete"',
+      editStop("Kind of Blue"),
+      deleteStop("Kind of Blue"),
+      editStop("Blue Train"),
+      deleteStop("Blue Train"),
       'combobox "Status"',
       'textbox "Title"',
       'spinbutton "Year"',
@@ -227,15 +262,15 @@ test.describe("keyboard traversal of every screen", () => {
     await api.deleteItem(collection.id, item.id);
 
     await page.goto("/settings");
-    await expect(page.getByRole("button", { name: "Restore" })).toBeVisible();
+    await expect(page.getByRole("button", { name: restoreName("Kind of Blue") })).toBeVisible();
 
     await expectTabOrder(page, "settings with a full trash", [
       'combobox "Language"',
       'combobox "Theme"',
       'button "Export data"',
       'button "Choose backup file"',
-      'button "Restore"',
-      'button "Delete forever"',
+      restoreStop("Kind of Blue"),
+      purgeStop("Kind of Blue"),
       'button "Empty trash"',
       'checkbox "Record error reports" [checked]',
       'button "Disconnect"',
@@ -267,7 +302,7 @@ test.describe("no screen traps focus", () => {
     await api.deleteItem(collection.id, item.id);
 
     await page.goto("/settings");
-    await expect(page.getByRole("button", { name: "Restore" })).toBeVisible();
+    await expect(page.getByRole("button", { name: restoreName("Kind of Blue") })).toBeVisible();
 
     const forward = await tabOrder(page);
     // The walk left focus off the end of the sequence, so the first Shift+Tab
@@ -305,7 +340,7 @@ test.describe("every action is operable without a pointer", () => {
     const rowEditor = page.getByRole("list").getByRole("button", { name: "Save" });
 
     // Space opens the editor.
-    await page.getByRole("button", { name: "Edit" }).focus();
+    await page.getByRole("button", { name: editName("Kind of Blue") }).focus();
     await page.keyboard.press(" ");
     await expect(rowEditor, "Space on a row's Edit must open its editor").toBeVisible();
 
@@ -316,7 +351,7 @@ test.describe("every action is operable without a pointer", () => {
 
     // Enter deletes, and the value is gone from the list rather than merely
     // greyed: the row is what carries it.
-    await page.getByRole("button", { name: "Delete" }).focus();
+    await page.getByRole("button", { name: deleteName("Kind of Blue") }).focus();
     await page.keyboard.press("Enter");
     await expect(page.getByRole("listitem"), "Enter on Delete must remove the row").toHaveCount(0);
     await expect(page.locator(".item-list")).toHaveCount(0);
@@ -337,7 +372,7 @@ test.describe("every action is operable without a pointer", () => {
 
     // Deleted by key, from the row's own button, so the walk below starts where
     // a keyboard user actually is when the toast appears.
-    await page.getByRole("button", { name: "Delete" }).first().focus();
+    await page.getByRole("button", { name: deleteName("Kind of Blue") }).focus();
     await page.keyboard.press("Enter");
     await expect(page.getByRole("listitem")).toHaveCount(1);
 
@@ -355,7 +390,7 @@ test.describe("every action is operable without a pointer", () => {
      */
     expect(await tabOrder(page), "the tab order from a delete to the undo shortcut").toEqual(
       restOfSequence([
-        'button "Delete"',
+        deleteStop("Blue Train"),
         'button "Undo"',
         'button "Dismiss"',
         'combobox "Status"',
@@ -371,7 +406,7 @@ test.describe("every action is operable without a pointer", () => {
     await expect(page.getByRole("listitem"), "Space on Undo must restore the item").toHaveCount(2);
 
     // And the toast's other control closes it without undoing anything.
-    await page.getByRole("button", { name: "Delete" }).first().click();
+    await page.getByRole("button", { name: deleteName("Kind of Blue") }).click();
     await expect(page.getByRole("button", { name: "Undo" })).toBeVisible();
     await page.getByRole("button", { name: "Dismiss" }).focus();
     await page.keyboard.press("Enter");
@@ -694,7 +729,7 @@ test.describe("focus while an action is in flight", () => {
     await api.deleteItem(collection.id, item.id);
 
     await page.goto("/settings");
-    const restore = page.getByRole("button", { name: "Restore" });
+    const restore = page.getByRole("button", { name: restoreName("Kind of Blue") });
     await expect(restore).toBeVisible();
 
     const held = await holdRequest(page, "**/api/collections/*/items/*/restore", "POST");
@@ -704,11 +739,11 @@ test.describe("focus while an action is in flight", () => {
     await held.arrived;
     await expectMarkedBusy(restore);
     expect(await focusedControl(page), "focus must stay on Restore while the item is being put back").toBe(
-      'button "Restore" [disabled]',
+      `button "${restoreName("Kind of Blue")}" [disabled]: Restore`,
     );
 
     held.release();
-    await expect(page.getByRole("button", { name: "Restore" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: restoreName("Kind of Blue") })).toHaveCount(0);
   });
 
   test("a confirmation's confirm keeps focus while the action is in flight", async ({ page, api }) => {
@@ -790,7 +825,7 @@ test.describe("focus when the control holding it goes away", () => {
     await page.goto(`/collections/${collection.id}`);
     await expect(page.getByRole("listitem")).toHaveCount(2);
 
-    await page.getByRole("button", { name: "Delete" }).first().focus();
+    await page.getByRole("button", { name: deleteName("Kind of Blue") }).focus();
     await page.keyboard.press("Enter");
     await expect(page.getByRole("listitem")).toHaveCount(1);
 
@@ -798,7 +833,7 @@ test.describe("focus when the control holding it goes away", () => {
     // through the page's live region, and parking focus in it would tax every
     // delete to save two keystrokes on the rare one that is regretted.
     await expect(
-      page.getByRole("button", { name: "Edit" }),
+      page.getByRole("button", { name: editName("Blue Train") }),
       "focus must land on the surviving row's Edit, not on <body>",
     ).toBeFocused();
   });
@@ -811,7 +846,7 @@ test.describe("focus when the control holding it goes away", () => {
     await page.goto(`/collections/${collection.id}`);
     await expect(page.getByRole("listitem")).toHaveCount(1);
 
-    await page.getByRole("button", { name: "Delete" }).focus();
+    await page.getByRole("button", { name: deleteName("Kind of Blue") }).focus();
     await page.keyboard.press("Enter");
     await expect(page.getByRole("listitem")).toHaveCount(0);
 
@@ -833,7 +868,7 @@ test.describe("focus when the control holding it goes away", () => {
     const row = page.getByRole("listitem");
     await expect(row).toHaveCount(1);
 
-    await page.getByRole("button", { name: "Edit" }).focus();
+    await page.getByRole("button", { name: editName("Kind of Blue") }).focus();
     await page.keyboard.press("Enter");
 
     // The disclosure the user just opened, entered at its first control. The
@@ -853,7 +888,7 @@ test.describe("focus when the control holding it goes away", () => {
     await api.createItem(collection.id, { title: "Kind of Blue", year: 1959 });
 
     await page.goto(`/collections/${collection.id}`);
-    await page.getByRole("button", { name: "Edit" }).click();
+    await page.getByRole("button", { name: editName("Kind of Blue") }).click();
     const cancel = page.getByRole("button", { name: "Cancel" });
     await expect(cancel).toBeVisible();
 
@@ -862,7 +897,7 @@ test.describe("focus when the control holding it goes away", () => {
     await expect(cancel).toHaveCount(0);
 
     await expect(
-      page.getByRole("button", { name: "Edit" }),
+      page.getByRole("button", { name: editName("Kind of Blue") }),
       "closing the editor must return focus to the control that opened it",
     ).toBeFocused();
   });
@@ -873,7 +908,7 @@ test.describe("focus when the control holding it goes away", () => {
     await api.createItem(collection.id, { title: "Kind of Blue", year: 1959 });
 
     await page.goto(`/collections/${collection.id}`);
-    await page.getByRole("button", { name: "Edit" }).click();
+    await page.getByRole("button", { name: editName("Kind of Blue") }).click();
     const row = page.getByRole("listitem");
     await row.getByRole("textbox", { name: "Title" }).fill("A Love Supreme");
 
@@ -887,7 +922,9 @@ test.describe("focus when the control holding it goes away", () => {
     // — and it was not in #367's table of six, which is how a seventh site
     // hides behind a list.
     await expect(
-      page.getByRole("button", { name: "Edit" }),
+      // Named for the title it was just given: a row's controls carry the row's
+      // name, so saving a rename renames them too (#375).
+      page.getByRole("button", { name: editName("A Love Supreme") }),
       "saving must return focus to the control that opened the editor",
     ).toBeFocused();
   });
@@ -898,7 +935,7 @@ test.describe("focus when the control holding it goes away", () => {
     await api.createItem(collection.id, { title: "Kind of Blue", year: 1959 });
 
     await page.goto(`/collections/${collection.id}`);
-    await page.getByRole("button", { name: "Delete" }).click();
+    await page.getByRole("button", { name: deleteName("Kind of Blue") }).click();
     const undo = page.getByRole("button", { name: "Undo" });
     await expect(undo).toBeVisible();
 
@@ -909,7 +946,10 @@ test.describe("focus when the control holding it goes away", () => {
     // The destination does not exist at the moment focus is lost: the toast
     // unmounts at once and the row only reappears on a later commit, when the
     // list has been fetched again. So the handoff has to wait for it.
-    await expect(page.getByRole("button", { name: "Edit" }), "focus must follow the restored row").toBeFocused();
+    await expect(
+      page.getByRole("button", { name: editName("Kind of Blue") }),
+      "focus must follow the restored row",
+    ).toBeFocused();
   });
 
   test("dismissing the toast hands focus where the delete left it", async ({ page, api }) => {
@@ -919,7 +959,7 @@ test.describe("focus when the control holding it goes away", () => {
     await api.createItem(collection.id, { title: "Blue Train", year: 1957 });
 
     await page.goto(`/collections/${collection.id}`);
-    await page.getByRole("button", { name: "Delete" }).first().click();
+    await page.getByRole("button", { name: deleteName("Kind of Blue") }).click();
     const dismiss = page.getByRole("button", { name: "Dismiss" });
     await expect(dismiss).toBeVisible();
 
@@ -930,7 +970,7 @@ test.describe("focus when the control holding it goes away", () => {
     // The same destination the delete chose, so a delete-then-dismiss leaves
     // the user where a delete alone would have.
     await expect(
-      page.getByRole("button", { name: "Edit" }),
+      page.getByRole("button", { name: editName("Blue Train") }),
       "dismissing must hand focus back to the list, not to <body>",
     ).toBeFocused();
   });
@@ -975,16 +1015,19 @@ test.describe("focus when the control holding it goes away", () => {
     await api.deleteItem(collection.id, second.id);
 
     await page.goto("/settings");
-    const restores = page.getByRole("button", { name: "Restore" });
+    const restores = page.getByRole("button", { name: /^Restore/ });
     await expect(restores).toHaveCount(2);
 
-    await page.getByRole("button", { name: "Delete forever" }).first().click();
-    const confirm = page.getByRole("button", { name: "Delete forever" }).first();
+    await page.getByRole("button", { name: purgeName("Kind of Blue") }).click();
+    const confirm = page.getByRole("button", { name: purgeName("Kind of Blue") });
     await confirm.focus();
     await page.keyboard.press("Enter");
     await expect(restores).toHaveCount(1);
 
     await expect(restores.first(), "focus must stay in the list that was purged").toBeFocused();
+    await expect(restores.first(), "and the row it landed on says which row it is").toHaveAccessibleName(
+      restoreName("Blue Train"),
+    );
   });
 
   test("purging the last trash row hands focus to the trash section", async ({ page, api }) => {
@@ -994,12 +1037,12 @@ test.describe("focus when the control holding it goes away", () => {
     await api.deleteItem(collection.id, item.id);
 
     await page.goto("/settings");
-    await expect(page.getByRole("button", { name: "Restore" })).toHaveCount(1);
+    await expect(page.getByRole("button", { name: restoreName("Kind of Blue") })).toHaveCount(1);
 
-    await page.getByRole("button", { name: "Delete forever" }).first().click();
-    await page.getByRole("button", { name: "Delete forever" }).first().focus();
+    await page.getByRole("button", { name: purgeName("Kind of Blue") }).click();
+    await page.getByRole("button", { name: purgeName("Kind of Blue") }).focus();
     await page.keyboard.press("Enter");
-    await expect(page.getByRole("button", { name: "Restore" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: restoreName("Kind of Blue") })).toHaveCount(0);
 
     // "The trash is empty." is a plain paragraph in a branch of the section, not
     // a live region, so focus arriving on the section is the only thing that

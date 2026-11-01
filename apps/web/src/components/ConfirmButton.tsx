@@ -9,6 +9,24 @@ interface ConfirmButtonProps {
   /** The button that goes through with it. Repeating the verb beats a bare "Yes". */
   confirmLabel: string;
   cancelLabel: string;
+  /**
+   * The accessible name for both the trigger and the confirm, where the visible
+   * label alone would not say what is being acted on (#375).
+   *
+   * Every trash row offers the same "Delete forever", so a screen-reader user
+   * tabbing a list hears the same two words per row with nothing tying a press
+   * to a record. The caller composes the name from a locale string — never this
+   * component, which has no business building user-visible text — and must keep
+   * the visible label inside it as a contiguous run, which WCAG 2.5.3 Label in
+   * Name (Level A) requires and axe's `label-content-name-mismatch` checks.
+   *
+   * Both buttons take it, and the confirm needs it as much as the trigger:
+   * `asking` is per-instance state and nothing closes the others, so several
+   * prompts can stand open at once — at which point the page carries several
+   * identical "Delete forever" buttons, and the `role="alert"` beside each was
+   * announced when it was inserted rather than being part of any name.
+   */
+  accessibleLabel?: string;
   onConfirm: () => void;
   /** True while the confirmed action is in flight. Holds the question open and blocks a second send. */
   pending?: boolean;
@@ -33,6 +51,7 @@ export function ConfirmButton({
   prompt,
   confirmLabel,
   cancelLabel,
+  accessibleLabel,
   onConfirm,
   pending = false,
   icon,
@@ -68,6 +87,7 @@ export function ConfirmButton({
       <button
         ref={triggerRef}
         type="button"
+        aria-label={accessibleLabel}
         className={className ? `touch-target ${className}` : "touch-target button-quiet"}
         onClick={() => setAsking(true)}
       >
@@ -86,6 +106,7 @@ export function ConfirmButton({
         <button
           ref={triggerRef}
           type="button"
+          aria-label={accessibleLabel}
           className="touch-target button-danger"
           // `aria-disabled`, never `disabled` (#368): Chrome drops focus to
           // <body> when the focused control is disabled, so the confirm the
