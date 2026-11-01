@@ -67,6 +67,11 @@ function SettingsPage() {
   }
 
   async function handleImportFile(event: ChangeEvent<HTMLInputElement>) {
+    // What `disabled` used to do (#368). A file input cannot refuse the picker
+    // through ARIA, so the refusal is here: `aria-disabled` tells a screen
+    // reader the control is busy and keeps it in the tab order, and a second
+    // file chosen mid-import is ignored rather than queued.
+    if (importData.isPending) return;
     const file = event.target.files?.[0];
     // Reset the input so re-selecting the same file fires onChange again.
     event.target.value = "";
@@ -144,7 +149,7 @@ function SettingsPage() {
             accept="application/json,.json"
             className="touch-target"
             aria-label={t("import_button")}
-            disabled={importData.isPending}
+            aria-disabled={importData.isPending || undefined}
             onChange={handleImportFile}
           />
         </div>

@@ -58,6 +58,9 @@ Tests passing is CI's evidence, not yours. Before "done" or "fixed":
   server already on those ports, so free them first. New route or new interactive state → new
   scan in `apps/web/e2e/a11y.spec.ts`; a new or renamed interactive control gets its stop in
   `apps/web/e2e/keyboard.spec.ts`, whose expectations are each tab stop's role and accessible name.
+  A control that goes unavailable mid-mutation uses `aria-disabled` plus a handler that refuses —
+  `disabled` drops focus to `<body>` — and an action that removes the focused control hands focus
+  on with `useFocusHandoff()`; both owe a spec in that file's last two blocks.
 - **Drive the changed surface.** API change → start the server and curl the actual route;
   web change → load it in the browser and click. Launch recipe:
 

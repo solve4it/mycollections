@@ -87,8 +87,15 @@ export function ConfirmButton({
           ref={triggerRef}
           type="button"
           className="touch-target button-danger"
-          disabled={pending}
-          onClick={onConfirm}
+          // `aria-disabled`, never `disabled` (#368): Chrome drops focus to
+          // <body> when the focused control is disabled, so the confirm the
+          // user just pressed would take their place on the page with it. The
+          // handler is what refuses the second press.
+          aria-disabled={pending || undefined}
+          onClick={() => {
+            if (pending) return;
+            onConfirm();
+          }}
         >
           {confirmLabel}
         </button>

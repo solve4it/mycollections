@@ -1,5 +1,7 @@
 import { BUILT_IN_FIELD_TYPES, type BuiltInFieldType, type FieldDefinition } from "@mycollections/core";
+import { useRef } from "react";
 import { useTranslation } from "react-i18next";
+import { useFocusHandoff } from "../lib/focus-handoff.js";
 import { Icon } from "./Icon.js";
 
 /**
@@ -72,6 +74,11 @@ export interface FieldSchemaBuilderProps {
 export function FieldSchemaBuilder({ fields, onChange, lockedTypeKeys, lockedTypeHint }: FieldSchemaBuilderProps) {
   const { t } = useTranslation("collections");
 
+  // Held here rather than in the row: the row is what gets removed, and a
+  // handoff asked for from inside it would be unmounted before it could finish.
+  const handOffFocus = useFocusHandoff();
+  const addFieldRef = useRef<HTMLButtonElement>(null);
+
   function updateField(key: string, patch: Partial<FieldDraft>) {
     onChange(fields.map((f) => (f.key === key ? { ...f, ...patch } : f)));
   }
@@ -103,9 +110,17 @@ export function FieldSchemaBuilder({ fields, onChange, lockedTypeKeys, lockedTyp
               <select
                 id={typeId}
                 value={field.type}
-                disabled={typeLocked}
+                // `aria-disabled`, never `disabled` (#368). A disabled control is
+                // skipped by Tab, and this one carries the only explanation of why
+                // the type cannot change — so `disabled` hid the rule from exactly
+                // the user who cannot see the greyed-out select. Marked instead,
+                // reachable, named, and refused in the handler.
+                aria-disabled={typeLocked || undefined}
                 aria-describedby={typeLocked ? hintId : undefined}
-                onChange={(e) => updateField(field.key, { type: e.target.value as BuiltInFieldType })}
+                onChange={(e) => {
+                  if (typeLocked) return;
+                  updateField(field.key, { type: e.target.value as BuiltInFieldType });
+                }}
               >
                 {BUILT_IN_FIELD_TYPES.map((type) => (
                   <option key={type} value={type}>
@@ -147,7 +162,18 @@ export function FieldSchemaBuilder({ fields, onChange, lockedTypeKeys, lockedTyp
             <button
               type="button"
               className="touch-target button-quiet"
-              onClick={() => onChange(fields.filter((f) => f.key !== field.key))}
+              onClick={() => {
+                // The field that takes this one's place, by the APG
+                // successor-element rule (#367) — its *label*, not its own
+                // Remove field: the label names the surviving field, so arrival
+                // says where the user is, where a second destructive control
+                // under the keyboard says nothing and invites a slip. The ids
+                // are positional, so the row that moves up into this index is
+                // the one this looks up; with none left, the control that makes
+                // one.
+                handOffFocus(() => document.getElementById(`field-label-${index}`) ?? addFieldRef.current);
+                onChange(fields.filter((f) => f.key !== field.key));
+              }}
             >
               <Icon name="delete" />
               {t("remove_field")}
@@ -155,7 +181,12 @@ export function FieldSchemaBuilder({ fields, onChange, lockedTypeKeys, lockedTyp
           </div>
         );
       })}
-      <button type="button" className="touch-target button-quiet" onClick={() => onChange([...fields, emptyField()])}>
+      <button
+        type="button"
+        ref={addFieldRef}
+        className="touch-target button-quiet"
+        onClick={() => onChange([...fields, emptyField()])}
+      >
         <Icon name="add" />
         {t("add_field")}
       </button>

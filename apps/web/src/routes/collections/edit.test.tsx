@@ -116,10 +116,16 @@ describe("EditCollectionPage", () => {
     expect(payload.fields.map((f) => f.id)).toEqual(["title"]);
   });
 
+  // The lock is `aria-disabled`, never `disabled` (#368): a disabled control is
+  // skipped by Tab, and this one carries the only explanation of why the type
+  // cannot change — so `disabled` hid the rule from exactly the user who cannot
+  // see the greyed-out select. `locked` reads the mark the app now sets.
+  const locked = (select: HTMLSelectElement) => select.getAttribute("aria-disabled") === "true";
+
   it("leaves field types editable while the collection is empty", async () => {
     renderEdit();
     const types = (await screen.findAllByLabelText(/field type/i)) as HTMLSelectElement[];
-    expect(types.every((select) => select.disabled)).toBe(false);
+    expect(types.some(locked)).toBe(false);
     expect(screen.queryByText(/cannot change the type/i)).not.toBeInTheDocument();
   });
 
@@ -128,9 +134,14 @@ describe("EditCollectionPage", () => {
     renderEdit();
     await waitFor(() => {
       const types = screen.getAllByLabelText(/field type/i) as HTMLSelectElement[];
-      expect(types.map((select) => select.disabled)).toEqual([true, true]);
+      expect(types.map(locked)).toEqual([true, true]);
     });
     expect(screen.getAllByText(/cannot change the type/i).length).toBeGreaterThan(0);
+    // Reachable with its explanation: the hint is only any use to a keyboard
+    // user if the control pointing at it is still a tab stop.
+    const [first] = screen.getAllByLabelText(/field type/i) as HTMLSelectElement[];
+    expect(first).toBeEnabled();
+    expect(first).toHaveAccessibleDescription(/cannot change the type/i);
   });
 
   it("locks types when the collection's only item is in the trash", async () => {
@@ -142,7 +153,7 @@ describe("EditCollectionPage", () => {
     renderEdit();
     await waitFor(() => {
       const types = screen.getAllByLabelText(/field type/i) as HTMLSelectElement[];
-      expect(types.map((select) => select.disabled)).toEqual([true, true]);
+      expect(types.map(locked)).toEqual([true, true]);
     });
   });
 
@@ -160,7 +171,7 @@ describe("EditCollectionPage", () => {
     renderEdit();
     await waitFor(() => {
       const types = screen.getAllByLabelText(/field type/i) as HTMLSelectElement[];
-      expect(types.map((select) => select.disabled)).toEqual([false, false]);
+      expect(types.map(locked)).toEqual([false, false]);
     });
   });
 
@@ -169,11 +180,12 @@ describe("EditCollectionPage", () => {
     renderEdit();
     await waitFor(() => {
       const types = screen.getAllByLabelText(/field type/i) as HTMLSelectElement[];
-      expect(types[0]?.disabled).toBe(true);
+      const [first] = screen.getAllByLabelText(/field type/i) as HTMLSelectElement[];
+      expect(first && locked(first)).toBe(true);
     });
     fireEvent.click(screen.getByRole("button", { name: /add field/i }));
     const types = screen.getAllByLabelText(/field type/i) as HTMLSelectElement[];
-    expect(types.map((select) => select.disabled)).toEqual([true, true, false]);
+    expect(types.map(locked)).toEqual([true, true, false]);
   });
 
   it("warns that values under a removed field are kept rather than deleted", async () => {

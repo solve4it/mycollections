@@ -36,6 +36,7 @@
     "commitlint",
     "cutover",
     "depscore",
+    "describedby",
     "dicebear",
     "esbuild",
     "frontmatter",

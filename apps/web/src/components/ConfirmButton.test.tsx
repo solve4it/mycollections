@@ -54,12 +54,26 @@ describe("ConfirmButton", () => {
     expect(trigger()).toHaveFocus();
   });
 
-  it("holds the question open while the action runs, with the confirm disabled against a double send", () => {
-    const { setPending } = renderConfirm();
+  // Marked rather than disabled (#368): Chrome drops focus to <body> the moment
+  // the focused control becomes disabled, so the confirm the user just pressed
+  // would take their place on the page with it. `aria-disabled` announces the
+  // same state and keeps them where they are; the refusal moves to the handler,
+  // which is what this asserts rather than the attribute alone.
+  it("holds the question open while the action runs, marking the confirm busy against a double send", () => {
+    const { onConfirm, setPending } = renderConfirm();
     fireEvent.click(trigger());
+    fireEvent.click(trigger());
+    expect(onConfirm).toHaveBeenCalledTimes(1);
+
     setPending(true);
     expect(screen.getByRole("alert")).toHaveTextContent(PROMPT);
-    expect(trigger()).toBeDisabled();
+    expect(trigger()).toHaveAttribute("aria-disabled", "true");
+    expect(trigger(), "`disabled` is what loses focus — the state is marked, not enforced").toBeEnabled();
+
+    // And the mark is not decoration: a second press while it is in flight is
+    // refused by the handler.
+    fireEvent.click(trigger());
+    expect(onConfirm).toHaveBeenCalledTimes(1);
     expect(screen.getByRole("button", { name: "Cancel" })).toBeEnabled();
   });
 
@@ -70,6 +84,7 @@ describe("ConfirmButton", () => {
     setPending(false);
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
     expect(trigger()).toBeEnabled();
+    expect(trigger()).not.toHaveAttribute("aria-disabled");
   });
 
   it("stays shut when something else on the page finishes a request", () => {

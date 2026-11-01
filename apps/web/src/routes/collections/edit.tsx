@@ -91,6 +91,8 @@ function EditCollectionPage() {
 
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
+    // What `disabled` used to do, without taking focus off the button (#368).
+    if (updateCollection.isPending) return;
     if (draft === null) return;
     const labeled = draft.fields.filter((f) => f.label.trim().length > 0);
     if (!draft.name.trim() || labeled.length === 0) return;
@@ -159,7 +161,7 @@ function EditCollectionPage() {
         {updateCollection.isError && <p role="alert">{t("save_error")}</p>}
 
         <div className="form-actions">
-          <button type="submit" className="touch-target" disabled={updateCollection.isPending}>
+          <button type="submit" className="touch-target" aria-disabled={updateCollection.isPending || undefined}>
             {t("save")}
           </button>
         </div>
