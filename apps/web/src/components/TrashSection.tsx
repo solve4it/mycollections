@@ -225,8 +225,12 @@ function CollectionRow({ collection, locale }: { collection: Collection; locale:
           <button
             type="button"
             className="touch-target button-quiet"
-            disabled={restore.isPending}
-            onClick={() => restore.mutate(collection.id)}
+            // `aria-disabled` rather than `disabled` (#368) — see ConfirmButton.
+            aria-disabled={restore.isPending || undefined}
+            onClick={() => {
+              if (restore.isPending) return;
+              restore.mutate(collection.id);
+            }}
           >
             <Icon name="restore" />
             {t("trash_restore")}
@@ -280,8 +284,12 @@ function ItemRow({ item, locale }: { item: DeletedItem; locale: string }) {
           <button
             type="button"
             className="touch-target button-quiet"
-            disabled={restore.isPending}
-            onClick={() => restore.mutate({ collectionId: item.collectionId, itemId: item.id })}
+            // `aria-disabled` rather than `disabled` (#368) — see ConfirmButton.
+            aria-disabled={restore.isPending || undefined}
+            onClick={() => {
+              if (restore.isPending) return;
+              restore.mutate({ collectionId: item.collectionId, itemId: item.id });
+            }}
           >
             <Icon name="restore" />
             {t("trash_restore")}

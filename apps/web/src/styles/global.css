@@ -546,10 +546,18 @@ button[type="submit"]:hover {
   background: var(--danger-surface);
 }
 
+/* Busy, not disabled (#368). `disabled` is what Chrome drops focus off, so a
+   control that reports its own progress is marked with `aria-disabled` instead
+   and has to look the same either way — the `:disabled` halves stay for the
+   controls nothing has converted. */
 .button-primary:disabled,
 .button-quiet:disabled,
 .button-danger:disabled,
-button[type="submit"]:disabled {
+button[type="submit"]:disabled,
+.button-primary[aria-disabled="true"],
+.button-quiet[aria-disabled="true"],
+.button-danger[aria-disabled="true"],
+button[type="submit"][aria-disabled="true"] {
   opacity: 0.6;
   cursor: not-allowed;
 }
@@ -1025,7 +1033,8 @@ p[role="alert"] {
 /* A locked control still has to be readable: it explains a rule rather than
    being merely unavailable, so it keeps the normal ink and marks itself with the
    surface and cursor instead of fading out. */
-.form-row select:disabled {
+.form-row select:disabled,
+.form-row select[aria-disabled="true"] {
   background: var(--paper);
   color: var(--ink-muted);
   cursor: not-allowed;

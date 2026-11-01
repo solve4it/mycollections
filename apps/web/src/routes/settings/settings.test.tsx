@@ -364,7 +364,10 @@ describe("SettingsPage data import", () => {
     expect(screen.queryByText("Importing your backup…")).not.toBeInTheDocument();
   });
 
-  it("disables the file picker while the import is in flight and re-enables it afterwards", async () => {
+  // Marked busy rather than disabled (#368). A `disabled` input drops focus to
+  // <body>, so a keyboard user who chose a file was thrown out of the page by
+  // the import starting; the refusal of a second file moved into the handler.
+  it("marks the file picker busy while the import is in flight and clears it afterwards", async () => {
     const inFlight = deferred<ImportSummary>();
     vi.mocked(importData).mockReturnValue(inFlight.promise);
 
@@ -372,13 +375,18 @@ describe("SettingsPage data import", () => {
     const input = await screen.findByLabelText(/choose backup file/i);
     selectFile(input, JSON.stringify({ version: 1, exportedAt: "x", collections: [], items: [] }));
 
-    await waitFor(() => expect(input).toBeDisabled());
-    // A disabled control still has to say what it is.
+    await waitFor(() => expect(input).toHaveAttribute("aria-disabled", "true"));
+    // In the tab order throughout, and still saying what it is.
+    expect(input).toBeEnabled();
     expect(input).toHaveAccessibleName("Choose backup file");
+
+    // A second file chosen mid-import is refused rather than queued.
+    selectFile(input, JSON.stringify({ version: 1, exportedAt: "x", collections: [], items: [] }));
+    expect(vi.mocked(importData)).toHaveBeenCalledTimes(1);
 
     inFlight.settle(IMPORT_SUMMARY);
 
-    await waitFor(() => expect(input).toBeEnabled());
+    await waitFor(() => expect(input).not.toHaveAttribute("aria-disabled"));
   });
 
   it("stops announcing progress when the import fails", async () => {

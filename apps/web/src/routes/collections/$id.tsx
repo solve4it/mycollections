@@ -1,7 +1,7 @@
 import type { Collection, Item } from "@mycollections/core";
 import type { UseQueryResult } from "@tanstack/react-query";
 import { createRoute, Link, redirect } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { DynamicItemForm } from "../../components/DynamicItemForm.js";
 import { EmptyState } from "../../components/EmptyState.js";
@@ -34,6 +34,23 @@ export const collectionDetailRoute = createRoute({
   },
   component: CollectionDetailPage,
 });
+
+/**
+ * How long "Added …" stays under the add-item form (#368).
+ *
+ * It needs a life span for the same reason the emptied-trash sentence does
+ * (`TrashSection.tsx`): nothing else will clear it. The form is ready for the
+ * next item the moment it saves, so there is no later interaction to retire the
+ * message on, and left alone it would sit there claiming an add that happened
+ * minutes ago.
+ *
+ * On WCAG 2.2.1: the window limits the *restatement*, never the outcome. The
+ * item is in the list above, which is the durable record of it, and there is no
+ * control inside the message to reach in time — so this is the same judgment as
+ * `TRASH_CONFIRMATION_MS`, by the same reasoning rather than by any dependency
+ * between them.
+ */
+export const ADD_CONFIRMATION_MS = 10_000;
 
 /**
  * Renders a stored field value. Booleans become a labelled icon rather than the
@@ -88,6 +105,21 @@ function CollectionDetailPage() {
   // The undo shortcut outlives the row that spawned it: once the delete lands and
   // the list reloads, that <li> is gone, so the toast is owned by the page.
   const [undo, setUndo] = useState<{ itemId: string; name: string } | null>(null);
+  // What the last add created, held here rather than read from
+  // `createItem.isSuccess` — a mutation's success state lasts until something
+  // resets it, and this sentence needs a life span of its own (#336 made the
+  // same move for the trash). Each success stores a new object, so the effect
+  // below restarts on exactly the event that should restart it.
+  const [added, setAdded] = useState<{ name: string } | null>(null);
+  // Bumped on each successful add to clear the form (#368). A count rather than
+  // a boolean: two adds in a row have to clear it twice.
+  const [addedCount, setAddedCount] = useState(0);
+
+  useEffect(() => {
+    if (!added) return;
+    const timer = setTimeout(() => setAdded(null), ADD_CONFIRMATION_MS);
+    return () => clearTimeout(timer);
+  }, [added]);
 
   const collection = collectionQuery.data;
 
@@ -192,8 +224,32 @@ function CollectionDetailPage() {
         <DynamicItemForm
           fields={collection.fields}
           pending={createItem.isPending}
-          onSubmit={(payload) => createItem.mutate(payload)}
+          resetSignal={addedCount}
+          onSubmit={(payload) =>
+            createItem.mutate(payload, {
+              onSuccess: (item) => {
+                setAdded({ name: itemLabel(collection, item, t("untitled")) });
+                setAddedCount((count) => count + 1);
+              },
+            })
+          }
         />
+        {/* Always rendered, never conditional (#308, #326, and #368 is what
+            made this screen need one at all). A keyboard user adding an item
+            used to get nothing: focus on <body>, a form still holding what they
+            typed, and silence. The region is here from the screen's first
+            commit, empty, and the confirmation arrives in it — a live region
+            inserted with its text already inside it is announced by VoiceOver
+            but usually not by NVDA or JAWS.
+
+            No role, on the region or on the sentence that lands in it:
+            `role="status"` implies `aria-live`, so a role on the message would
+            make the message the nearest live region for its own insertion and
+            lose the announcement. The failure below stays outside it, keeping
+            `role="alert"` as a live region in its own right. */}
+        <div className="add-item-live" aria-live="polite">
+          {added && <p>{t("added_status", { name: added.name })}</p>}
+        </div>
         {createItem.isError && <p role="alert">{t("create_error")}</p>}
       </section>
     </div>

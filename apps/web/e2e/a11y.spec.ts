@@ -220,6 +220,28 @@ test.describe("accessibility", () => {
     await expectNoAccessibilityViolations(page);
   });
 
+  /**
+   * The editor of a collection that already has items, which is a different
+   * screen from the one above: a field whose stored values would not convert
+   * has its type locked, and the lock renders a hint the select points at
+   * (#368). Never scanned before, because the editor's other scan seeds a
+   * collection with no items and so never locks anything.
+   */
+  test("the collection editor with a locked field type", async ({ page, api }) => {
+    await api.reset();
+    const collection = await api.createCollection({ name: "Vinyl records", fields: FIELDS });
+    await api.createItem(collection.id, { title: "Kind of Blue" });
+
+    await page.goto(`/collections/${collection.id}/edit`);
+    await expect(page.getByLabel("Collection name")).toHaveValue("Vinyl records");
+    await expect(
+      page.getByRole("combobox", { name: "Field type" }).first(),
+      "the collection must have items, or nothing is locked and this scans the screen above",
+    ).toHaveAttribute("aria-disabled", "true");
+
+    await expectNoAccessibilityViolations(page);
+  });
+
   test("settings, with something in the trash", async ({ page, api }) => {
     await api.reset();
     const collection = await api.createCollection({ name: "Vinyl records", fields: FIELDS });

@@ -28,6 +28,8 @@ function NewCollectionPage() {
 
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
+    // What `disabled` used to do, without taking focus off the button (#368).
+    if (createCollection.isPending) return;
     const labeled = fields.filter((f) => f.label.trim().length > 0);
     if (!name.trim() || labeled.length === 0) return;
 
@@ -80,7 +82,7 @@ function NewCollectionPage() {
         {createCollection.isError && <p role="alert">{t("submit_error")}</p>}
 
         <div className="form-actions">
-          <button type="submit" className="touch-target" disabled={createCollection.isPending}>
+          <button type="submit" className="touch-target" aria-disabled={createCollection.isPending || undefined}>
             {t("submit")}
           </button>
         </div>

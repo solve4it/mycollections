@@ -103,9 +103,17 @@ export function FieldSchemaBuilder({ fields, onChange, lockedTypeKeys, lockedTyp
               <select
                 id={typeId}
                 value={field.type}
-                disabled={typeLocked}
+                // `aria-disabled`, never `disabled` (#368). A disabled control is
+                // skipped by Tab, and this one carries the only explanation of why
+                // the type cannot change — so `disabled` hid the rule from exactly
+                // the user who cannot see the greyed-out select. Marked instead,
+                // reachable, named, and refused in the handler.
+                aria-disabled={typeLocked || undefined}
                 aria-describedby={typeLocked ? hintId : undefined}
-                onChange={(e) => updateField(field.key, { type: e.target.value as BuiltInFieldType })}
+                onChange={(e) => {
+                  if (typeLocked) return;
+                  updateField(field.key, { type: e.target.value as BuiltInFieldType });
+                }}
               >
                 {BUILT_IN_FIELD_TYPES.map((type) => (
                   <option key={type} value={type}>
