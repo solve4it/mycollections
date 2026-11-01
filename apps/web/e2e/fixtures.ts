@@ -159,3 +159,56 @@ export async function expectNoAccessibilityViolations(page: Page): Promise<void>
   expect(summarize([...wcag.violations, ...structural.violations] as AxeResult[])).toEqual([]);
   expect(summarize([...wcag.incomplete, ...structural.incomplete] as AxeResult[]), "axe could not decide").toEqual([]);
 }
+
+/**
+ * Nothing in the page holds focus.
+ *
+ * Two very different situations produce it, and which one it is depends entirely
+ * on when it is read. Walking Tab off the end of the document lands here before
+ * the sequence wraps round to the top, so it is how `tabOrder` knows it is
+ * finished. Reading it straight after activating a control is the bug: the node
+ * that held focus has been removed and nothing caught it, so a screen reader's
+ * cursor is back at the top of the page (WCAG 2.4.3).
+ */
+export const NOTHING_FOCUSED = "<body>";
+
+/**
+ * What holds focus, as its ARIA role and accessible name: `button "Delete"`.
+ *
+ * Read through `ariaSnapshot()` rather than from the DOM so the value is the one
+ * a screen reader would announce — Playwright's own accessible-name computation,
+ * including the parts a hand-rolled descriptor would miss (a `<label>`'s text, an
+ * `aria-label`, a form control's value, and CSS generated content). Its first
+ * line is the element itself; the rest describes children and `/url`, which is
+ * more than a tab stop needs.
+ */
+export async function focusedControl(page: Page): Promise<string> {
+  const focused = page.locator(":focus");
+  if ((await focused.count()) === 0) return NOTHING_FOCUSED;
+  const [first] = (await focused.ariaSnapshot()).split("\n");
+  return (first ?? "").trim().replace(/^- /, "").replace(/:$/, "");
+}
+
+/**
+ * Presses Tab from wherever focus is until the sequence runs off the end of the
+ * document, returning every stop in order.
+ *
+ * Reaching the end is itself the no-trap assertion (WCAG 2.1.2). Chromium hands
+ * focus past the last control to the document rather than to browser chrome it
+ * does not have here, so the walk ends on `<body>` and would wrap round to the
+ * skip link if it kept going — a page that really trapped focus would cycle
+ * instead and hit the limit. The limit throws rather than returning what it has,
+ * so a trap can never read as a merely short tab order.
+ */
+export async function tabOrder(page: Page, limit = 60): Promise<string[]> {
+  const stops: string[] = [];
+  for (let index = 0; index < limit; index++) {
+    await page.keyboard.press("Tab");
+    const stop = await focusedControl(page);
+    if (stop === NOTHING_FOCUSED) return stops;
+    stops.push(stop);
+  }
+  throw new Error(
+    `focus never left the page in ${limit} presses of Tab — a focus trap, or a page with more controls than this limit. Stops so far:\n${stops.join("\n")}`,
+  );
+}
