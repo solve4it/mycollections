@@ -23,5 +23,13 @@
     "rules": {
       "preset": "recommended"
     }
-  }
+  },
+  "overrides": [
+    {
+      "includes": ["**/CHANGELOG.md"],
+      "formatter": {
+        "enabled": false
+      }
+    }
+  ]
 }
