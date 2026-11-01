@@ -340,8 +340,10 @@ rendered page. Two spec files drive the parts it cannot see.
   the skip link, and where focus lands after a client-side navigation — and one spec that scans the
   app in a navigated-into state rather than after a page load.
 - `keyboard.spec.ts` is the keyboard **traversal** sweep: for every screen, the whole tab sequence
-  in order; that Shift+Tab retraces it and that no screen traps focus; and that every action is
-  operable by key, with Space as well as Enter where the control is a button.
+  in order; that Shift+Tab retraces it and that no screen traps focus; that every action is
+  operable by key, with Space as well as Enter where the control is a button; and — the two blocks
+  at the end of the file — where focus is left by an action that takes the control holding it away,
+  or marks it busy.
 
 The tab-order expectations are lists of each stop's ARIA role and accessible name, exactly as
 Playwright computes them — `button "Delete"`, `textbox "Collection name": Vinyl records` — so a
@@ -360,6 +362,56 @@ What no tool can check is whether a screen reader actually spoke: every assertio
 announcement is a check on the shape of the DOM. See
 [#24](https://github.com/solve4it/mycollections/issues/24) for what is still outstanding, including
 the manual screen-reader pass.
+
+### Focus has to survive the action
+
+Two rules, both learned from the sweep above finding thirteen places that broke them.
+
+**A control that is busy marks itself, it is not disabled.** Chrome drops `document.activeElement`
+to `<body>` the moment the focused element becomes `disabled`, so a button that disables itself for
+the duration of its own mutation throws a keyboard user out of the page by reporting progress —
+nothing unmounts, and focus is gone anyway. Use `aria-disabled={pending || undefined}` and refuse
+the second send with an early return in the handler. The control keeps its place in the tab order,
+keeps its accessible name, and gains an announced busy state it did not have; the mutation hooks in
+`lib/queries.ts` already guard double submission, so `disabled` was never carrying that weight. The
+same applies to a control disabled for a _rule_ rather than a request — a locked field type in
+`FieldSchemaBuilder` — where `disabled` also took the `aria-describedby` hint explaining the rule
+out of the tab order, hiding it from exactly the user who cannot see the grey.
+
+**An action that removes the control holding focus names where focus goes.** `useFocusHandoff()`
+in `lib/focus-handoff.ts` is the one primitive for it: call the function it returns from the
+handler that is about to remove the control, passing a function that resolves the destination, and
+call it from a component that _survives_ the removal — the effect completing the handoff runs after
+that component's next commit, so a hook inside the thing being unmounted dies first. The
+destination may return `null` while it is not in the document yet, which is not a failure: an Undo
+restores a row that only reappears once the list has been fetched again, and the handoff waits for
+it, bounded by both a commit count and a deadline.
+
+The destinations are not this repo's invention — each follows an ARIA APG rule, and says which in
+its comment:
+
+| Action                                    | Destination                                                                    | Rule                              |
+| ----------------------------------------- | ------------------------------------------------------------------------------ | --------------------------------- |
+| A row's Edit (opens the editor)           | the editor's first control                                                     | disclosure: enter what you opened |
+| The editor's Cancel, or a successful Save | the Edit that opened it                                                        | dialog: return to the invoker     |
+| A row's Delete                            | the row that takes its place, else the one before, else the Items heading      | successor element                 |
+| The toast's Undo                          | the restored row's Edit, once it is back                                       | successor element                 |
+| The toast's Dismiss                       | wherever the delete handed focus                                               | — same answer as the delete       |
+| Remove field                              | the next field's **label**, else Add field                                     | successor element                 |
+| A confirmed trash purge                   | the next row in the **same** list, else the one before, else the trash section | successor element                 |
+
+Two things that look like details and are not. A destination has to be a control whose name says
+where the user now is, which is why Remove field goes to the next field's label rather than to its
+Remove button: "Field label, edit, Year" places you, "Remove field, button" does not, and parks you
+on a destructive control. And when a list empties there is no control left worth landing on, so the
+destination is a container made focusable with `tabIndex={-1}` — the Items heading, or the trash
+`<section>` with `aria-labelledby` pointing at its heading, which is the pattern `ErrorScreen.tsx`
+already uses. Focus arriving there is the only thing that tells a screen-reader user the list is
+now empty, because "The trash is empty." is a plain paragraph, not a live region.
+
+So: **a new control that disables itself, or an action that removes the control that triggered it,
+owes a spec in one of those two blocks.** The deletion case also owes a destination before it owes
+code — the issue it comes from should say which APG rule it follows.
 
 The rest of the accessibility floor is asserted without a browser, by the integration tests in
 `apps/web/src/styles`: contrast ratios in both themes (`tokens.integration.test.ts`), the

@@ -1,5 +1,5 @@
 import { type FieldDefinition, ITEM_STATUSES, type ItemStatus } from "@mycollections/core";
-import { type FormEvent, useState } from "react";
+import { type FormEvent, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { ItemInput } from "../lib/api-client.js";
 
@@ -11,6 +11,24 @@ interface DynamicItemFormProps {
   initialStatus?: ItemStatus;
   initialValues?: Record<string, unknown>;
   submitLabel?: string;
+  /**
+   * Names the form, for the editor that replaces a row (#367).
+   *
+   * Opening the editor takes the item's own fields off the screen, so a user
+   * who has just been put inside it has nothing left saying which item they
+   * are editing. A named `<form>` is a landmark, and entering it is announced
+   * before its first control — which is where the name belongs, rather than on
+   * the control itself.
+   */
+  label?: string;
+  /**
+   * Put focus on the first control as the form appears (#367).
+   *
+   * The APG disclosure rule: a user who opened this is meant to be in it. Only
+   * the row editor asks — the add-item form is part of the page, not something
+   * that opened.
+   */
+  focusOnOpen?: boolean;
   onCancel?: () => void;
   pending?: boolean;
   /**
@@ -61,6 +79,8 @@ export function DynamicItemForm({
   initialStatus,
   initialValues = {},
   submitLabel,
+  label,
+  focusOnOpen = false,
   onCancel,
   pending = false,
   resetSignal = 0,
@@ -83,6 +103,11 @@ export function DynamicItemForm({
     setValues(Object.fromEntries(fields.map((f) => [f.id, toDraft(f, initialValues[f.id])])));
   }
 
+  const statusRef = useRef<HTMLSelectElement>(null);
+  useEffect(() => {
+    if (focusOnOpen) statusRef.current?.focus();
+  }, [focusOnOpen]);
+
   function setValue(id: string, value: DraftValue) {
     setValues((prev) => ({ ...prev, [id]: value }));
   }
@@ -103,10 +128,15 @@ export function DynamicItemForm({
   }
 
   return (
-    <form onSubmit={handleSubmit} className="dynamic-item-form">
+    <form onSubmit={handleSubmit} className="dynamic-item-form" aria-label={label}>
       <div className="form-row">
         <label htmlFor="item-status">{t("status_label")}</label>
-        <select id="item-status" value={status} onChange={(e) => setStatus(e.target.value as ItemStatus)}>
+        <select
+          id="item-status"
+          ref={statusRef}
+          value={status}
+          onChange={(e) => setStatus(e.target.value as ItemStatus)}
+        >
           {ITEM_STATUSES.map((s) => (
             <option key={s} value={s}>
               {t(`status_${s}`)}

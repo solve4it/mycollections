@@ -22,6 +22,7 @@
   "value_yes": "Yes",
   "value_no": "No",
   "untitled": "(untitled)",
+  "editing_item": "Editing “{{name}}”",
   "added_status": "Added “{{name}}”",
   "deleted_toast": "Deleted “{{name}}”",
   "undo": "Undo",

@@ -1,7 +1,8 @@
 import type { Collection, DeletedItem } from "@mycollections/core";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { EmptyTrashResult } from "../lib/api-client.js";
+import { useFocusHandoff } from "../lib/focus-handoff.js";
 import { formatDate } from "../lib/intl.js";
 import {
   useEmptyTrash,
@@ -70,6 +71,31 @@ export function TrashSection() {
   // exactly the event that should restart it.
   const [emptied, setEmptied] = useState<EmptyTrashResult | null>(null);
 
+  // A confirmed purge removes the row *and* the button that confirmed it, so
+  // focus fell to <body> (#367). Held at the section, which is what survives.
+  const handOffFocus = useFocusHandoff();
+  const sectionRef = useRef<HTMLElement>(null);
+
+  /**
+   * Where focus goes when the row at `index` of one of the two lists is purged.
+   *
+   * Inside the same list, always: the two lists are separate claims — a trashed
+   * collection takes its items down with it and they are listed nowhere (#281)
+   * — so crossing from one to the other is a jump a user cannot predict. Next
+   * row, else the one before it when the purged row was last, else the section,
+   * whose heading is the only thing that says the list is now empty: "The trash
+   * is empty." is a plain paragraph in a branch of `TrashContents`, not a live
+   * region, so nothing announces it on its own.
+   */
+  function purgeDestination(list: "collections" | "items", index: number) {
+    return () => {
+      const rows = Array.from(
+        document.querySelectorAll<HTMLElement>(`[data-trash-list="${list}"] [data-trash-restore]`),
+      );
+      return rows[index] ?? rows[rows.length - 1] ?? sectionRef.current;
+    };
+  }
+
   // Retires the confirmation once it has been up long enough to read (#336).
   // Only the message goes: the region below stays mounted and becomes empty
   // again in place, because a region torn down when it has nothing to say is a
@@ -83,12 +109,18 @@ export function TrashSection() {
   }, [emptied]);
 
   return (
-    <section className="settings-trash">
-      <h2>{t("trash_label")}</h2>
+    // `tabIndex={-1}` so a purge that empties a list has somewhere named to go,
+    // and `aria-labelledby` so arriving there announces "Trash" rather than an
+    // unnamed region — the pattern `ErrorScreen.tsx` uses for the same reason.
+    // On the container rather than the heading itself: focusing a node inside a
+    // labelled container makes VoiceOver read the title twice.
+    <section className="settings-trash" ref={sectionRef} tabIndex={-1} aria-labelledby="trash-heading">
+      <h2 id="trash-heading">{t("trash_label")}</h2>
       <p>{t("trash_description")}</p>
       <TrashContents
         locale={locale}
         query={trash}
+        onPurging={(list, index) => handOffFocus(purgeDestination(list, index))}
         onEmpty={() => {
           // Drop the previous confirmation as the next empty starts: it describes
           // an older event, and leaving it up would let it sit beside this one's
@@ -134,6 +166,8 @@ interface TrashContentsProps {
   query: ReturnType<typeof useTrash>;
   locale: string;
   onEmpty: () => void;
+  /** Asked for before a purge removes the row and the button that confirmed it. */
+  onPurging: (list: "collections" | "items", index: number) => void;
   pending: boolean;
 }
 
@@ -142,7 +176,7 @@ interface TrashContentsProps {
  * the two is what made a failed load read as an empty collection in #228, and here
  * it would tell a user their deleted data is gone.
  */
-function TrashContents({ query, locale, onEmpty, pending }: TrashContentsProps) {
+function TrashContents({ query, locale, onEmpty, onPurging, pending }: TrashContentsProps) {
   const { t } = useTranslation("settings");
   const trash = query.data;
 
@@ -165,9 +199,14 @@ function TrashContents({ query, locale, onEmpty, pending }: TrashContentsProps) 
         <>
           <h3>{t("trash_collections_heading")}</h3>
           <p className="trash-note">{t("trash_collections_note")}</p>
-          <ul className="trash-list">
-            {trash.collections.map((collection) => (
-              <CollectionRow key={collection.id} collection={collection} locale={locale} />
+          <ul className="trash-list" data-trash-list="collections">
+            {trash.collections.map((collection, index) => (
+              <CollectionRow
+                key={collection.id}
+                collection={collection}
+                locale={locale}
+                onPurging={() => onPurging("collections", index)}
+              />
             ))}
           </ul>
         </>
@@ -175,9 +214,9 @@ function TrashContents({ query, locale, onEmpty, pending }: TrashContentsProps) 
       {trash.items.length > 0 && (
         <>
           <h3>{t("trash_items_heading")}</h3>
-          <ul className="trash-list">
-            {trash.items.map((item) => (
-              <ItemRow key={item.id} item={item} locale={locale} />
+          <ul className="trash-list" data-trash-list="items">
+            {trash.items.map((item, index) => (
+              <ItemRow key={item.id} item={item} locale={locale} onPurging={() => onPurging("items", index)} />
             ))}
           </ul>
         </>
@@ -209,7 +248,15 @@ function DeletedOn({ at, locale }: { at: string | null; locale: string }) {
   );
 }
 
-function CollectionRow({ collection, locale }: { collection: Collection; locale: string }) {
+function CollectionRow({
+  collection,
+  locale,
+  onPurging,
+}: {
+  collection: Collection;
+  locale: string;
+  onPurging: () => void;
+}) {
   const { t } = useTranslation("settings");
   const restore = useRestoreCollection();
   const purge = usePurgeCollection();
@@ -225,6 +272,7 @@ function CollectionRow({ collection, locale }: { collection: Collection; locale:
           <button
             type="button"
             className="touch-target button-quiet"
+            data-trash-restore=""
             // `aria-disabled` rather than `disabled` (#368) — see ConfirmButton.
             aria-disabled={restore.isPending || undefined}
             onClick={() => {
@@ -242,7 +290,10 @@ function CollectionRow({ collection, locale }: { collection: Collection; locale:
             confirmLabel={t("trash_delete_forever")}
             cancelLabel={t("trash_cancel")}
             pending={purge.isPending}
-            onConfirm={() => purge.mutate(collection.id)}
+            onConfirm={() => {
+              onPurging();
+              purge.mutate(collection.id);
+            }}
           />
         </div>
       </div>
@@ -266,7 +317,7 @@ function itemName(item: DeletedItem, untitled: string): string {
   return untitled;
 }
 
-function ItemRow({ item, locale }: { item: DeletedItem; locale: string }) {
+function ItemRow({ item, locale, onPurging }: { item: DeletedItem; locale: string; onPurging: () => void }) {
   const { t } = useTranslation("settings");
   const restore = useRestoreTrashedItem();
   const purge = usePurgeItem();
@@ -284,6 +335,7 @@ function ItemRow({ item, locale }: { item: DeletedItem; locale: string }) {
           <button
             type="button"
             className="touch-target button-quiet"
+            data-trash-restore=""
             // `aria-disabled` rather than `disabled` (#368) — see ConfirmButton.
             aria-disabled={restore.isPending || undefined}
             onClick={() => {
@@ -301,7 +353,10 @@ function ItemRow({ item, locale }: { item: DeletedItem; locale: string }) {
             confirmLabel={t("trash_delete_forever")}
             cancelLabel={t("trash_cancel")}
             pending={purge.isPending}
-            onConfirm={() => purge.mutate(item.id)}
+            onConfirm={() => {
+              onPurging();
+              purge.mutate(item.id);
+            }}
           />
         </div>
       </div>

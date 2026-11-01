@@ -1,7 +1,7 @@
 import type { Collection, Item } from "@mycollections/core";
 import type { UseQueryResult } from "@tanstack/react-query";
 import { createRoute, Link, redirect } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { DynamicItemForm } from "../../components/DynamicItemForm.js";
 import { EmptyState } from "../../components/EmptyState.js";
@@ -10,6 +10,7 @@ import { Icon } from "../../components/Icon.js";
 import { CollectionDetailSkeleton, ItemListSkeleton } from "../../components/Skeleton.js";
 import { UndoToast } from "../../components/UndoToast.js";
 import { getToken } from "../../lib/api-client.js";
+import { type FocusDestination, useFocusHandoff } from "../../lib/focus-handoff.js";
 import { CONTENT_LINK_ACTIVE_OPTIONS } from "../../lib/links.js";
 import { type PageName, usePageTitle } from "../../lib/page-title.js";
 import {
@@ -104,7 +105,10 @@ function CollectionDetailPage() {
   const restoreItem = useRestoreItem(id);
   // The undo shortcut outlives the row that spawned it: once the delete lands and
   // the list reloads, that <li> is gone, so the toast is owned by the page.
-  const [undo, setUndo] = useState<{ itemId: string; name: string } | null>(null);
+  // `index` is where in the list the row was, which is where focus goes if the
+  // toast is dismissed — the same destination the delete itself chose, so a
+  // delete-then-dismiss leaves the user where a delete alone would have (#367).
+  const [undo, setUndo] = useState<{ itemId: string; name: string; index: number } | null>(null);
   // What the last add created, held here rather than read from
   // `createItem.isSuccess` — a mutation's success state lasts until something
   // resets it, and this sentence needs a life span of its own (#336 made the
@@ -122,6 +126,34 @@ function CollectionDetailPage() {
   }, [added]);
 
   const collection = collectionQuery.data;
+
+  // A row's Delete removes the row, and the toast's Undo and Dismiss remove the
+  // toast, so all three orphaned focus to <body> (#367). The handoff is held
+  // here, at the page, because the page is what survives all three.
+  const handOffFocus = useFocusHandoff();
+  const itemsHeadingRef = useRef<HTMLHeadingElement>(null);
+
+  /**
+   * Where focus goes when the row at `index` is removed.
+   *
+   * The APG successor-element rule: the row that takes its place, else the one
+   * before it when the removed row was last. Not the undo shortcut, which the
+   * issue first proposed — the toast announces itself through this screen's
+   * live region, so a screen-reader user has already heard it, and parking
+   * focus inside a polite region as it is populated is the variability #308 was
+   * fought over. It would also tax every delete to save two keystrokes on the
+   * rare one that is regretted.
+   *
+   * With no row left, the heading of the list they were in. Not the add-item
+   * form: dropping a user into "add an item" because they deleted their last
+   * one is a worse surprise than landing on a heading.
+   */
+  function rowDestination(index: number): FocusDestination {
+    return () => {
+      const edits = Array.from(document.querySelectorAll<HTMLElement>("[data-row-edit]"));
+      return edits[index] ?? edits[edits.length - 1] ?? itemsHeadingRef.current;
+    };
+  }
 
   // The name in the <h1> is also the name of the page, so the tab, the history
   // entry and the route-change announcement carry it too (#309). Above the
@@ -168,15 +200,21 @@ function CollectionDetailPage() {
       </div>
       {collection.description && <p>{collection.description}</p>}
 
-      <h2>{t("items_heading")}</h2>
+      {/* tabIndex={-1} so a delete that empties the list has somewhere named to
+          go (#367). Not in the tab order — a negative index is reachable only
+          programmatically, which is the whole point of it. */}
+      <h2 ref={itemsHeadingRef} tabIndex={-1}>
+        {t("items_heading")}
+      </h2>
       <ItemList
         collection={collection}
         query={itemsQuery}
-        onDeleted={(item) => {
+        onDeleting={(index) => handOffFocus(rowDestination(index))}
+        onDeleted={(item, index) => {
           // Drop any failure from a previous undo: the new toast is about a new
           // deletion, and must not open carrying the last one's error.
           restoreItem.reset();
-          setUndo({ itemId: item.id, name: itemLabel(collection, item, t("untitled")) });
+          setUndo({ itemId: item.id, name: itemLabel(collection, item, t("untitled")), index });
         }}
       />
 
@@ -208,8 +246,26 @@ function CollectionDetailPage() {
               message={t("deleted_toast", { name: undo.name })}
               actionLabel={t("undo")}
               dismissLabel={t("dismiss_undo")}
-              onAction={() => restoreItem.mutate(undo.itemId, { onSuccess: () => setUndo(null) })}
-              onDismiss={() => setUndo(null)}
+              onAction={() =>
+                restoreItem.mutate(undo.itemId, {
+                  onSuccess: () => {
+                    // Focus follows the item back. The destination does not
+                    // exist yet at this point — the toast unmounts on the next
+                    // line and the row only reappears once the list has been
+                    // fetched again — which is why the handoff waits for it.
+                    // Asked for inside onSuccess, so a failed restore leaves
+                    // focus on Undo, where the retry is.
+                    handOffFocus(() =>
+                      document.querySelector<HTMLElement>(`[data-item-id="${undo.itemId}"] [data-row-edit]`),
+                    );
+                    setUndo(null);
+                  },
+                })
+              }
+              onDismiss={() => {
+                handOffFocus(rowDestination(undo.index));
+                setUndo(null);
+              }}
             />
           )}
         </div>
@@ -259,7 +315,9 @@ function CollectionDetailPage() {
 interface ItemListProps {
   collection: Collection;
   query: UseQueryResult<Item[]>;
-  onDeleted: (item: Item) => void;
+  /** Asked for as a delete starts, while the row is still on screen. */
+  onDeleting: (index: number) => void;
+  onDeleted: (item: Item, index: number) => void;
 }
 
 /**
@@ -267,7 +325,7 @@ interface ItemListProps {
  * and there are none" as distinct outcomes — collapsing the two is what made a
  * failed load read as an empty collection (#228).
  */
-function ItemList({ collection, query, onDeleted }: ItemListProps) {
+function ItemList({ collection, query, onDeleting, onDeleted }: ItemListProps) {
   const { t } = useTranslation("items");
   const items = query.data;
 
@@ -288,8 +346,14 @@ function ItemList({ collection, query, onDeleted }: ItemListProps) {
     <>
       {query.error && <p role="alert">{t("items_reload_error")}</p>}
       <ul className="item-list">
-        {items.map((item) => (
-          <ItemRow key={item.id} collection={collection} item={item} onDeleted={onDeleted} />
+        {items.map((item, index) => (
+          <ItemRow
+            key={item.id}
+            collection={collection}
+            item={item}
+            onDeleting={() => onDeleting(index)}
+            onDeleted={() => onDeleted(item, index)}
+          />
         ))}
       </ul>
     </>
@@ -299,14 +363,24 @@ function ItemList({ collection, query, onDeleted }: ItemListProps) {
 interface ItemRowProps {
   collection: Collection;
   item: Item;
-  onDeleted: (item: Item) => void;
+  onDeleting: () => void;
+  onDeleted: () => void;
 }
 
-function ItemRow({ collection, item, onDeleted }: ItemRowProps) {
+function ItemRow({ collection, item, onDeleting, onDeleted }: ItemRowProps) {
   const { t } = useTranslation("items");
   const updateItem = useUpdateItem(collection.id);
   const deleteItem = useDeleteItem(collection.id);
   const [editing, setEditing] = useState(false);
+
+  // Opening and closing the editor both remove the control that was pressed, so
+  // both hand focus on (#367). This row survives either, so the handoff lives
+  // here; the delete, which takes the row itself, is handled by the page.
+  const handOffFocus = useFocusHandoff();
+  const editRef = useRef<HTMLButtonElement>(null);
+  // The APG dialog rule, return-to-invoker: whatever closes the editor — Cancel
+  // or a successful Save — hands focus back to the control that opened it.
+  const toEdit: FocusDestination = () => editRef.current;
 
   // The failure message belongs to this row, so it lives inside this <li> —
   // a page-level banner could not say *which* item failed. `.item-row` moves
@@ -315,23 +389,37 @@ function ItemRow({ collection, item, onDeleted }: ItemRowProps) {
   // unstyled <li> stacks the card and the message. No CSS change needed.
   if (editing) {
     return (
-      <li>
+      <li data-item-id={item.id}>
         <div className="item-row">
           <DynamicItemForm
             fields={collection.fields}
             initialStatus={item.status}
             initialValues={item.fields}
             submitLabel={t("save")}
+            // The editor takes the item's own fields off the screen, so it has
+            // to carry the name itself — and it is what a user entering it
+            // hears first (#367).
+            label={t("editing_item", { name: itemLabel(collection, item, t("untitled")) })}
+            focusOnOpen
             pending={updateItem.isPending}
             // Cancelling discards the whole editing session, the failed save
             // included: without the reset, reopening the editor would show an
             // error for an attempt the user has not made yet.
             onCancel={() => {
+              handOffFocus(toEdit);
               updateItem.reset();
               setEditing(false);
             }}
             onSubmit={(payload) =>
-              updateItem.mutate({ itemId: item.id, input: payload }, { onSuccess: () => setEditing(false) })
+              updateItem.mutate(
+                { itemId: item.id, input: payload },
+                {
+                  onSuccess: () => {
+                    handOffFocus(toEdit);
+                    setEditing(false);
+                  },
+                },
+              )
             }
           />
         </div>
@@ -341,7 +429,7 @@ function ItemRow({ collection, item, onDeleted }: ItemRowProps) {
   }
 
   return (
-    <li>
+    <li data-item-id={item.id}>
       <div className="item-row">
         <div className="item-fields">
           <span className={`item-status item-status-${item.status}`}>
@@ -357,14 +445,29 @@ function ItemRow({ collection, item, onDeleted }: ItemRowProps) {
           ))}
         </div>
         <div className="item-actions">
-          <button type="button" className="touch-target button-quiet" onClick={() => setEditing(true)}>
+          {/* `data-row-edit` is how the page addresses this button as a focus
+              destination from outside the row: the row a delete hands focus to
+              is a sibling this component holds no reference to, and the row an
+              Undo restores does not exist yet when focus is lost (#367). */}
+          <button
+            type="button"
+            ref={editRef}
+            data-row-edit=""
+            className="touch-target button-quiet"
+            onClick={() => setEditing(true)}
+          >
             <Icon name="edit" />
             {t("edit")}
           </button>
           <button
             type="button"
             className="touch-target button-quiet"
-            onClick={() => deleteItem.mutate(item.id, { onSuccess: () => onDeleted(item) })}
+            onClick={() => {
+              // Asked for before the mutation, while the row is still on screen
+              // and this button still holds focus.
+              onDeleting();
+              deleteItem.mutate(item.id, { onSuccess: onDeleted });
+            }}
           >
             <Icon name="delete" />
             {t("delete")}
