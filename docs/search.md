@@ -1,4 +1,5 @@
 ---
+
 title: Search
 description: Finding items across your collections — full-text search, filters, and saved queries.
 ---

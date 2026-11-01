@@ -121,7 +121,7 @@ Before marking a PR ready for review, tick every item:
 ## Reporting bugs and requesting features
 
 - **Bugs**: open an issue with reproduction steps, expected vs. actual behavior, and environment info (OS, Node version, browser if applicable).
-- **Features**: open an issue describing the use case, not just the mechanism. Explain *why* the feature matters before proposing *how* to build it.
+- **Features**: open an issue describing the use case, not just the mechanism. Explain _why_ the feature matters before proposing _how_ to build it.
 - **Security issues**: do NOT open a public issue. Email `security@solve4it.com` — see [`SECURITY.md`](./SECURITY.md).
 
 ## Code of Conduct

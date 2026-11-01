@@ -1,4 +1,5 @@
 ---
+
 title: Getting Started
 description: Your first steps with MyCollections — install, create your first collection, and add an item.
 ---

@@ -1,11 +1,14 @@
 ## Summary
+
 <!-- Briefly describe what this PR does and why -->
 
 ## Linked Issue
+
 <!-- Every PR must link to an issue. Use "Closes #<number>" -->
 Closes #
 
 ## Definition of Done
+
 - [ ] CI is green
 - [ ] Tests written for new/changed behavior
 - [ ] Docs updated (if applicable)

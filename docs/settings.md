@@ -1,4 +1,5 @@
 ---
+
 title: Settings
 description: Configuring MyCollections — app-level preferences, per-collection settings, sync, and plugins.
 ---

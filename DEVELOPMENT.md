@@ -5,10 +5,12 @@ This guide takes you from a fresh clone to a running MyCollections dev environme
 ## Prerequisites
 
 - **Node.js 24 LTS** (currently `24.14.1`, pinned in `.nvmrc`). We recommend [fnm](https://github.com/Schniz/fnm) for fast version switching:
+
   ```bash
   fnm install && fnm use
   ```
 - **pnpm** — the version is pinned in `package.json` via `packageManager` and managed automatically by Corepack:
+
   ```bash
   corepack enable
   ```
@@ -65,19 +67,19 @@ Each workspace is a pnpm package and a Turborepo target. The monorepo uses [Turb
 
 Run from the repo root:
 
-| Script | What it does |
-|---|---|
-| `pnpm dev` | Start all apps in dev mode (`turbo run dev`) |
-| `pnpm build` | Build every workspace (`turbo run build`) |
-| `pnpm test` | Run the full test suite (`turbo run test`) |
-| `pnpm test:e2e` | Run the accessibility sweep in a real browser (`turbo run test:e2e`) |
-| `pnpm typecheck` | Type-check every workspace (`turbo run typecheck`) |
-| `pnpm lint` | Biome lint across the repo (includes a11y rules) |
-| `pnpm lint:fix` | Auto-fix lint issues where possible |
-| `pnpm format` | Format with Biome |
-| `pnpm format:check` | Check formatting without writing |
-| `pnpm spellcheck` | Run cSpell over the repo |
-| `pnpm check` | Full local CI: lint + spellcheck + typecheck + test + build |
+| Script              | What it does                                                         |
+| ------------------- | -------------------------------------------------------------------- |
+| `pnpm dev`          | Start all apps in dev mode (`turbo run dev`)                         |
+| `pnpm build`        | Build every workspace (`turbo run build`)                            |
+| `pnpm test`         | Run the full test suite (`turbo run test`)                           |
+| `pnpm test:e2e`     | Run the accessibility sweep in a real browser (`turbo run test:e2e`) |
+| `pnpm typecheck`    | Type-check every workspace (`turbo run typecheck`)                   |
+| `pnpm lint`         | Biome lint across the repo (includes a11y rules)                     |
+| `pnpm lint:fix`     | Auto-fix lint issues where possible                                  |
+| `pnpm format`       | Format with Biome                                                    |
+| `pnpm format:check` | Check formatting without writing                                     |
+| `pnpm spellcheck`   | Run cSpell over the repo                                             |
+| `pnpm check`        | Full local CI: lint + spellcheck + typecheck + test + build          |
 
 Run `pnpm check` before opening a PR — it's the closest local approximation of what CI will run.
 
@@ -149,7 +151,7 @@ By default the token is a **random UUID regenerated on every restart**, so after
 API_TOKEN=dev-local-token pnpm --filter @mycollections/api dev
 ```
 
-> This placeholder is for loopback development only. The server refuses to bind a non-loopback `HOST` unless `API_TOKEN` is set explicitly *and* is at least 32 characters, so a memorable token can never end up guarding a network-reachable API (#242).
+> This placeholder is for loopback development only. The server refuses to bind a non-loopback `HOST` unless `API_TOKEN` is set explicitly _and_ is at least 32 characters, so a memorable token can never end up guarding a network-reachable API (#242).
 
 The SQLite database is created automatically at `apps/api/data/app.db` on first run (override with `DB_PATH`). This location is anchored to the app directory, so it's the same file no matter which directory you launch from, and the resolved path is printed on startup (`Database: …`). The `data/` directory is gitignored.
 
@@ -170,7 +172,7 @@ A second instance needs **three** changes, not one — `DEV_ORIGINS` alone is no
 
 1. a free API `PORT`,
 2. `VITE_API_URL` pointing the web app at that port (it defaults to `http://localhost:3001`),
-3. `--port` on Vite *and* that origin in `DEV_ORIGINS`.
+3. `--port` on Vite _and_ that origin in `DEV_ORIGINS`.
 
 Point `DB_PATH` somewhere scratch too, or both instances write to the same database. Turbo runs tasks in strict env mode, so these variables reach the servers through `pnpm dev` only because `turbo.json` lists them in the `dev` task's `passThroughEnv`; a variable missing from that list is silently dropped before the server ever sees it.
 
@@ -204,11 +206,11 @@ Wiring:
 
 - **API** — the Fastify error handler reports unhandled (5xx) errors and returns a generic `500` body so internal details never reach clients; 4xx errors pass through untouched.
 - **Web** — route render errors are caught by TanStack Router (`defaultOnCatch` → `onRouterCatch`), everything else by the top-level `ErrorBoundary`, `window` `error`/`unhandledrejection` handlers, and the React Query cache `onError`. Users can opt out via Settings → Privacy (persisted in `localStorage`, checked on every capture).
-- **Both React paths report a `componentStack`.** `defaultOnCatch` and `ErrorBoundary.componentDidCatch` each receive React's `ErrorInfo`, and its `componentStack` is the only part of a report that says *which* component threw. Pass it; a handler typed without it silently loses that. It is optional on `onRouterCatch` so a bare call still reports — an absent stack leaves the key off rather than writing `undefined`, since `buildErrorReport` keeps only primitive context values.
-- **`defaultOnCatch` only fires where an error component is configured.** The router mounts its per-route `CatchBoundary` only when `errorComponent` (or the router's `defaultErrorComponent`) resolves for that match, and `defaultOnCatch` *is* that boundary's `componentDidCatch`. Configure only the handler and it can never be called — which is what #319 was: the throw passed every route to the router's *global* boundary (`Matches.js`), which reports nothing in any environment and renders the library's own `ErrorComponent`, a red `<pre>` holding `error.message`, expanded in dev and one "Show Error" button away in production. So the missing error component was a privacy leak as well as a missing screen. `createAppRouter` (`apps/web/src/router.ts`) now sets both, and is the seam `router.test.tsx` uses to drive a throw through the app's real options.
-- **The two crash screens, and why they are two** (`apps/web/src/components/ErrorScreen.tsx`). `RouteError` is the `defaultErrorComponent`: a route's boundary replaces the *screen*, so the shell is still standing and it can offer a link back to /collections. `AppErrorScreen` is the root route's own `errorComponent` and the `ErrorBoundary`'s fallback: the root's boundary wraps the root component, so a throw in `Root` or `Shell` renders with no nav, no `<main>` landmark and nothing left maintaining `document.title` — it brings all three, and offers only Reload, since routing is not known to work from there. Neither takes the boundary's `reset`: it only clears boundary state, so a deterministic render bug throws again and reports twice, and `router.invalidate()` rebuilds every committed match, resetting the boundary once per store update on the way through.
+- **Both React paths report a `componentStack`.** `defaultOnCatch` and `ErrorBoundary.componentDidCatch` each receive React's `ErrorInfo`, and its `componentStack` is the only part of a report that says _which_ component threw. Pass it; a handler typed without it silently loses that. It is optional on `onRouterCatch` so a bare call still reports — an absent stack leaves the key off rather than writing `undefined`, since `buildErrorReport` keeps only primitive context values.
+- **`defaultOnCatch` only fires where an error component is configured.** The router mounts its per-route `CatchBoundary` only when `errorComponent` (or the router's `defaultErrorComponent`) resolves for that match, and `defaultOnCatch` _is_ that boundary's `componentDidCatch`. Configure only the handler and it can never be called — which is what #319 was: the throw passed every route to the router's _global_ boundary (`Matches.js`), which reports nothing in any environment and renders the library's own `ErrorComponent`, a red `<pre>` holding `error.message`, expanded in dev and one "Show Error" button away in production. So the missing error component was a privacy leak as well as a missing screen. `createAppRouter` (`apps/web/src/router.ts`) now sets both, and is the seam `router.test.tsx` uses to drive a throw through the app's real options.
+- **The two crash screens, and why they are two** (`apps/web/src/components/ErrorScreen.tsx`). `RouteError` is the `defaultErrorComponent`: a route's boundary replaces the _screen_, so the shell is still standing and it can offer a link back to /collections. `AppErrorScreen` is the root route's own `errorComponent` and the `ErrorBoundary`'s fallback: the root's boundary wraps the root component, so a throw in `Root` or `Shell` renders with no nav, no `<main>` landmark and nothing left maintaining `document.title` — it brings all three, and offers only Reload, since routing is not known to work from there. Neither takes the boundary's `reset`: it only clears boundary state, so a deterministic render bug throws again and reports twice, and `router.invalidate()` rebuilds every committed match, resetting the boundary once per store update on the way through.
 - **One surface, five screens, and focus is a prop** (#349). `FailureSurface` in that same file is the `<h1>` + explanation + optional actions block behind every full-page failure: the two crash screens above, and the three route-level load failures in `routes/collections/index.tsx`, `$id.tsx` and `edit.tsx` that each hand-rolled the markup until #349. It takes `title` and `description` as **already-translated strings**, not keys — both defects fixed in #347 were namespace mistakes at those call sites, and a string argument makes the wrong pair visible where a bare `t("error_title")` reads identically in every namespace. It also keeps the `t()` calls in the route files, which is the only reason `locale-keys.integration.test.ts` can still bind them to a namespace; pass keys through a prop instead and that scan goes silently vacuous. Taking focus is opt-in via `claimFocus`, for the reason in the next two bullets — the crash screens pass it, the load failures do not, and the default is the safe way round.
-- **The crash screens carry `role="alert"` *and* take focus, and the two are not the same mechanism.** The role is the announcement: `alert` is the one live region a user agent fires an event for **on creation**, so inserting one announces it — unlike `aria-live`/`role="status"`, where the "persistent and empty, filled afterwards" rule below genuinely applies. #319 originally claimed these screens were an exception to that rule; they are not, and #347 corrected it. The focus is for two other things: a crash destroys whatever was focused, so focus falls to `<body>` and the tab order restarts at the top of the document (WCAG 2.4.3) — and browsers suppress live-region events until the document has loaded, which is exactly `AppErrorScreen` on a first paint. It is guarded on `document.activeElement` being `<body>` or nothing, the same guard `Shell.tsx` uses, so it never takes focus away from something that survived.
+- **The crash screens carry `role="alert"` _and_ take focus, and the two are not the same mechanism.** The role is the announcement: `alert` is the one live region a user agent fires an event for **on creation**, so inserting one announces it — unlike `aria-live`/`role="status"`, where the "persistent and empty, filled afterwards" rule below genuinely applies. #319 originally claimed these screens were an exception to that rule; they are not, and #347 corrected it. The focus is for two other things: a crash destroys whatever was focused, so focus falls to `<body>` and the tab order restarts at the top of the document (WCAG 2.4.3) — and browsers suppress live-region events until the document has loaded, which is exactly `AppErrorScreen` on a first paint. It is guarded on `document.activeElement` being `<body>` or nothing, the same guard `Shell.tsx` uses, so it never takes focus away from something that survived.
 - **The route-level failure screens keep the role for a different reason again, and decline the focus.** `routes/collections/index.tsx`, `$id.tsx` and `edit.tsx` replace the screen when their query fails — which, with React Query's default three retries and no `retry` override in `lib/query-client.ts`, is about **seven seconds after the navigation**, not with it. By then focus has settled: on the nav (which lives outside the pathname-keyed wrapper and survives) or on `<main>` (where the shell put it), and moving it that long after a user action is a hazard rather than a help. Focus management cannot announce these; the role is the only thing that does. #346 proposed removing the role and was closed for exactly this. Since #349 the declining is explicit — they omit `claimFocus` — rather than implicit in not using the shared component, and `ErrorScreen.test.tsx` pins the default, which nothing else would.
 - **`disableGlobalCatchBoundary` exists** (`Matches.js`) if the app's own `<ErrorBoundary>` should ever be the true last resort rather than the router's. It is not set today: the root route's `errorComponent` catches everything the global boundary would have.
 - **Every web entry point takes `unknown` and normalizes with `toReportableError`.** A `throw` in a render, a rejected promise and an `ErrorEvent` all carry whatever value was thrown, not necessarily an `Error`. `buildErrorReport` reads `.message`, so handing it a raw string threw inside `capture`, which swallows failures by design — the report was dropped silently. Type a handler's parameter as `Error` and that hole reopens.
@@ -227,7 +229,7 @@ That does not remove the paused state entirely (a hidden tab still pauses a retr
 Two consequences for how a failure is verified, both learned the hard way (#347):
 
 - **A failure surface arrives about seven seconds after the navigation, not with it.** Nothing overrides `retry`, so React Query's default three attempts run at 1s, 2s and 4s first. Any test or manual check that gives up sooner concludes the screen has no error state. It is also why those screens announce themselves with `role="alert"` rather than by taking focus — by the time they mount, focus has long since settled somewhere else.
-- **You cannot reproduce a query failure by driving Chrome from a tool.** React Query pauses *retries* while `document.visibilityState` is `"hidden"`, and a tab driven in the background always is: the query fetches once, fails, and then waits — no retries, no error state, indefinitely. The screen sits on its skeleton and looks like a bug in the app. Verify these states through `pnpm test:e2e`, where Playwright's page is visible, or by clicking through a browser you are actually looking at.
+- **You cannot reproduce a query failure by driving Chrome from a tool.** React Query pauses _retries_ while `document.visibilityState` is `"hidden"`, and a tab driven in the background always is: the query fetches once, fails, and then waits — no retries, no error state, indefinitely. The screen sits on its skeleton and looks like a bug in the app. Verify these states through `pnpm test:e2e`, where Playwright's page is visible, or by clicking through a browser you are actually looking at.
 
 ## Working on the docs site
 
@@ -239,7 +241,7 @@ The docs site at `apps/docs` is an [Astro Starlight](https://starlight.astro.bui
 - Relative Markdown links between shared docs (`[Items](./items.md)`) are rewritten to real page URLs at build time by `apps/docs/scripts/satteri-relative-doc-links.mjs`. Keep writing them the relative way — that is the form GitHub needs, and the rewrite is what makes it work on the site too.
 - `apps/docs/scripts/check-built-links.mjs` runs as a `postbuild` hook and fails the build if any in-site link still points at a `.md` file, or points at a page that was not built. A link that climbs out of `docs/` (`../../README.md`) is deliberately not rewritten and will fail this check — link to those on GitHub by absolute URL instead.
 - `apps/docs/scripts/check-built-pages.mjs` runs alongside it and fails the build if a doc did not reach the site with its content: a shared doc the copy step missed, a doc that produced no page, or a page published with an empty body. That last one is the reason it exists — Starlight catches an error thrown while rendering a page, logs it, and finishes the build green, publishing a page with its navigation and footer intact and nothing in between (#294).
-- Images referenced from the shared docs live in `docs/assets/`, and that directory is copied in alongside the Markdown by the same script (#295). Astro resolves `![Shelf view](./assets/shelf.png)` against the *copied* file and runs it through its image pipeline, so the published `src` is an optimized, content-hashed `/mycollections/_astro/shelf.<hash>.webp` rather than the source path — write the relative reference and never a URL under `_astro/`. An image the pipeline cannot find fails the build with `[ImageNotFound]`. `apps/docs/test/docs-images.test.mjs` is the regression guard: it builds the real site from the real `docs/` plus a fixture page and image and asserts the emitted `src` resolves to a file the build actually wrote.
+- Images referenced from the shared docs live in `docs/assets/`, and that directory is copied in alongside the Markdown by the same script (#295). Astro resolves `![Shelf view](./assets/shelf.png)` against the _copied_ file and runs it through its image pipeline, so the published `src` is an optimized, content-hashed `/mycollections/_astro/shelf.<hash>.webp` rather than the source path — write the relative reference and never a URL under `_astro/`. An image the pipeline cannot find fails the build with `[ImageNotFound]`. `apps/docs/test/docs-images.test.mjs` is the regression guard: it builds the real site from the real `docs/` plus a fixture page and image and asserts the emitted `src` resolves to a file the build actually wrote.
 - `apps/docs/site.mjs` holds the `site` and `base` values shared by the Astro config and those two scripts.
 - **`astro build` runs through `apps/docs/scripts/build.mjs`, which fails the build on any `[WARN]` it prints** (#339). The build's output is streamed through untouched; the script reads it on the way past. This package has produced four bugs of one shape — the build says something is wrong and carries on (#286, #294, #295, #331) — and two permanent `[WARN] [content]` lines had been training everyone to skim past the exact prefix a real problem arrives under. Clearing them only helps if something notices when the output stops being clean. If Astro or Starlight starts warning about something legitimate, this turns red on purpose: read it, then fix the cause or account for it deliberately. Filtering the line out is not the fix.
 - The not-found page is `apps/docs/src/pages/404.astro`, not a content file, and Starlight's own `/404` route is turned off (`disable404Route`). Starlight renders `src/content/docs/404.md` from an injected route, but its `[...slug]` catch-all does not exclude that same entry, so the documented file makes two routes claim `/404` and every build warns (verified against Starlight 0.42.0). Astro emits `src/pages/404.astro` as `dist/404.html`, which is the file GitHub Pages serves for an unknown URL; `check-built-pages.mjs` asserts it exists with a title, since nothing links to it and the link check never reaches it.
@@ -299,7 +301,7 @@ registers the matchers and the tests pass.
 
 Augmenting `Matchers` instead is Vitest's supported extension point and reaches `Assertion`,
 `ExpectStatic` and `AsymmetricMatchersContaining` alike, so it merges cleanly. Note that
-`AsymmetricMatchersContaining` must *not* also be augmented — it already extends `Matchers`,
+`AsymmetricMatchersContaining` must _not_ also be augmented — it already extends `Matchers`,
 and a second `TestingLibraryMatchers` base makes it unsatisfiable (TS2320).
 
 Delete the file once jest-dom ships Vitest 5 types — tracked upstream at
@@ -364,7 +366,7 @@ new route:
 
 The announcement is made once per **page**, where a page is the matched route's own interpolated
 pathname (`/collections/<id>`) — not `location.pathname`, which the router updates a render before
-the matches resolve, so a guard on it announces the page being *left*; and not the translated
+the matches resolve, so a guard on it announces the page being _left_; and not the translated
 title, which would announce the current page again on every language change.
 
 #### The address that matches nothing
@@ -374,7 +376,7 @@ router's `defaultNotFoundComponent`. That is the same rule as above read backwar
 carries `staticData`, so only a route can be named and announced, and a component-shaped 404
 leaves the document title saying whatever the previous screen was called. It is also why the
 router's development warning about "TanStack Router's overly generic defaultNotFoundComponent"
-(`renderRouteNotFound.js`) is gone rather than suppressed — an unknown URL now *matches* a route,
+(`renderRouteNotFound.js`) is gone rather than suppressed — an unknown URL now _matches_ a route,
 so no notFound error is raised at all.
 
 A wildcard ranks below every static and dynamic path, so the catch-all takes only what nothing
@@ -385,7 +387,7 @@ notice.
 The splat is not the whole story, and the part that is easy to get wrong is the part that has no
 route at all. A URL the matcher cannot **decode** — `/%`, or a link truncated mid-escape — throws
 a `URIError` inside `findRouteMatch`, which returns null, so it never reaches ranking and becomes
-a *global* not-found. `router.ts` therefore also configures `defaultNotFoundComponent` with the
+a _global_ not-found. `router.ts` therefore also configures `defaultNotFoundComponent` with the
 same screen, and `NotFoundScreen` publishes its own name through `usePageTitle` — because that
 path has no `staticData` to be named from, and without it the document would be called
 "MyCollections". A `notFound()` thrown from a loader lands on the same backstop.
@@ -430,7 +432,7 @@ focus to `<main>` when — and only when — that has happened.
 
 TanStack's `<Link>` decides it is active by **prefix** match, and an active link carries a
 hardcoded `aria-current="page"` and `data-status="active"` — `STATIC_ACTIVE_PROPS` in `link.js`,
-spread *after* the caller's props, so no prop can take them back off. `activeOptions` is the only
+spread _after_ the caller's props, so no prop can take them back off. `activeOptions` is the only
 lever there is.
 
 That default is right for the nav and wrong for everything else, which is the whole of the rule:
@@ -438,7 +440,7 @@ That default is right for the nav and wrong for everything else, which is the wh
 - **The nav says where you are, and which of the two things it means.** ARIA has two values and
   they are not interchangeable: `aria-current="page"` is "the current page within a set of pages"
   and `aria-current="true"` is "the current item within a set". So the nav says `page` only where
-  the link *is* the page on screen (`/collections`, `/settings`) and `true` where it is the section
+  the link _is_ the page on screen (`/collections`, `/settings`) and `true` where it is the section
   that page sits in (`/collections/<id>`, `/collections/new`, the editor). Saying `page` for the
   section — which is what the app did until #355, and what most apps do — tells a screen-reader
   user they are on a page they are not on.
@@ -451,8 +453,8 @@ That default is right for the nav and wrong for everything else, which is the wh
   reason) and asking the hook twice: once with this page's active rule, once with `exact` to answer
   the narrower question `page` actually means.
 - **A link in a screen's own content says where you can go.** Every back link and every way out of
-  a failure points at an *ancestor* of the current URL by nature, so it matches that prefix always —
-  and announces "current page" about the one link the user is about to follow *away*. Give those
+  a failure points at an _ancestor_ of the current URL by nature, so it matches that prefix always —
+  and announces "current page" about the one link the user is about to follow _away_. Give those
   `activeOptions={CONTENT_LINK_ACTIVE_OPTIONS}` (`src/lib/links.ts`, which is `{ exact: true }`:
   the specification's own reading, where a link is current only when it points at the page you are
   on). The detail screen's "All collections", the editor's two back links, and the recovery links
@@ -460,13 +462,13 @@ That default is right for the nav and wrong for everything else, which is the wh
 - **A 404 is inside nothing.** The address matched no route, so `/collections` is not a section the
   user is in — it is a string their wrong address happens to start with. The splat route declares
   `staticData: { notFound: true }`, the shell reads it (`useIsNotFound`), and the nav switches to
-  exact matching for that page only: no address the splat catches can *equal* a nav destination, so
+  exact matching for that page only: no address the splat catches can _equal_ a nav destination, so
   there the nav links are simply never current. Declared on the route rather than recognized in the
   shell for the same reason as `dynamicTitle` — the shell has to know during the same render as the
   route change, and a component-shaped answer arrives a commit after the nav has already spoken.
 
 `Shell.navigation.test.tsx` sweeps every route for links that claim to be the current page and
-asserts the exact list — including the *value*, since a sweep that only listed the links would pass
+asserts the exact list — including the _value_, since a sweep that only listed the links would pass
 against the bug #355 fixed — so a new screen with a back link fails there rather than shipping the
 bug again; the two 404 URLs are pinned in `not-found.test.tsx` and the crash screen's way out in
 `router.test.tsx`. Note what the axe sweep does **not** do here: `aria-current="page"` is valid
@@ -504,7 +506,7 @@ differently — persistent and empty, never conditional:
   screen's "storage will not remember your token", Settings' session-only token hint, the trash's
   loading line — is in its screen's first commit or in none of them, so `role="status"` on it buys
   no announcement and makes every page-level status query ambiguous. Demote it to a plain `<p>`
-  (`.form-hint` where the styling applies). The test to write is that it carries *no* role, found
+  (`.form-hint` where the styling applies). The test to write is that it carries _no_ role, found
   by its text: a `queryByRole("status")` assertion goes vacuous the moment the role is gone.
 - **Only layout needs a wrapper.** `.undo-toast-region` exists because the toast is `position:
   fixed` with `pointer-events` juggling. A region in normal flow — the two on Settings — is one
@@ -522,7 +524,7 @@ differently — persistent and empty, never conditional:
 - **Give a message a life span, and empty the region in place.** A message that describes a finished
   event has to go away on its own when nothing on the page can clear it — Settings' emptied-trash
   confirmation outlived its list for the whole mount because the only thing that could have cleared
-  it, the button, was gone with the trash (#336). Clear the *message*, never the region: a region
+  it, the button, was gone with the trash (#336). Clear the _message_, never the region: a region
   torn down when it has nothing to say is one that arrives with its text already inside it next
   time. Emptying it announces nothing, because `aria-relevant` defaults to `additions text` and a
   removal is neither. Hold the message in local state rather than deriving it from a mutation's
@@ -553,7 +555,7 @@ in this app's build target — `chrome111, edge111, firefox114, safari16.4, ios1
 since dropped `textInfo` again — so `directionForLanguage` has one fallback: `maximize()` supplies
 the locale's script, still from CLDR, and only the step from script to direction is ours (a short
 set of right-to-left ISO 15924 codes; a script's direction is intrinsic, whereas a list of
-right-to-left *languages* goes stale). The unit test deletes both accessors to exercise that path,
+right-to-left _languages_ goes stale). The unit test deletes both accessors to exercise that path,
 because Node's Intl has them and would otherwise hide it.
 
 `document-language.integration.test.ts` keeps `index.html`'s hardcoded values equal to the
@@ -563,7 +565,7 @@ Adding a locale therefore needs nothing here, as long as its bundle is passed to
 with the others. A locale fetched lazily would not be: it resolves to the fallback first and
 arrives on i18next's `loaded` event, which nothing listens to yet.
 
-Note that a correct `dir` is not a right-to-left *layout*: the CSS still uses physical properties
+Note that a correct `dir` is not a right-to-left _layout_: the CSS still uses physical properties
 in places, and directional icons are not mirrored. Labelling the document is #277; making the
 layout survive the flip is #322.
 

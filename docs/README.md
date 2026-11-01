@@ -58,7 +58,7 @@ there is enough content to warrant a hierarchy, add it deliberately — copy ste
 - **Plain Markdown.** Keep frontmatter minimal (`title:` and `description:`) so the content is portable across renderers. Starlight-specific features (tabs, asides, etc.) should be used sparingly — in-app Help may not support them.
 - **No absolute paths to other docs.** Use relative links (`./collections.md`) so they work regardless of the base URL. The docs site rewrites them to real page URLs when it builds, and its build fails on any it cannot resolve — including a link that points outside this directory, which should be an absolute GitHub URL instead.
 - **No references to renderer-specific chrome.** Don't write "click the button in the top-right of the docs site" — the in-app Help won't have that button.
-- **Images.** Put images in `docs/assets/` (subdirectories are fine) and reference them with Markdown image syntax and a relative path — `![Shelf view](./assets/shelf.png)` — the form GitHub resolves against the file itself. The docs site copies `docs/assets/` in alongside the generated Markdown and hands every referenced image to Astro's image pipeline, which content-hashes it and re-encodes raster formats: `./assets/shelf.png` is published as `/mycollections/_astro/shelf.<hash>.webp`. So write the relative reference and let the build rewrite it — never hardcode a URL under `_astro/`, and don't count on the original filename or format surviving. Two consequences worth knowing: an image the pipeline cannot find fails the build instead of shipping a broken page, and a raw `<img src="./assets/…">` tag bypasses the pipeline entirely and *would* ship broken, so don't write one.
+- **Images.** Put images in `docs/assets/` (subdirectories are fine) and reference them with Markdown image syntax and a relative path — `![Shelf view](./assets/shelf.png)` — the form GitHub resolves against the file itself. The docs site copies `docs/assets/` in alongside the generated Markdown and hands every referenced image to Astro's image pipeline, which content-hashes it and re-encodes raster formats: `./assets/shelf.png` is published as `/mycollections/_astro/shelf.<hash>.webp`. So write the relative reference and let the build rewrite it — never hardcode a URL under `_astro/`, and don't count on the original filename or format surviving. Two consequences worth knowing: an image the pipeline cannot find fails the build instead of shipping a broken page, and a raw `<img src="./assets/…">` tag bypasses the pipeline entirely and _would_ ship broken, so don't write one.
 - **Update `CHANGELOG`-worthy content only when behavior changes.** Cosmetic doc edits don't need a feature flag or migration note.
 
 ## How Starlight consumes this directory
@@ -80,6 +80,7 @@ Details will be specified when the in-app Help feature issue is picked up.
 1. Open (or find) a GitHub issue describing what the doc is for.
 2. Create a new `.md` file in this directory following the authoring rules above.
 3. Add a minimal frontmatter block:
+
    ```md
    ---
    title: Your page title

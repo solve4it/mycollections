@@ -1,4 +1,5 @@
 ---
+
 title: Image pipeline check
 description: Build fixture that proves an image in docs/assets reaches the built site.
 ---

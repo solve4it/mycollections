@@ -8,12 +8,12 @@ This package is **desktop-first** and contains no platform I/O of its own. The O
 
 The protocol core (`OidcAuthProvider`) is pure. Everything platform-specific is an injected seam:
 
-| Seam | Responsibility | Implementations |
-|---|---|---|
-| `SecureTokenStore` | Persist `TokenSet`s by account key | `InMemoryTokenStore` (here); `KeyringTokenStore` (OS keychain, follow-up #169); BFF/cookie store for web (follow-up #174) |
-| `AuthorizationFlow` | Perform the redirect, capture the auth code | `FakeAuthorizationFlow` (here); loopback flow for desktop (follow-up #170); web redirect flow (follow-up #174) |
-| `TokenEndpoint` | Exchange/refresh/revoke tokens at the IdP | Wired per real provider (follow-ups #171, #172, #173) |
-| `IdentityResolver` | Validate the ID token, derive the user | Wired per real provider (validates signature/`iss`/`aud`/`exp`/`nonce`) |
+| Seam                | Responsibility                              | Implementations                                                                                                           |
+| ------------------- | ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `SecureTokenStore`  | Persist `TokenSet`s by account key          | `InMemoryTokenStore` (here); `KeyringTokenStore` (OS keychain, follow-up #169); BFF/cookie store for web (follow-up #174) |
+| `AuthorizationFlow` | Perform the redirect, capture the auth code | `FakeAuthorizationFlow` (here); loopback flow for desktop (follow-up #170); web redirect flow (follow-up #174)            |
+| `TokenEndpoint`     | Exchange/refresh/revoke tokens at the IdP   | Wired per real provider (follow-ups #171, #172, #173)                                                                     |
+| `IdentityResolver`  | Validate the ID token, derive the user      | Wired per real provider (validates signature/`iss`/`aud`/`exp`/`nonce`)                                                   |
 
 ### Security properties
 
@@ -26,16 +26,16 @@ The protocol core (`OidcAuthProvider`) is pure. Everything platform-specific is 
 
 ## What's exported
 
-| Export | Purpose |
-|---|---|
-| `OidcAuthProvider` | The OIDC Authorization Code + PKCE provider (implements core `AuthProvider`) |
-| `SecureTokenStore` / `TokenSet` | Secure storage seam and the secret payload it holds |
-| `InMemoryTokenStore` | Non-persistent store for tests and ephemeral fallback |
-| `AuthorizationFlow` / `AuthorizationRequest` / `AuthorizationResponse` | Redirect transport seam |
-| `FakeAuthorizationFlow` | Test authorization flow returning a canned code |
-| `TokenEndpoint` / `IdentityResolver` | Per-provider seams for token exchange and ID-token validation |
-| `createMockAuthProvider` | Fully wired in-memory provider for app-shell development |
-| `createPkcePair` / `sha256Base64Url` / `randomUrlSafe` | PKCE (RFC 7636) helpers (Web Crypto, runs on Node ≥ 24 and browsers) |
+| Export                                                                 | Purpose                                                                      |
+| ---------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| `OidcAuthProvider`                                                     | The OIDC Authorization Code + PKCE provider (implements core `AuthProvider`) |
+| `SecureTokenStore` / `TokenSet`                                        | Secure storage seam and the secret payload it holds                          |
+| `InMemoryTokenStore`                                                   | Non-persistent store for tests and ephemeral fallback                        |
+| `AuthorizationFlow` / `AuthorizationRequest` / `AuthorizationResponse` | Redirect transport seam                                                      |
+| `FakeAuthorizationFlow`                                                | Test authorization flow returning a canned code                              |
+| `TokenEndpoint` / `IdentityResolver`                                   | Per-provider seams for token exchange and ID-token validation                |
+| `createMockAuthProvider`                                               | Fully wired in-memory provider for app-shell development                     |
+| `createPkcePair` / `sha256Base64Url` / `randomUrlSafe`                 | PKCE (RFC 7636) helpers (Web Crypto, runs on Node ≥ 24 and browsers)         |
 
 ## Usage
 
@@ -44,8 +44,8 @@ import { createMockAuthProvider } from "@mycollections/auth";
 
 // App-shell development: no browser, network, or keychain.
 const auth = createMockAuthProvider();
-const session = await auth.signIn();        // non-secret Session metadata
-const token = await auth.getAccessToken();  // access token, auto-refreshed near expiry
+const session = await auth.signIn(); // non-secret Session metadata
+const token = await auth.getAccessToken(); // access token, auto-refreshed near expiry
 await auth.signOut();
 ```
 

@@ -1,4 +1,5 @@
 ---
+
 title: Collections
 description: How collections work in MyCollections — creating them, choosing a plugin type, and managing them over time.
 ---
@@ -21,13 +22,13 @@ Open a collection and choose **Edit collection** to change its name, description
 
 Your item values are filed under each field, so most edits cost nothing at all:
 
-| Change | What happens to existing items |
-| --- | --- |
-| **Add a field** | Nothing. Existing items are simply blank for it, and stay valid. Marking it required applies the next time you edit an item — nothing is filled in for you. |
-| **Rename a field**, or change its help text, choices, rating range, or currency | Nothing. Values follow the field. |
-| **Reorder fields** | Nothing — it only changes what you see. |
-| **Remove a field** | The field disappears from every item, but **the values are kept** in your data and stay in a JSON backup. Nothing is deleted. |
-| **Change a field's type** | Only possible while the collection is empty. |
+| Change                                                                          | What happens to existing items                                                                                                                              |
+| ------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Add a field**                                                                 | Nothing. Existing items are simply blank for it, and stay valid. Marking it required applies the next time you edit an item — nothing is filled in for you. |
+| **Rename a field**, or change its help text, choices, rating range, or currency | Nothing. Values follow the field.                                                                                                                           |
+| **Reorder fields**                                                              | Nothing — it only changes what you see.                                                                                                                     |
+| **Remove a field**                                                              | The field disappears from every item, but **the values are kept** in your data and stay in a JSON backup. Nothing is deleted.                               |
+| **Change a field's type**                                                       | Only possible while the collection is empty.                                                                                                                |
 
 ### Why the type is sometimes locked
 
