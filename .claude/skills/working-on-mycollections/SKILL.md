@@ -56,7 +56,8 @@ Tests passing is CI's evidence, not yours. Before "done" or "fixed":
   playwright install chromium`, once). It starts its own API on 3111 against `DB_PATH=:memory:`
   and its own web preview on 4173, so it never touches real data — but it also refuses to reuse a
   server already on those ports, so free them first. New route or new interactive state → new
-  scan in `apps/web/e2e/a11y.spec.ts`.
+  scan in `apps/web/e2e/a11y.spec.ts`; a new or renamed interactive control gets its stop in
+  `apps/web/e2e/keyboard.spec.ts`, whose expectations are each tab stop's role and accessible name.
 - **Drive the changed surface.** API change → start the server and curl the actual route;
   web change → load it in the browser and click. Launch recipe:
 

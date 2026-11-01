@@ -115,6 +115,7 @@ Before marking a PR ready for review, tick every item:
 - [ ] A11y rules pass (Biome's built-in a11y rules must be green; screen-reader and keyboard flows considered for UI work)
 - [ ] New routes declare `staticData.titleKey` so the page is named and its arrival announced (see DEVELOPMENT.md), and no new live region is mounted with its text already inside — hidden messages go through the shell's announcer, a message that must be visible or carries a control gets a class-named region of its own that is rendered unconditionally and filled afterwards, and a notice that can never change is not a live region at all
 - [ ] For UI changes, `pnpm test:e2e` is green — the axe sweep over every route, at both viewports and both color schemes. New routes and new interactive states get a scan in `apps/web/e2e/a11y.spec.ts`; see DEVELOPMENT.md for the one-time browser install.
+- [ ] A new or renamed interactive control is reflected in `apps/web/e2e/keyboard.spec.ts` — a new screen gets its tab sequence, a new control gets its stop, and a rename changes the stop's expected accessible name. A control that is reachable only by pointer, or that leaves focus on `<body>` when it removes the thing holding it, does not pass.
 - [ ] For new dependencies: `depscore` was checked (see CLAUDE.md)
 - [ ] CI is green on the PR
 

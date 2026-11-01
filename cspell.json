@@ -55,6 +55,7 @@
     "prebuild",
     "predev",
     "shusak",
+    "spinbutton",
     "subtags",
     "tanstack",
     "transitionend",
