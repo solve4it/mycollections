@@ -280,7 +280,7 @@ test.describe("accessibility", () => {
 
     await page.goto("/settings");
     await expect(page).toHaveURL(/\/settings$/);
-    await page.getByRole("button", { name: "Delete forever" }).first().click();
+    await page.getByRole("button", { name: "Delete forever “Kind of Blue”" }).click();
     await expect(page.getByRole("alert")).toContainText("This cannot be undone.");
 
     // The first thing this sweep found: at 390px the actions column sized itself
@@ -321,7 +321,7 @@ test.describe("accessibility", () => {
     await expect(region).toHaveAttribute("aria-live", "polite");
     await expect(region, "the region must be on the page, and empty, before the delete").toBeEmpty();
 
-    await page.getByRole("button", { name: "Delete" }).first().click();
+    await page.getByRole("button", { name: "Delete “Kind of Blue”" }).click();
 
     await expect(region).toContainText("Deleted “Kind of Blue”");
     const undo = page.getByRole("button", { name: "Undo" });

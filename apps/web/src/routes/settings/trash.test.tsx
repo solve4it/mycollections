@@ -148,17 +148,31 @@ describe("Settings trash listing", () => {
 });
 
 describe("Settings trash restore", () => {
+  // Every row's controls name the row they act on (#375), so the specs below
+  // match on the verb and the full name is asserted once, here.
+  it("names each row's controls for the row they act on", async () => {
+    renderSettings();
+    const records = await row("Records");
+    expect(within(records).getByRole("button", { name: /^Restore/ })).toHaveAccessibleName("Restore “Records”");
+    expect(within(records).getByRole("button", { name: /^Delete forever/ })).toHaveAccessibleName(
+      "Delete forever “Records”",
+    );
+    const dune = await row("Dune");
+    expect(within(dune).getByRole("button", { name: /^Restore/ })).toHaveAccessibleName("Restore “Dune”");
+    expect(within(dune).getByRole("button", { name: /^Delete forever/ })).toHaveAccessibleName("Delete forever “Dune”");
+  });
+
   it("restores a collection through the collection route", async () => {
     renderSettings();
     const records = await row("Records");
-    fireEvent.click(within(records).getByRole("button", { name: "Restore" }));
+    fireEvent.click(within(records).getByRole("button", { name: /^Restore/ }));
     await waitFor(() => expect(restoreCollection).toHaveBeenCalledWith("col-records"));
   });
 
   it("restores an item into the collection it came from", async () => {
     renderSettings();
     const dune = await row("Dune");
-    fireEvent.click(within(dune).getByRole("button", { name: "Restore" }));
+    fireEvent.click(within(dune).getByRole("button", { name: /^Restore/ }));
     await waitFor(() => expect(restoreItem).toHaveBeenCalledWith("col-books", "item-dune"));
   });
 
@@ -170,7 +184,7 @@ describe("Settings trash restore", () => {
 
     renderSettings();
     const records = await row("Records");
-    fireEvent.click(within(records).getByRole("button", { name: "Restore" }));
+    fireEvent.click(within(records).getByRole("button", { name: /^Restore/ }));
 
     await waitFor(async () => expect(await trashSection()).not.toHaveTextContent("Records"));
   });
@@ -179,7 +193,7 @@ describe("Settings trash restore", () => {
     vi.mocked(restoreCollection).mockRejectedValue(new Error("500"));
     renderSettings();
     const records = await row("Records");
-    fireEvent.click(within(records).getByRole("button", { name: "Restore" }));
+    fireEvent.click(within(records).getByRole("button", { name: /^Restore/ }));
     await waitFor(() => expect(within(records).getByRole("alert")).toHaveTextContent(/could not restore/i));
     expect(records).toHaveTextContent("Records");
   });
@@ -189,7 +203,7 @@ describe("Settings trash permanent delete", () => {
   it("asks before destroying a collection, naming it and its contents", async () => {
     renderSettings();
     const records = await row("Records");
-    fireEvent.click(within(records).getByRole("button", { name: "Delete forever" }));
+    fireEvent.click(within(records).getByRole("button", { name: /^Delete forever/ }));
     expect(within(records).getByRole("alert")).toHaveTextContent(
       "Permanently delete “Records” and every item in it? This cannot be undone.",
     );
@@ -199,27 +213,27 @@ describe("Settings trash permanent delete", () => {
   it("destroys the collection only after the confirmation", async () => {
     renderSettings();
     const records = await row("Records");
-    fireEvent.click(within(records).getByRole("button", { name: "Delete forever" }));
-    fireEvent.click(within(records).getByRole("button", { name: "Delete forever" }));
+    fireEvent.click(within(records).getByRole("button", { name: /^Delete forever/ }));
+    fireEvent.click(within(records).getByRole("button", { name: /^Delete forever/ }));
     await waitFor(() => expect(purgeCollection).toHaveBeenCalledWith("col-records"));
   });
 
   it("destroys an item only after the confirmation", async () => {
     renderSettings();
     const dune = await row("Dune");
-    fireEvent.click(within(dune).getByRole("button", { name: "Delete forever" }));
+    fireEvent.click(within(dune).getByRole("button", { name: /^Delete forever/ }));
     expect(within(dune).getByRole("alert")).toHaveTextContent("Permanently delete “Dune”? This cannot be undone.");
-    fireEvent.click(within(dune).getByRole("button", { name: "Delete forever" }));
+    fireEvent.click(within(dune).getByRole("button", { name: /^Delete forever/ }));
     await waitFor(() => expect(purgeItem).toHaveBeenCalledWith("item-dune"));
   });
 
   it("cancelling destroys nothing", async () => {
     renderSettings();
     const dune = await row("Dune");
-    fireEvent.click(within(dune).getByRole("button", { name: "Delete forever" }));
+    fireEvent.click(within(dune).getByRole("button", { name: /^Delete forever/ }));
     fireEvent.click(within(dune).getByRole("button", { name: "Cancel" }));
     expect(purgeItem).not.toHaveBeenCalled();
-    expect(within(dune).getByRole("button", { name: "Delete forever" })).toBeInTheDocument();
+    expect(within(dune).getByRole("button", { name: /^Delete forever/ })).toBeInTheDocument();
   });
 });
 

@@ -418,6 +418,37 @@ The rest of the accessibility floor is asserted without a browser, by the integr
 `prefers-reduced-motion` gating of every animation (`motion.integration.test.ts`), and where the
 focus ring is and is not drawn (`focus.integration.test.ts`).
 
+### Naming a control that acts on one row
+
+A control that appears once per row has to say which row it acts on, or a screen-reader user hears
+the same word once per item with nothing tying a press to a record — and a focus destination
+arriving on it says nothing about what just happened. The four in the app are an item's Edit and
+Delete and a trash row's Restore and Delete forever.
+
+The pattern, which every interpolated-name string in the app already follows (`deleted_toast`,
+`editing_item`, `added_status`, the trash prompts): **the visible verb first, then the row's name in
+curly quotes** — `Delete forever “Kind of Blue”` — carried on an `aria-label` from a locale key, not
+built in a component.
+
+The order is not a matter of taste. WCAG 2.5.3 Label in Name (Level A) requires the visible label to
+appear in the accessible name, and axe reads that strictly: `label-content-name-mismatch` tokenizes
+both strings and demands the visible label be a **contiguous** run of the name. So `Delete forever
+“Kind of Blue”` passes and the natural-sounding `Delete Kind of Blue forever` fails, because it
+splits "Delete forever". The rule is tagged `wcag21a`, which is in the tag set `e2e/fixtures.ts`
+scans with, so getting this wrong turns `pnpm test:e2e` red rather than shipping.
+
+The curly quotes are silent: NVDA, JAWS and VoiceOver all default to a punctuation level that does
+not speak `“ ”`, so they read as a short pause between the verb and the name — while braille users
+see them, which is what makes a verb-shaped item name parseable. A colon would be spoken by some
+configurations; this is the reason the separator is quotes and not punctuation.
+
+In the keyboard sweep these names are built by four helpers at the top of `keyboard.spec.ts`, said
+once because each appears in both a selector and a tab-order expectation. The expectations carry one
+more thing than the selectors: Playwright appends an element's text content to a stop when the
+accessible name differs from it, so a stop reads `button "Edit “Kind of Blue”": Edit` — the 2.5.3
+relationship written out, failing both if a row stops naming itself and if the visible label drifts
+out of the name.
+
 ### Page titles and route announcements
 
 A client-side navigation replaces the content with no page load, so nothing reaches a screen
