@@ -179,7 +179,6 @@ describe("EditCollectionPage", () => {
     vi.mocked(listItems).mockResolvedValue([item("i1")]);
     renderEdit();
     await waitFor(() => {
-      const types = screen.getAllByLabelText(/field type/i) as HTMLSelectElement[];
       const [first] = screen.getAllByLabelText(/field type/i) as HTMLSelectElement[];
       expect(first && locked(first)).toBe(true);
     });
