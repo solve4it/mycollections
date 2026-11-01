@@ -334,10 +334,30 @@ and 4173 (web preview), with a token generated per run and `DB_PATH=:memory:`. I
 database in your working tree.
 
 What it covers, and what it does not: axe finds violations that are machine-decidable from the
-rendered page. On top of that, the `keyboard access` specs drive the parts axe cannot see — the
-skip link, and where focus lands after a client-side navigation — and one spec scans the app in a
-navigated-into state rather than after a page load. What no tool can check is whether a screen
-reader actually spoke: every assertion about announcement is a check on the shape of the DOM. See
+rendered page. Two spec files drive the parts it cannot see.
+
+- `a11y.spec.ts` holds the axe scans, plus a `keyboard access` block about focus **management** —
+  the skip link, and where focus lands after a client-side navigation — and one spec that scans the
+  app in a navigated-into state rather than after a page load.
+- `keyboard.spec.ts` is the keyboard **traversal** sweep: for every screen, the whole tab sequence
+  in order; that Shift+Tab retraces it and that no screen traps focus; and that every action is
+  operable by key, with Space as well as Enter where the control is a button.
+
+The tab-order expectations are lists of each stop's ARIA role and accessible name, exactly as
+Playwright computes them — `button "Delete"`, `textbox "Collection name": Vinyl records` — so a
+failure is a diff of the words a screen reader would say, not of CSS selectors. A control that
+lost its label, gained a second one, or moved in the sequence all read as that diff. Two
+consequences worth knowing before you add a control:
+
+- **The nav's position is asserted once, not per screen.** `.shell-sidebar` is `display: none`
+  below 768px and `.shell-bottom-nav` above it, and `display: none` removes an element from the
+  tab order, so the sidebar precedes the content at desktop width and the bottom bar follows it on
+  a phone. `wholeSequence()` says that; each screen declares only its own stops.
+- **Renaming a user-visible control changes a tab-order expectation**, which is deliberate: the
+  expectation is the announced name, and a rename is a change to what the user hears.
+
+What no tool can check is whether a screen reader actually spoke: every assertion about
+announcement is a check on the shape of the DOM. See
 [#24](https://github.com/solve4it/mycollections/issues/24) for what is still outstanding, including
 the manual screen-reader pass.
 
