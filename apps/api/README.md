@@ -14,27 +14,27 @@ Local Fastify API server for MyCollections. Runs on `localhost` only and is inte
 
 All routes require `Authorization: Bearer <token>` except `GET /api/health`.
 
-| Method | Path | Description |
-|---|---|---|
-| `GET` | `/api/health` | Health check (no auth required) |
-| `GET` | `/api/collections` | List all collections (each includes `itemCount`, the number of non-deleted items) |
-| `POST` | `/api/collections` | Create a collection |
-| `GET` | `/api/collections/:id` | Get a collection |
-| `PATCH` | `/api/collections/:id` | Update a collection, its field schema included (see [Editing a field schema](#editing-a-field-schema)) |
-| `DELETE` | `/api/collections/:id` | Soft-delete a collection |
-| `POST` | `/api/collections/:id/restore` | Restore a soft-deleted collection |
-| `GET` | `/api/collections/:id/items` | List items (`?status=owned\|wanted\|ordered`) |
-| `POST` | `/api/collections/:id/items` | Create an item |
-| `GET` | `/api/collections/:id/items/:itemId` | Get an item |
-| `PATCH` | `/api/collections/:id/items/:itemId` | Update an item |
-| `DELETE` | `/api/collections/:id/items/:itemId` | Soft-delete an item |
-| `POST` | `/api/collections/:id/items/:itemId/restore` | Restore a soft-deleted item |
-| `GET` | `/api/trash` | List what soft delete has hidden: `{ collections, items }` |
-| `DELETE` | `/api/trash` | Empty the trash — permanently delete everything in it; returns `{ items, collections }` counts |
-| `DELETE` | `/api/trash/items/:itemId` | Permanently delete a trashed item |
-| `DELETE` | `/api/trash/collections/:id` | Permanently delete a trashed collection and its items |
-| `GET` | `/api/export` | Download a JSON backup of all collections and items |
-| `POST` | `/api/import` | Restore a backup document (`?mode=skip`) |
+| Method   | Path                                         | Description                                                                                            |
+| -------- | -------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| `GET`    | `/api/health`                                | Health check (no auth required)                                                                        |
+| `GET`    | `/api/collections`                           | List all collections (each includes `itemCount`, the number of non-deleted items)                      |
+| `POST`   | `/api/collections`                           | Create a collection                                                                                    |
+| `GET`    | `/api/collections/:id`                       | Get a collection                                                                                       |
+| `PATCH`  | `/api/collections/:id`                       | Update a collection, its field schema included (see [Editing a field schema](#editing-a-field-schema)) |
+| `DELETE` | `/api/collections/:id`                       | Soft-delete a collection                                                                               |
+| `POST`   | `/api/collections/:id/restore`               | Restore a soft-deleted collection                                                                      |
+| `GET`    | `/api/collections/:id/items`                 | List items (`?status=owned\|wanted\|ordered`)                                                          |
+| `POST`   | `/api/collections/:id/items`                 | Create an item                                                                                         |
+| `GET`    | `/api/collections/:id/items/:itemId`         | Get an item                                                                                            |
+| `PATCH`  | `/api/collections/:id/items/:itemId`         | Update an item                                                                                         |
+| `DELETE` | `/api/collections/:id/items/:itemId`         | Soft-delete an item                                                                                    |
+| `POST`   | `/api/collections/:id/items/:itemId/restore` | Restore a soft-deleted item                                                                            |
+| `GET`    | `/api/trash`                                 | List what soft delete has hidden: `{ collections, items }`                                             |
+| `DELETE` | `/api/trash`                                 | Empty the trash — permanently delete everything in it; returns `{ items, collections }` counts         |
+| `DELETE` | `/api/trash/items/:itemId`                   | Permanently delete a trashed item                                                                      |
+| `DELETE` | `/api/trash/collections/:id`                 | Permanently delete a trashed collection and its items                                                  |
+| `GET`    | `/api/export`                                | Download a JSON backup of all collections and items                                                    |
+| `POST`   | `/api/import`                                | Restore a backup document (`?mode=skip`)                                                               |
 
 In dev mode, OpenAPI docs are available at `GET /api/docs`.
 
@@ -45,13 +45,13 @@ schema you want, not a delta. Item values are stored in a JSON object keyed by f
 id and are never coerced against the collection's definitions, which decides what each
 edit costs:
 
-| Edit | Effect on existing items |
-| --- | --- |
-| Add a field | None. Items have no value for it and render blank. `required` starts applying the next time an item is edited; nothing is backfilled. |
-| Relabel, change help text, edit `select` options, `rating` max, or `currencyCode` | None. |
-| Reorder | None — display order only. |
-| Remove a field | Values stored under that id are **kept**, unrendered. They survive in `GET /api/export`. |
-| Change a field's type | Rejected with `400` while the collection holds any items. |
+| Edit                                                                              | Effect on existing items                                                                                                              |
+| --------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| Add a field                                                                       | None. Items have no value for it and render blank. `required` starts applying the next time an item is edited; nothing is backfilled. |
+| Relabel, change help text, edit `select` options, `rating` max, or `currencyCode` | None.                                                                                                                                 |
+| Reorder                                                                           | None — display order only.                                                                                                            |
+| Remove a field                                                                    | Values stored under that id are **kept**, unrendered. They survive in `GET /api/export`.                                              |
+| Change a field's type                                                             | Rejected with `400` while the collection holds any items.                                                                             |
 
 Retyping is the one edit that would strand data — a text value under a field that
 became `number` is unreadable by the new control — so it is allowed only while the
@@ -90,7 +90,7 @@ back everything it held. Consequently:
   collection is in the trash. Restore the collection instead.
 - Purging a collection removes its items too, via the foreign key cascade. Emptying the
   trash removes trashed collections first for the same reason, so an item that was deleted
-  individually *and* whose collection was later deleted is removed once, not counted twice.
+  individually _and_ whose collection was later deleted is removed once, not counted twice.
 
 ### Backup format
 
@@ -126,16 +126,16 @@ await app.listen({ port: 3001, host: "127.0.0.1" });
 
 ## Configuration
 
-| Env var | Default | Description |
-|---|---|---|
-| `DB_PATH` | `apps/api/data/app.db` | SQLite database file path. The default is anchored to the app directory (not the current working directory), so it's the same file no matter where you launch from. The resolved path is printed on startup. |
-| `PORT` | `3001` | HTTP port. Must be an integer 0–65535; `0` asks the OS for a free port. |
-| `HOST` | `127.0.0.1` | Bind address. Anything other than loopback publishes the API to the network and is refused unless `API_TOKEN` is set explicitly and is at least 32 characters. |
-| `API_TOKEN` | random UUID (development only) | Bearer token, regenerated on every start and printed to stdout **in development only**. **Required outside development**: the generated fallback is never printed there, so it would be known to nobody and every authenticated request would 401 — the server refuses to start rather than bind something unusable. |
-| `NODE_ENV` | — | Set to `production` to disable Swagger UI and harden CSP |
+| Env var       | Default                                                                                            | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| ------------- | -------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `DB_PATH`     | `apps/api/data/app.db`                                                                             | SQLite database file path. The default is anchored to the app directory (not the current working directory), so it's the same file no matter where you launch from. The resolved path is printed on startup.                                                                                                                                                                                                                                                                       |
+| `PORT`        | `3001`                                                                                             | HTTP port. Must be an integer 0–65535; `0` asks the OS for a free port.                                                                                                                                                                                                                                                                                                                                                                                                            |
+| `HOST`        | `127.0.0.1`                                                                                        | Bind address. Anything other than loopback publishes the API to the network and is refused unless `API_TOKEN` is set explicitly and is at least 32 characters.                                                                                                                                                                                                                                                                                                                     |
+| `API_TOKEN`   | random UUID (development only)                                                                     | Bearer token, regenerated on every start and printed to stdout **in development only**. **Required outside development**: the generated fallback is never printed there, so it would be known to nobody and every authenticated request would 401 — the server refuses to start rather than bind something unusable.                                                                                                                                                               |
+| `NODE_ENV`    | —                                                                                                  | Set to `production` to disable Swagger UI and harden CSP                                                                                                                                                                                                                                                                                                                                                                                                                           |
 | `DEV_ORIGINS` | `http://localhost:5173`, `http://127.0.0.1:5173`, `http://localhost:4173`, `http://127.0.0.1:4173` | **Development only.** Comma-separated browser origins the dev CORS allowlist accepts, for a web dev server on another port (a parallel worktree, two branches at once). Replaces the defaults rather than extending them; loopback origins only; empty keeps the defaults and anything else refuses to start. Never read when `NODE_ENV=production`, where CORS is off entirely. Overriding it is reported as a startup warning, since a changed allowlist is otherwise invisible. |
 
-An empty value counts as unset, not as a value: `HOST=""` used to reach `app.listen()` verbatim and bind *every* interface. Invalid configuration prints a one-line reason and exits non-zero rather than starting.
+An empty value counts as unset, not as a value: `HOST=""` used to reach `app.listen()` verbatim and bind _every_ interface. Invalid configuration prints a one-line reason and exits non-zero rather than starting.
 
 ## Network exposure
 

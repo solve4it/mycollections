@@ -1,4 +1,5 @@
 ---
+
 name: working-on-mycollections
 description: How to execute any development task in this repo — planning from the board, TDD, runtime verification, commit/PR mechanics, and the specific mistakes this project punishes. Use at the start of every coding, review, or fix task in MyCollections.
 ---
@@ -23,8 +24,8 @@ board IDs); this file holds the judgment. When they overlap, CLAUDE.md wins on m
    `apps/web` (lib → component → route → locale JSON). Commit at each layer boundary with a
    conventional message referencing the issue (`fix(api): … #216`). Small PRs; split rather
    than grow.
-4. **TDD, and watch the test fail.** Write the test first, run it, and confirm it fails *for
-   the right reason* (missing module ≠ wrong behavior). Only then implement. Assert displayed
+4. **TDD, and watch the test fail.** Write the test first, run it, and confirm it fails _for
+   the right reason_ (missing module ≠ wrong behavior). Only then implement. Assert displayed
    or returned values with discriminating fixtures — `expect(body.fields).toEqual({title:
    "Dune"})`, not `expect(el).toBeInTheDocument()`.
 5. **Gate, then verify at the surface** (see next section), then push as the bot and open the
@@ -58,10 +59,12 @@ Tests passing is CI's evidence, not yours. Before "done" or "fixed":
   scan in `apps/web/e2e/a11y.spec.ts`.
 - **Drive the changed surface.** API change → start the server and curl the actual route;
   web change → load it in the browser and click. Launch recipe:
+
   ```bash
   DB_PATH=<scratchpad>/app.db API_TOKEN=dev-token PORT=3111 pnpm --filter @mycollections/api dev
   VITE_API_URL=http://localhost:3111 pnpm --filter @mycollections/web dev   # → :5173
   ```
+
   Paste the token on the setup screen. NEVER use the default DB path when testing — the
   working-tree `data/app.db` holds real collections. Never delete it.
 - **A query-failure screen cannot be reached by driving Chrome from a tool.** React Query
@@ -112,7 +115,7 @@ Tests passing is CI's evidence, not yours. Before "done" or "fixed":
   corepack shims — run `corepack enable` from that version's bin. Kill dev servers by port
   (`lsof -ti tcp:3111 -sTCP:LISTEN | xargs kill`), not by job id — background shells don't
   share state, and a surviving server causes an address-already-in-use error that looks like
-  your bug. `-sTCP:LISTEN` is not optional: `lsof -i tcp:<port>` matches *both* ends of a
+  your bug. `-sTCP:LISTEN` is not optional: `lsof -i tcp:<port>` matches _both_ ends of a
   connection, so without it you also kill the browser's socket to that port, the Chrome
   renderer dies, the tab silently reloads, and the page looks like it lost your data.
 - **Fastify v5 specifics.** `setErrorHandler` receives `unknown` (narrow it; use core's

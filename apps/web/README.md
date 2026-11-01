@@ -8,24 +8,24 @@ The `Shell` component provides the full-height application frame:
 
 - **Desktop (≥768 px)**: the cabinet sidebar on the left (216 px), main content on the right.
 - **Mobile (<768 px)**: full-width main content, fixed bottom navigation bar (64 px) on the same cabinet surface.
-- **The cabinet**: both navigation bars sit on `--cabinet`, which is dark in *both* themes — the nav is the only dark chrome in the app, so the eye always knows what is furniture and what is the collection. Nav rules are built from `--cabinet-*` / `--manila`, never the `--color-*` aliases, which flip with the palette.
+- **The cabinet**: both navigation bars sit on `--cabinet`, which is dark in _both_ themes — the nav is the only dark chrome in the app, so the eye always knows what is furniture and what is the collection. Nav rules are built from `--cabinet-*` / `--manila`, never the `--color-*` aliases, which flip with the palette.
 - **Sidebar footer**: `LOCAL-FIRST · v<version>` in the mono face. The version is injected at build time by a `define` in `vite.config.ts`, read from `.release-please-manifest.json` (the root package is private and has no `version` field until the first release).
 - **Touch targets**: all nav links and buttons carry the `touch-target` CSS class, enforcing `min-height` and `min-width` of 44 px per WCAG 2.5.5. It is **sizing only** — the primary-action fill lives on the separate `button-primary` class, so an element opts into the blue button look explicitly (a class that did both is what made the active tab invisible in #259).
-- **Active nav item**: `NavLink` (`Shell.tsx`) marks it `aria-current="page"` where the link is the page on screen and `aria-current="true"` where it is only the section that page sits in (#355) — and neither on a 404, because an address that matched no route is inside nothing (#354), so there no nav item wears the pill or the notch. The sidebar marks an active item with a white-8 % pill, a heavier label, and a 3 px `--manila` drawer-pull notch bleeding off the left edge; the bottom nav with a `--manila` label and a 2 px notch. The notch is deliberately a *presence* cue, not a hue one, so it satisfies WCAG 1.4.1 and survives forced-colors mode; its space is pre-reserved with a transparent border so navigating never shifts the layout.
+- **Active nav item**: `NavLink` (`Shell.tsx`) marks it `aria-current="page"` where the link is the page on screen and `aria-current="true"` where it is only the section that page sits in (#355) — and neither on a 404, because an address that matched no route is inside nothing (#354), so there no nav item wears the pill or the notch. The sidebar marks an active item with a white-8 % pill, a heavier label, and a 3 px `--manila` drawer-pull notch bleeding off the left edge; the bottom nav with a `--manila` label and a 2 px notch. The notch is deliberately a _presence_ cue, not a hue one, so it satisfies WCAG 1.4.1 and survives forced-colors mode; its space is pre-reserved with a transparent border so navigating never shifts the layout.
 - **Keyboard / screen readers**: a visually hidden skip-to-content link (`<a href="#main-content">`) appears on focus. The sidebar and bottom nav both have descriptive `aria-label` values. Focus rings are 2 px `:focus-visible` outlines in `--focus`, or `--focus-on-cabinet` on the sidebar and bottom nav — `--focus` on the cabinet measures 2.02:1, under the 3:1 floor for non-text UI.
 
 ## Routing
 
 Code-based routing via TanStack Router. Routes are defined in `src/routes/`:
 
-| Route | File | Description |
-|---|---|---|
-| `/` | `routes/index.tsx` | Redirects to `/collections` |
-| `/setup` | `routes/setup/index.tsx` | First-run onboarding: API token entry. Redirects to `/collections` if a token is already stored |
-| `/collections` | `routes/collections/index.tsx` | Dashboard: collection cards, loading/error/empty states. Redirects to `/setup` if no token |
-| `/collections/new` | `routes/collections/new.tsx` | Create a collection with the field schema builder |
-| `/collections/$id` | `routes/collections/$id.tsx` | Collection detail: item list + add/edit/delete with a dynamically generated form |
-| `/settings` | `routes/settings/index.tsx` | Settings + language selector |
+| Route              | File                           | Description                                                                                     |
+| ------------------ | ------------------------------ | ----------------------------------------------------------------------------------------------- |
+| `/`                | `routes/index.tsx`             | Redirects to `/collections`                                                                     |
+| `/setup`           | `routes/setup/index.tsx`       | First-run onboarding: API token entry. Redirects to `/collections` if a token is already stored |
+| `/collections`     | `routes/collections/index.tsx` | Dashboard: collection cards, loading/error/empty states. Redirects to `/setup` if no token      |
+| `/collections/new` | `routes/collections/new.tsx`   | Create a collection with the field schema builder                                               |
+| `/collections/$id` | `routes/collections/$id.tsx`   | Collection detail: item list + add/edit/delete with a dynamically generated form                |
+| `/settings`        | `routes/settings/index.tsx`    | Settings + language selector                                                                    |
 
 The root layout (`routes/__root.tsx`) wraps all routes with the `Shell` component. Routes that need a connected API guard against a missing token in `beforeLoad` and redirect to `/setup`.
 
@@ -47,19 +47,19 @@ The API token is the random UUID the server prints to stdout on startup; the use
 
 `/collections/$id` lists the collection's items and lets you create, edit, and delete them. The `DynamicItemForm` component (`src/components/DynamicItemForm.tsx`) **generates form controls from the collection's `FieldDefinition[]`**:
 
-| Field type | Control |
-|---|---|
-| `text` / `url` / `email` / `image` | `<input>` (`text` / `url` / `email` / `url`) |
-| `number` / `currency` | `<input type="number">` (currency uses `step="0.01"`) |
-| `boolean` | checkbox |
-| `date` | `<input type="date">` |
-| `select` / `rating` | `<select>` (rating is `0…max`) |
-| `multiselect` | checkbox group |
-| `tags` | comma-separated text → `string[]` |
+| Field type                         | Control                                               |
+| ---------------------------------- | ----------------------------------------------------- |
+| `text` / `url` / `email` / `image` | `<input>` (`text` / `url` / `email` / `url`)          |
+| `number` / `currency`              | `<input type="number">` (currency uses `step="0.01"`) |
+| `boolean`                          | checkbox                                              |
+| `date`                             | `<input type="date">`                                 |
+| `select` / `rating`                | `<select>` (rating is `0…max`)                        |
+| `multiselect`                      | checkbox group                                        |
+| `tags`                             | comma-separated text → `string[]`                     |
 
 Every item also has a **status** (`owned` / `wanted` / `ordered`, default `owned`) from `ITEM_STATUSES`. On submit the form emits an `ItemInput` (`{ status, fields }`) where `fields` is keyed by field id and coerced to the right runtime type (numbers parsed, tags split, etc.). The same component is reused for editing by passing `initialStatus` / `initialValues`.
 
-**Failed mutations are never silent.** With `networkMode: "always"` a create, update or delete *fails* rather than pausing, so each one renders its own translated `role="alert"` naming the action that failed (`create_error` / `update_error` / `delete_error` in `locales/en/items.json`) — a shared "something went wrong" would leave the user guessing which attempt was lost. Save and delete messages belong to the row that failed, so `item-row` sits on a wrapper `<div>` inside each `<li>`: the class is a flex row, and an alert added beside the fields and actions would be squeezed into a third column. Retrying clears the message on its own (a mutation returns to `pending` before it runs again); cancelling an edit calls `updateItem.reset()`, otherwise reopening the editor would show an error for a save the user had not attempted.
+**Failed mutations are never silent.** With `networkMode: "always"` a create, update or delete _fails_ rather than pausing, so each one renders its own translated `role="alert"` naming the action that failed (`create_error` / `update_error` / `delete_error` in `locales/en/items.json`) — a shared "something went wrong" would leave the user guessing which attempt was lost. Save and delete messages belong to the row that failed, so `item-row` sits on a wrapper `<div>` inside each `<li>`: the class is a flex row, and an alert added beside the fields and actions would be squeezed into a third column. Retrying clears the message on its own (a mutation returns to `pending` before it runs again); cancelling an edit calls `updateItem.reset()`, otherwise reopening the editor would show an error for a save the user had not attempted.
 
 > Not yet implemented (follow-ups on #32): tag autocomplete from existing tags, and a dedicated item detail view.
 
@@ -69,7 +69,7 @@ Two components cover every wait and every "there is nothing here yet" on the col
 (#225); see [`DESIGN.md`](../../DESIGN.md#waiting-and-emptiness-225) for the reasoning.
 
 - **`src/components/EmptyState.tsx`** — the open-drawer mark, a title, an explanation, and
-  optional `children` for the action that fills it. `titleAs="h1"` when the empty state *is* the
+  optional `children` for the action that fills it. `titleAs="h1"` when the empty state _is_ the
   page (the empty dashboard); the default `"p"` inside a region that already sits under headings
   (the item list), where a third heading would claim an outline level it does not own.
 - **`src/components/Skeleton.tsx`** — `CollectionGridSkeleton`, `ItemListSkeleton` and
@@ -81,7 +81,7 @@ Two components cover every wait and every "there is nothing here yet" on the col
 
 Anything that does not depend on the pending data renders beside the skeleton rather than after
 it — the dashboard's `<h1>` and Create action, the detail route's back link — so a loading route
-still has a heading to navigate to and nothing pops in when the data lands. A pending *action*
+still has a heading to navigate to and nothing pops in when the data lands. A pending _action_
 (Settings' import) keeps a plain `role="status"` line: there is no content shape to preview.
 
 ## Icons
@@ -101,13 +101,13 @@ empty-state mark in `EmptyState.tsx`: it is an illustration on its own 72×64 ca
 
 All UI strings use `react-i18next`. Translation files live in `src/locales/<lang>/<namespace>.json`:
 
-| Namespace | File | Contents |
-|---|---|---|
-| `common` | `locales/en/common.json` | App name, nav labels, ARIA strings |
+| Namespace     | File                          | Contents                                                     |
+| ------------- | ----------------------------- | ------------------------------------------------------------ |
+| `common`      | `locales/en/common.json`      | App name, nav labels, ARIA strings                           |
 | `collections` | `locales/en/collections.json` | Dashboard, empty state, and collection-creation form strings |
-| `items` | `locales/en/items.json` | Item list, status labels, and dynamic-form strings |
-| `settings` | `locales/en/settings.json` | Settings page strings, language selector |
-| `setup` | `locales/en/setup.json` | Onboarding / token entry strings |
+| `items`       | `locales/en/items.json`       | Item list, status labels, and dynamic-form strings           |
+| `settings`    | `locales/en/settings.json`    | Settings page strings, language selector                     |
+| `setup`       | `locales/en/setup.json`       | Onboarding / token entry strings                             |
 
 **Adding a translation key:**
 
@@ -140,7 +140,7 @@ Use the helpers from `src/lib/intl.ts` which wrap the browser's `Intl` API:
 import { formatDate, formatNumber, formatCurrency } from "@/lib/intl.js";
 
 formatDate(new Date(), i18n.language, { dateStyle: "medium" });
-formatCurrency(42.50, i18n.language, "USD");
+formatCurrency(42.5, i18n.language, "USD");
 ```
 
 ## Development
@@ -163,9 +163,9 @@ and spacing. The palette table, usage rules, and theming mechanics are documente
 
 Layout constants on `:root`:
 
-| Variable | Default | Purpose |
-|---|---|---|
-| `--breakpoint-md` | `768px` | Mobile/desktop cutover |
-| `--sidebar-width` | `240px` | Desktop sidebar width |
-| `--bottom-nav-height` | `64px` | Mobile bottom nav height |
-| `--touch-target-size` | `44px` | Minimum nav link hit area |
+| Variable              | Default | Purpose                   |
+| --------------------- | ------- | ------------------------- |
+| `--breakpoint-md`     | `768px` | Mobile/desktop cutover    |
+| `--sidebar-width`     | `240px` | Desktop sidebar width     |
+| `--bottom-nav-height` | `64px`  | Mobile bottom nav height  |
+| `--touch-target-size` | `44px`  | Minimum nav link hit area |

@@ -1,6 +1,7 @@
 # MyCollections - Claude Code Instructions
 
 ## Project
+
 MyCollections is a personal collection management application with a plugin architecture.
 - **Organization**: Solve4It (solve4it.com)
 - **Repo**: solve4it/mycollections
@@ -13,6 +14,7 @@ MyCollections is a personal collection management application with a plugin arch
 All commits and PRs MUST be made as the `solve4it-bot[bot]` GitHub App. The repo owner (`shusak`) reviews and approves PRs.
 
 ### Git config for every branch
+
 ```bash
 git config user.name "solve4it-bot[bot]"
 git config user.email "3274849+solve4it-bot[bot]@users.noreply.github.com"
@@ -20,16 +22,19 @@ git config commit.gpgsign false
 ```
 
 ### Get a bot token (expires after 1 hour, regenerate as needed)
+
 ```bash
 BOT_TOKEN=$(~/.config/solve4it/get-bot-token.sh)
 ```
 
 ### Push using bot token
+
 ```bash
 git push "https://x-access-token:${BOT_TOKEN}@github.com/solve4it/mycollections.git" <branch-name>
 ```
 
 ### Create PR using bot token
+
 ```bash
 curl -s -X POST \
   -H "Authorization: token $BOT_TOKEN" \
@@ -51,11 +56,13 @@ Every piece of work follows this process:
 8. After merge, move issue to `Done` on the project board and close it
 
 ### Project board IDs
+
 - Project ID: `PVT_kwDOEDb4es4BTKDH`
 - Status field ID: `PVTSSF_lADOEDb4es4BTKDHzhAer4Y`
 - Status options: Todo=`f75ad846`, In Progress=`47fc9ee4`, Done=`98236657`
 
 ### Moving an issue on the board
+
 ```bash
 ITEM_ID=$(gh project item-list 1 --owner solve4it --limit 100 --format json | jq -r '.items[] | select(.content.number == <ISSUE_NUM>) | .id')
 gh project item-edit --project-id PVT_kwDOEDb4es4BTKDH --id "$ITEM_ID" --field-id PVTSSF_lADOEDb4es4BTKDHzhAer4Y --single-select-option-id <STATUS_OPTION_ID>
@@ -83,7 +90,9 @@ at the start of any coding, review, or fix task. This file holds the mechanics (
 tokens, board IDs); the skill holds the judgment. Keep both current together.
 
 ## Keeping this file current
+
 Update CLAUDE.md whenever conventions, workflows, or project practices change. This file is the source of truth for all Claude Code sessions — if it's stale, new sessions will follow outdated instructions.
 
 ## When plan changes
+
 If items are added to or removed from the plan, create or close the corresponding GitHub issues to keep the project board in sync.

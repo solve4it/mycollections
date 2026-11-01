@@ -6,12 +6,12 @@ An earlier draft of this package called for an in-memory SQLite mirror in front 
 
 ## Schema (Phase 1)
 
-| Table | Purpose |
-|---|---|
-| `collections` | Collection metadata, `is_finite_set` flag, and the field schema (JSON array of `FieldDefinition`) |
-| `items` | Items with `status` (`owned`/`wanted`/`ordered`) and custom field values in a JSON column queryable with `json_extract()` |
-| `media` | Per-item media (images) with primary designation and `storage_path` |
-| `user_profile` | Account info from the auth layer plus a JSON settings blob (theme, locale, opt-outs) |
+| Table          | Purpose                                                                                                                   |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `collections`  | Collection metadata, `is_finite_set` flag, and the field schema (JSON array of `FieldDefinition`)                         |
+| `items`        | Items with `status` (`owned`/`wanted`/`ordered`) and custom field values in a JSON column queryable with `json_extract()` |
+| `media`        | Per-item media (images) with primary designation and `storage_path`                                                       |
+| `user_profile` | Account info from the auth layer plus a JSON settings blob (theme, locale, opt-outs)                                      |
 
 Later phases add their own tables via new migrations: `share_links` (#48), `plugin_data` (#54/#55), `licenses` (#57), `mutations`/`sync_state` (#49), and the `items_fts` FTS5 table (#41).
 
@@ -27,7 +27,7 @@ Migrations are generated with drizzle-kit (`pnpm generate`) into `drizzle/` and 
 
 The database holds every collection in plaintext, so `openDatabase()` creates it — plus its `-wal`/`-shm` sidecars and any pre-migration `.bak` — readable and writable only by the owning account (`0600`), and creates missing parent directories as `0700`. An existing database opened with looser permissions is tightened on startup (#242).
 
-The file is pre-created at `0600` *before* SQLite opens it: SQLite would otherwise create it world-readable (`0644` under a typical umask), and it derives the sidecar modes from the database file's own mode, so getting the main file right is what makes the sidecars right.
+The file is pre-created at `0600` _before_ SQLite opens it: SQLite would otherwise create it world-readable (`0644` under a typical umask), and it derives the sidecar modes from the database file's own mode, so getting the main file right is what makes the sidecars right.
 
 Two deliberate limits. A parent directory that already exists is left as it is — a `DB_PATH` of `/tmp/app.db` must not narrow `/tmp` — so upgrading an existing install leaves `data/` at its old mode; the `0600` files make that moot. And filesystems that cannot express POSIX permissions (exFAT, some network mounts) reject the change, which is ignored rather than fatal: failing to start would cost the user their app without buying back confidentiality that filesystem cannot provide anyway.
 
@@ -51,14 +51,14 @@ handle.close();
 
 ## What's exported
 
-| Export | Purpose |
-|---|---|
+| Export                            | Purpose                                                                                                           |
+| --------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
 | `openDatabase` / `DatabaseHandle` | Open + migrate the database; returns repositories, the Drizzle instance (`db`), and the raw connection (`sqlite`) |
-| `CollectionsRepository` | CRUD, soft delete/restore, `listDeleted()`/`purge()` for the trash, hard delete |
-| `ItemsRepository` | CRUD, list/filter by status, `listDeleted()`/`purge()` for the trash, `findByFieldValue()` via `json_extract()` |
-| `MediaRepository` | CRUD plus `setPrimary()` (demotes the previous primary in the same transaction) |
-| `UserProfileRepository` | `get()` / `upsert()` keyed by the auth layer's account key |
-| `emptyTrash` | Permanently removes every trashed collection (cascading to its items) and every trashed item, in one transaction |
-| `schema` | The Drizzle table definitions, for callers needing custom queries |
+| `CollectionsRepository`           | CRUD, soft delete/restore, `listDeleted()`/`purge()` for the trash, hard delete                                   |
+| `ItemsRepository`                 | CRUD, list/filter by status, `listDeleted()`/`purge()` for the trash, `findByFieldValue()` via `json_extract()`   |
+| `MediaRepository`                 | CRUD plus `setPrimary()` (demotes the previous primary in the same transaction)                                   |
+| `UserProfileRepository`           | `get()` / `upsert()` keyed by the auth layer's account key                                                        |
+| `emptyTrash`                      | Permanently removes every trashed collection (cascading to its items) and every trashed item, in one transaction  |
+| `schema`                          | The Drizzle table definitions, for callers needing custom queries                                                 |
 
 Repositories validate reads and writes with the core Zod schemas, so malformed rows fail loudly at the boundary. All tests run against real SQLite (no mocks).

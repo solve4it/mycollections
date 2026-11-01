@@ -12,30 +12,30 @@ breaks WCAG AA fails CI.
 
 ## Palette
 
-| Token | Light | Dark | Used for |
-| --- | --- | --- | --- |
-| `--paper` | `#F1F2EE` | `#141816` | Page background |
-| `--card` | `#FAFAF7` | `#1D2320` | Cards, inputs, raised surfaces |
-| `--ink` | `#1D231F` | `#E7EAE5` | Body text |
-| `--ink-muted` | `#5C645E` | `#9AA39C` | Secondary text |
-| `--line` | `#DDE0D9` | `#2C332E` | Borders, dividers, progress tracks |
-| `--cabinet` | `#232B26` | `#0E120F` | Nav chrome (dark in both themes) |
-| `--cabinet-ink` / `--cabinet-muted` | `#E9ECE7` / `#A7B1A9` | `#E9ECE7` / `#97A199` | Nav text, active / inactive |
-| `--stamp` / `--stamp-hover` | `#3E46C8` / `#333BB2` | `#4A52D6` / `#5A62E6` | Primary action fills |
-| `--stamp-ink` | `#FFFFFF` | `#FFFFFF` | Text on stamp fills |
-| `--accent-text` | `#3E46C8` | `#97A0FF` | Accent-colored **text** (active nav, badges) |
-| `--focus` | `#3E46C8` | `#97A0FF` | Focus rings on paper/card |
-| `--focus-on-cabinet` | `#97A0FF` | `#97A0FF` | Focus rings on the cabinet |
-| `--manila` | `#D9B36C` | `#D9B36C` | Active notch and accents **on the cabinet only** |
-| `--progress` | `#9A7420` | `#D9B36C` | Progress-bar fills (manila-ink on light surfaces) |
-| `--owned` / `--wanted` / `--ordered` | `#2A7448` / `#9A6208` / `#3E46C8` | `#5CBF8A` / `#E0A33E` / `#97A0FF` | Status dots + labels |
-| `--danger` | `#B3261E` | `#F2857C` | Error text, and the border on an inline alert |
-| `--danger-surface` | `#F7EAE7` | `#2B201E` | Tint behind an inline alert (decoration only) |
+| Token                                | Light                             | Dark                              | Used for                                          |
+| ------------------------------------ | --------------------------------- | --------------------------------- | ------------------------------------------------- |
+| `--paper`                            | `#F1F2EE`                         | `#141816`                         | Page background                                   |
+| `--card`                             | `#FAFAF7`                         | `#1D2320`                         | Cards, inputs, raised surfaces                    |
+| `--ink`                              | `#1D231F`                         | `#E7EAE5`                         | Body text                                         |
+| `--ink-muted`                        | `#5C645E`                         | `#9AA39C`                         | Secondary text                                    |
+| `--line`                             | `#DDE0D9`                         | `#2C332E`                         | Borders, dividers, progress tracks                |
+| `--cabinet`                          | `#232B26`                         | `#0E120F`                         | Nav chrome (dark in both themes)                  |
+| `--cabinet-ink` / `--cabinet-muted`  | `#E9ECE7` / `#A7B1A9`             | `#E9ECE7` / `#97A199`             | Nav text, active / inactive                       |
+| `--stamp` / `--stamp-hover`          | `#3E46C8` / `#333BB2`             | `#4A52D6` / `#5A62E6`             | Primary action fills                              |
+| `--stamp-ink`                        | `#FFFFFF`                         | `#FFFFFF`                         | Text on stamp fills                               |
+| `--accent-text`                      | `#3E46C8`                         | `#97A0FF`                         | Accent-colored **text** (active nav, badges)      |
+| `--focus`                            | `#3E46C8`                         | `#97A0FF`                         | Focus rings on paper/card                         |
+| `--focus-on-cabinet`                 | `#97A0FF`                         | `#97A0FF`                         | Focus rings on the cabinet                        |
+| `--manila`                           | `#D9B36C`                         | `#D9B36C`                         | Active notch and accents **on the cabinet only**  |
+| `--progress`                         | `#9A7420`                         | `#D9B36C`                         | Progress-bar fills (manila-ink on light surfaces) |
+| `--owned` / `--wanted` / `--ordered` | `#2A7448` / `#9A6208` / `#3E46C8` | `#5CBF8A` / `#E0A33E` / `#97A0FF` | Status dots + labels                              |
+| `--danger`                           | `#B3261E`                         | `#F2857C`                         | Error text, and the border on an inline alert     |
+| `--danger-surface`                   | `#F7EAE7`                         | `#2B201E`                         | Tint behind an inline alert (decoration only)     |
 
 Rules the split tokens encode — don't collapse them:
 
-- **Fill vs. text**: `--stamp` is a *fill* (with `--stamp-ink` text on it); it is too dim as
-  dark-mode text. Anything accent-colored that is *read* uses `--accent-text`.
+- **Fill vs. text**: `--stamp` is a _fill_ (with `--stamp-ink` text on it); it is too dim as
+  dark-mode text. Anything accent-colored that is _read_ uses `--accent-text`.
 - **Manila never sits on paper**: as a fill on light surfaces it fails 3:1 — use `--progress`.
 - **Danger is not hue-separable from wanted.** Every red that clears contrast against paper and
   card sits within 1.4:1 of `--wanted` under deuteranopia — red-vs-amber is the canonical
@@ -50,11 +50,11 @@ Rules the split tokens encode — don't collapse them:
 Three self-hosted variable fonts (latin subsets, ~108 KB total, `apps/web/src/styles/fonts/`,
 OFL-licensed — see the LICENSE file there). No CDN: offline-safe, no host sees user traffic.
 
-| Token | Face | Role |
-| --- | --- | --- |
-| `--font-display` | Bricolage Grotesque | Wordmark and `h1`/`h2` only — restraint keeps it special |
-| `--font-body` | Instrument Sans | Everything readable (16px base) |
-| `--font-mono` | Spline Sans Mono | Catalog codes, counts, status labels — the "typewritten label" voice |
+| Token            | Face                | Role                                                                 |
+| ---------------- | ------------------- | -------------------------------------------------------------------- |
+| `--font-display` | Bricolage Grotesque | Wordmark and `h1`/`h2` only — restraint keeps it special             |
+| `--font-body`    | Instrument Sans     | Everything readable (16px base)                                      |
+| `--font-mono`    | Spline Sans Mono    | Catalog codes, counts, status labels — the "typewritten label" voice |
 
 Only upright styles ship; italics are browser-synthesized (deliberate — italics have no role
 in the direction). Non-Latin locales need matching subsets plus `unicode-range` declarations.
@@ -71,7 +71,7 @@ free. Twelve icons: `collections`, `settings`, `add`, `back`, `edit`, `delete`, 
 Sizing is em-based (`.icon` = 1.25em), so icons track the type scale; a context that needs a
 different optical size sets `font-size` on the icon rather than a pixel width, keeping the
 relationship relative. Icons are `aria-hidden` by default — the surrounding link, button, or
-label owns the accessible name. Pass `label` only when the icon *is* the value (the boolean
+label owns the accessible name. Pass `label` only when the icon _is_ the value (the boolean
 check/cross in an item row), never to restate adjacent text.
 
 Directional icons follow the file, not the data: `export` writes a backup **down** onto the
@@ -93,7 +93,7 @@ lift, 150ms transitions, skeleton shimmer — all gated by `prefers-reduced-moti
 That gate is a single `@media (prefers-reduced-motion: reduce)` block at the end of global.css
 (landed with #223; #225 inherits it), never a per-rule opt-out. It sets near-zero durations
 rather than `none` so `transitionend`/`animationend` handlers still fire, and it cancels the
-card's hover *displacement* as well — zeroing the duration alone leaves a 2px jump under the
+card's hover _displacement_ as well — zeroing the duration alone leaves a 2px jump under the
 pointer, which is motion, just faster. The one orchestrated moment is reserved for set
 completion (#42).
 
@@ -176,7 +176,7 @@ is not a failure of the app, so it takes no `[role="alert"]` and therefore none 
 A 404 is the one screen a user reaches by getting something wrong, and it is **not** a failure of
 the app: nothing threw, no request failed, and their collections are where they left them. So it
 takes none of the treatment above — no `[role="alert"]`, and therefore none of the `--danger`
-ink, since in this app the role *is* the danger treatment. Its register is `.empty-state`'s: title
+ink, since in this app the role _is_ the danger treatment. Its register is `.empty-state`'s: title
 in `--ink`, explanation in `--ink-muted`, centered, calm. The same distinction #335 draws for
 confirmations.
 
@@ -184,7 +184,7 @@ The **motif** is the shared one for "not filed here", and it is defined here onc
 site's 404 (#343) can draw the same thing rather than invent a second: **the cabinet with the
 asked-for drawer missing** — a body with three drawer bands, a pull on the top and bottom ones,
 and a dashed outline in the gap where the middle drawer front should be. The dashes are the
-non-color cue, so the absence still reads in forced-colors mode. Deliberately *not*
+non-color cue, so the absence still reads in forced-colors mode. Deliberately _not_
 `EmptyState`'s mark, which is a drawer pulled open and empty: that one says the user has nothing
 filed yet, which on a 404 is a lie about their data.
 
@@ -203,7 +203,7 @@ page-sized `<h1>`, and a centered row of controls.
 
 ## Forms, buttons and status (#224)
 
-**Controls.** The text-like control rule is written as *exclusions*
+**Controls.** The text-like control rule is written as _exclusions_
 (`input:not([type="checkbox"]):not([type="radio"]):not([type="file"])`), never as a list of
 types. An enumerated list is what left `number`, `currency`, `date`, `url`, `image` and `email`
 fields — half the built-in types — rendering as bare UA controls: the rule named only `text` and
@@ -325,7 +325,7 @@ It keeps every other rule (`fill="none"`, `currentColor`, round caps, `aria-hidd
 takes the empty state's muted ink for free and survives forced-colors mode.
 
 **Skeletons** replace the text-only "Loading…" screens on both collection routes. A skeleton is
-a picture of the content that is coming, so it is drawn *inside the real containers* —
+a picture of the content that is coming, so it is drawn _inside the real containers_ —
 `.collection-grid`, `.item-list` — and reserves the real boxes, including the cover's 5:3. When
 the data lands, nothing moves. `.skeleton-card` deliberately does **not** reuse
 `.collection-card`: that class carries the hover lift, and a placeholder is not a target.

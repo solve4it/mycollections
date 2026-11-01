@@ -1,4 +1,5 @@
 ---
+
 title: MyCollections Documentation
 description: Welcome to MyCollections — your collections, your way. Start here to learn what MyCollections can do and how to get up and running.
 ---
