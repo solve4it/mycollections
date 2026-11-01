@@ -74,12 +74,16 @@ Run from the repo root:
 | `pnpm test`         | Run the full test suite (`turbo run test`)                           |
 | `pnpm test:e2e`     | Run the accessibility sweep in a real browser (`turbo run test:e2e`) |
 | `pnpm typecheck`    | Type-check every workspace (`turbo run typecheck`)                   |
-| `pnpm lint`         | Biome lint across the repo (includes a11y rules)                     |
+| `pnpm lint`         | Biome lint and format check across the repo (a11y rules included)    |
 | `pnpm lint:fix`     | Auto-fix lint issues where possible                                  |
 | `pnpm format`       | Format with Biome                                                    |
 | `pnpm format:check` | Check formatting without writing                                     |
 | `pnpm spellcheck`   | Run cSpell over the repo                                             |
 | `pnpm check`        | Full local CI: lint + spellcheck + typecheck + test + build          |
+
+`pnpm lint` is `biome check .`, so it reports formatting alongside lint rules. `CHANGELOG.md` is the one file
+exempt from the formatter: release-please owns its layout and writes `*` list bullets where Biome's Markdown
+formatter wants `-`, so `biome.json` turns the formatter off for that path. The linter and cSpell still cover it.
 
 Run `pnpm check` before opening a PR — it's the closest local approximation of what CI will run.
 
@@ -677,6 +681,7 @@ layout survive the flip is #322.
 - **Turborepo caches aggressively.** If a change isn't taking effect, try `pnpm turbo run <task> --force` or delete `.turbo/` in the affected workspace.
 - **Node version mismatches** cause confusing failures. Run `fnm use` after `git pull` if `.nvmrc` changed.
 - **Husky pre-commit hook** runs Biome and cSpell on staged files via lint-staged. If a commit is blocked, fix the reported issue and re-stage — don't bypass with `--no-verify`.
+- **Don't reformat `CHANGELOG.md`.** release-please regenerates it on every release PR with `*` bullets, which Biome's Markdown formatter would rewrite to `-`. `biome.json` disables the formatter for that path precisely so the pre-commit hook's `biome check --write` leaves it alone; reformatting it by hand only creates churn that the next release undoes (#380).
 - **cSpell false positives**: add project-specific terms to the `words` array in `cspell.json` rather than inline-ignoring.
 - **`pnpm test:e2e` fails to start a server**: something is already on port 3111 or 4173. The harness refuses to reuse an existing server on purpose — it would be one it did not configure, backed by a database it did not choose. Free the port (`lsof -ti tcp:3111 -sTCP:LISTEN | xargs kill`) and re-run.
 - **VS Code**: install the Biome extension for inline lint/format feedback and disable ESLint/Prettier to avoid conflicts.
