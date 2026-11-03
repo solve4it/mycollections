@@ -6,6 +6,8 @@ description: >-
 # Not pnpm/action-setup: it strips the sha512 from packageManager and runs
 # `pnpm self-update`, which trusts whatever the registry serves for that
 # version. Corepack refuses a download whose hash does not match the pin.
+# Corepack itself comes from npm on the registry's own integrity, the one hop
+# this does not pin by hash — the same single hop `self-update` was.
 #
 # Never cache COREPACK_HOME (~/.cache/node/corepack). Corepack only verifies a
 # download; a version already in its cache runs whatever the pin says. Hosted

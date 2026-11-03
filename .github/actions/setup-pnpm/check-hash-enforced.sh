@@ -38,6 +38,10 @@ if [ "$status" -ne 0 ] && grep -q "Mismatch hashes" <<<"$out"; then
   exit 0
 fi
 
-echo "::error::pnpm ran with a tampered packageManager sha512 (exit $status) — the pin is not being enforced"
+if [ "$status" -eq 0 ]; then
+  echo "::error::pnpm ran with a tampered packageManager sha512 — the pin is not being enforced"
+else
+  echo "::error::pnpm exited $status without Corepack's 'Mismatch hashes', so this run could not prove the pin is enforced (a network or registry error?)"
+fi
 echo "$out"
 exit 1
