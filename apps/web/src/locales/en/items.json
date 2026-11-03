@@ -40,5 +40,20 @@
   "showing_all_other": "Showing all {{count}} items",
   "added_status_hidden": "Added “{{name}}”. It doesn’t match the search, so it isn’t shown.",
   "saved_hidden": "Saved “{{name}}”. It no longer matches the search, so it isn’t shown.",
-  "restored_hidden": "Restored “{{name}}”. It doesn’t match the search, so it isn’t shown."
+  "restored_hidden": "Restored “{{name}}”. It doesn’t match the search, so it isn’t shown.",
+  "sort_label": "Sort by",
+  "sort_best_match": "Best match",
+  "sort_added_oldest": "Date added, oldest first",
+  "sort_added_newest": "Date added, newest first",
+  "sort_updated": "Recently updated",
+  "sort_name_a_z": "Name, A to Z",
+  "sort_name_z_a": "Name, Z to A",
+  "sort_a_z": "{{field}}, A to Z",
+  "sort_z_a": "{{field}}, Z to A",
+  "sort_low_high": "{{field}}, low to high",
+  "sort_high_low": "{{field}}, high to low",
+  "sort_oldest": "{{field}}, oldest first",
+  "sort_newest": "{{field}}, newest first",
+  "sort_no_first": "{{field}}, no first",
+  "sort_yes_first": "{{field}}, yes first"
 }

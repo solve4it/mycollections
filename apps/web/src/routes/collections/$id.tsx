@@ -8,6 +8,7 @@ import { EmptyState } from "../../components/EmptyState.js";
 import { FailureSurface } from "../../components/ErrorScreen.js";
 import { Icon } from "../../components/Icon.js";
 import { ItemSearchBox } from "../../components/ItemSearchBox.js";
+import { ItemSortSelect } from "../../components/ItemSortSelect.js";
 import { CollectionDetailSkeleton, ItemListSkeleton } from "../../components/Skeleton.js";
 import { UndoToast } from "../../components/UndoToast.js";
 import { useAnnounce } from "../../lib/announcer.js";
@@ -180,6 +181,12 @@ function CollectionDetailPage() {
     });
   }
 
+  function setSort(next: string | undefined) {
+    // A sort needs no announcement of its own: the select speaks the option
+    // chosen, and the list below is what changed.
+    void navigate({ search: (prev: ItemSearch) => ({ ...prev, sort: next }), replace: true, resetScroll: false });
+  }
+
   /**
    * The result count, spoken once a search settles (#41). Keyed on the search
    * itself, not on fetches: a refetch after an edit, delete or undo re-runs the
@@ -278,7 +285,10 @@ function CollectionDetailPage() {
       <h2 ref={itemsHeadingRef} tabIndex={-1}>
         {t("items_heading")}
       </h2>
-      <ItemSearchBox value={search.q ?? ""} onSearch={setSearch} inputRef={searchInputRef} />
+      <div className="item-list-controls">
+        <ItemSearchBox value={search.q ?? ""} onSearch={setSearch} inputRef={searchInputRef} />
+        <ItemSortSelect value={sort} searching={q !== ""} fields={collection.fields} onSort={setSort} />
+      </div>
       <ItemList
         collection={collection}
         query={itemsQuery}
