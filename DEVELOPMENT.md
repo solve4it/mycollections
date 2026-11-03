@@ -302,6 +302,18 @@ pnpm --filter @mycollections/core test --watch
 pnpm --filter @mycollections/core test --coverage
 ```
 
+### Tests are collected from `src/`, and never compiled
+
+The `tsc`-built workspaces (`packages/auth`, `packages/core`, `packages/db`, `apps/api`) each have a
+`vitest.config.ts` whose `include` is `src/**/*.test.ts`, and build through `tsconfig.build.json`,
+which leaves test files out. Both halves matter (#396): Vitest 5 no longer excludes `dist/` by
+default, and `tsc` was emitting every test into it, so each test ran twice — and after an edit the
+`dist/` copy was stale, running the previous build against current non-TS assets such as
+`packages/db/drizzle/*.sql` and failing for no reason the source could explain. `tsc` never deletes
+outputs, so a checkout built before this change still holds old `dist/**/*.test.js` files; the
+`include` is what keeps them from running. `pnpm typecheck` still uses the full `tsconfig.json`, so
+tests stay type-checked.
+
 ### jest-dom matcher types under Vitest 5
 
 `apps/web/src/vitest.d.ts` re-declares jest-dom's matchers on Vitest's `Matchers` interface.
