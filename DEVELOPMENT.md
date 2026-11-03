@@ -477,8 +477,10 @@ destination is a container made focusable with `tabIndex={-1}` — the Items hea
 already uses. Focus arriving there is the only thing that tells a screen-reader user the list is
 now empty, because "The trash is empty." is a plain paragraph, not a live region.
 
-A search (#41) can take a row off the list as a side effect of an edit, which is why the Save
-handoff is chosen by the **page**, not the row: the row's own `useFocusHandoff` would unmount with
+A search (#41) can take a row off the list as a side effect of an edit — and a sort can move it,
+which in a browser loses focus too: React moves a keyed row with `insertBefore`, which takes the
+node out of the document for a moment, and focus inside it falls to `<body>`. That is why the Save
+handoff is chosen by the **page**, not the row, and why it runs even when the row is still listed: the row's own `useFocusHandoff` would unmount with
 it. The page asks whether the item is still listed once the list has been fetched again — a
 mutation's `mutate`-level `onSuccess` runs after its hook-level `onSuccess`, which awaits the
 invalidation's refetch — and the hidden cases also say why the item went, through the announcer.
