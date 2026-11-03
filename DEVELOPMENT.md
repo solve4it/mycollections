@@ -380,10 +380,14 @@ survive a removal; key the suffix by the same thing React keys the row by.
 Build the id with `scopedId(prefix, part, key?)` from `src/lib/dom-id.ts` rather than by
 concatenating. A data key (a field id is any non-empty string) can contain whitespace, which an id
 may not and which splits an `aria-describedby` list; it can contain a dash, so a dash-joined
-`part`-`key` pair can spell another row's id; and `encodeURIComponent` throws on an unpaired
-surrogate. `scopedId` escapes the key totally and joins it with a separator the escape never emits. axe files duplicate ids
-under `incomplete` rather than `violations`, which `expectNoAccessibilityViolations` fails on too,
-but only if a scan actually enters the state where both instances are on screen.
+`part`-`key` pair can spell another row's id; it can contain characters such as `:` that break a
+`#id` selector, which the e2e specs build from these ids; and `encodeURIComponent` throws on an
+unpaired surrogate. `scopedId` escapes the key totally into a plain CSS identifier and joins it
+with a separator the escape never emits.
+
+axe files duplicate ids under `incomplete` rather than `violations`, which
+`expectNoAccessibilityViolations` fails on too, but only if a scan actually enters the state where
+both instances are on screen.
 
 ### Focus has to survive the action
 

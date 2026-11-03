@@ -32,6 +32,27 @@ describe("scopedId", () => {
   });
 
   it("does not let an escape sequence in a key pass for an escaped character", () => {
-    expect(scopedId("p", "field", " ")).not.toBe(scopedId("p", "field", "%0020"));
+    expect(scopedId("p", "field", " ")).not.toBe(scopedId("p", "field", "_0020"));
+    expect(scopedId("p", "field", "_")).not.toBe(scopedId("p", "field", "_005f"));
+  });
+
+  // Ids get turned into `#id` selectors — the keyboard spec looks a hint up by
+  // its `aria-describedby` that way — so every id must be a plain CSS
+  // identifier: no `:`, no `%`, nothing that needs `CSS.escape`.
+  it("is usable as a CSS id selector without escaping, whatever the key", () => {
+    const keys = ["title", "release year", "hint-foo", "a:b", "50%", "_x", "\ud800", "日本", "a__b"];
+    for (const key of keys) {
+      const id = scopedId("_r_0_", "type-hint", key);
+      expect(id).toMatch(/^[A-Za-z_][A-Za-z0-9_-]*$/);
+      const el = document.createElement("p");
+      el.id = id;
+      document.body.append(el);
+      expect(document.querySelector(`#${id}`)).toBe(el);
+      el.remove();
+    }
+  });
+
+  it("keeps a key containing the separator from meeting a different split", () => {
+    expect(scopedId("p", "a", "b__c")).not.toBe(scopedId("p", "a__b", "c"));
   });
 });
