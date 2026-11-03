@@ -367,6 +367,22 @@ announcement is a check on the shape of the DOM. See
 [#24](https://github.com/solve4it/mycollections/issues/24) for what is still outstanding, including
 the manual screen-reader pass.
 
+### Ids belong to the instance
+
+A component that can be rendered more than once takes the DOM ids its labels and descriptions
+point at from React's `useId()`, never from a literal and never from an array index
+([#369](https://github.com/solve4it/mycollections/issues/369)). `<label for>` resolves to the
+_first_ element in the document with that id, so two instances sharing one quietly label the first
+instance twice and leave the second unnamed — the collection screen did exactly this with the
+add-item form and a row's editor open at the same time. An index renumbers ids under rows that
+survive a removal; key the suffix by the same thing React keys the row by.
+
+When the suffix is a data key (a field id is any non-empty string), pass it through `domIdPart()`
+in `src/lib/dom-id.ts`: an id may not contain whitespace, and `aria-describedby` is a
+space-separated list, so a raw key with a space splits the reference. axe files duplicate ids
+under `incomplete` rather than `violations`, which `expectNoAccessibilityViolations` fails on too,
+but only if a scan actually enters the state where both instances are on screen.
+
 ### Focus has to survive the action
 
 Two rules, both learned from the sweep above finding thirteen places that broke them.
