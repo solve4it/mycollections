@@ -156,19 +156,22 @@ const observers: MutationObserver[] = [];
  * Every "the region holds the right words" assertion passes against that bug,
  * so the test has to watch the region rather than read it at the end.
  *
- * One entry per mutation batch: an observer is called once per microtask
- * checkpoint, so a single React commit is one entry however many nodes it
- * touched, while two commits are two. Empty text is the region being cleared,
- * not something said.
+ * One entry per message node added to the region (#41): each announcement is
+ * a node of its own, which is what lets identical words be said twice. A node
+ * removed is a message expiring, which no screen reader reads.
  */
 function recordAnnouncements(): string[] {
   const spoken: string[] = [];
   const region = announcer();
-  const observer = new MutationObserver(() => {
-    const text = region.textContent?.trim() ?? "";
-    if (text && text !== spoken[spoken.length - 1]) spoken.push(text);
+  const observer = new MutationObserver((records) => {
+    for (const record of records) {
+      for (const node of record.addedNodes) {
+        const text = node.textContent?.trim() ?? "";
+        if (text) spoken.push(text);
+      }
+    }
   });
-  observer.observe(region, { childList: true, characterData: true, subtree: true });
+  observer.observe(region, { childList: true });
   observers.push(observer);
   return spoken;
 }
@@ -239,7 +242,27 @@ describe("announcing route changes", () => {
     // .visually-hidden clips the box rather than using display:none, which would
     // take the text out of the accessibility tree along with the layout.
     expect(announcer()).toHaveClass("visually-hidden");
-    expect(announcer()).toHaveAttribute("aria-atomic", "true");
+    // Not atomic: the region holds one node per message (#41), and atomic would
+    // re-read all of them whenever one is added.
+    expect(announcer()).not.toHaveAttribute("aria-atomic");
+  });
+
+  it("says a page's name again when the user comes back to it", async () => {
+    const { router } = renderAt("/collections");
+    expect(await screen.findByRole("main")).toBeInTheDocument();
+
+    const spoken = recordAnnouncements();
+    await router.navigate({ to: "/settings" });
+    await waitFor(() => expect(spoken).toEqual(["Settings · MyCollections"]));
+    await router.navigate({ to: "/collections/new" });
+    await router.navigate({ to: "/settings" });
+    await waitFor(() =>
+      expect(spoken).toEqual([
+        "Settings · MyCollections",
+        "New collection · MyCollections",
+        "Settings · MyCollections",
+      ]),
+    );
   });
 });
 

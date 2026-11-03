@@ -596,18 +596,22 @@ test.describe("accessibility", () => {
     // the page the user just loaded is not news.
     await expect(region, "the announcer must be on the page, and empty, on arrival").toBeEmpty();
 
+    // One node per message (#41): each announcement is an addition of its own,
+    // and the previous one stays until its lifetime is up.
+    const messages = region.locator(":scope > *");
+
     await page.getByRole("link", { name: "Back to collections" }).click();
     await expect(page).toHaveURL(/\/collections$/);
-    await expect(region).toHaveText("Collections · MyCollections");
+    await expect(messages).toHaveText(["Collections · MyCollections"]);
 
     await page.goBack();
 
     await expect(page).toHaveURL(/\/nope$/);
     await expect(page.getByRole("heading", { level: 1, name: "Page not found" })).toBeVisible();
-    // The words that changed are the assertion: a 404 that announced nothing
-    // would leave "Collections · MyCollections" standing here, on a page that
-    // is no longer the collections list.
-    await expect(region).toHaveText("Page not found · MyCollections");
+    // The new node is the assertion: a 404 that announced nothing would leave
+    // "Collections · MyCollections" as the last thing said, on a page that is
+    // no longer the collections list.
+    await expect(messages).toHaveText(["Collections · MyCollections", "Page not found · MyCollections"]);
   });
 
   /**

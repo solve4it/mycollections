@@ -1,6 +1,7 @@
 import { useLinkProps, useRouterState } from "@tanstack/react-router";
 import { type ComponentPropsWithRef, type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { Announcer, AnnouncerProvider, useAnnouncements } from "../lib/announcer.js";
 import { isSamePageName, type PageName, PageNameProvider } from "../lib/page-title.js";
 import { Icon, type IconName } from "./Icon.js";
 
@@ -173,7 +174,7 @@ export function Shell({ children }: ShellProps) {
   const pageId = usePageId();
   const hasDynamicTitle = useHasDynamicTitle();
   const isNotFound = useIsNotFound();
-  const [announcement, setAnnouncement] = useState("");
+  const { messages: announcements, announce } = useAnnouncements();
 
   /**
    * The name the screen published for itself, if it has one yet (#309).
@@ -255,8 +256,8 @@ export function Shell({ children }: ShellProps) {
     if (announcedPageId.current === pageId) return;
     if (!settled) return;
     announcedPageId.current = pageId;
-    setAnnouncement(pageTitle);
-  }, [pageId, settled, pageTitle]);
+    announce(pageTitle);
+  }, [pageId, settled, pageTitle, announce]);
 
   /**
    * __root.tsx keys the screen wrapper by pathname so the entrance animation
@@ -295,10 +296,9 @@ export function Shell({ children }: ShellProps) {
           inserted with its text already in it, which is the bug above. No
           role="status" — `aria-live` alone is the whole contract here, and the
           role would make every page-level getByRole("status") in the suite
-          ambiguous with a region that is not about the page's status. */}
-      <div aria-live="polite" aria-atomic="true" className="visually-hidden">
-        {announcement}
-      </div>
+          ambiguous with a region that is not about the page's status. Pages
+          speak through it with `useAnnounce()` (lib/announcer.tsx). */}
+      <Announcer messages={announcements} />
       <div className="shell">
         <nav className="shell-sidebar" aria-label={t("aria_main_nav")}>
           <div className="sidebar-logo">
@@ -326,7 +326,9 @@ export function Shell({ children }: ShellProps) {
             hands its own name back out to the title and the announcement
             above (#309). */}
         <main className="shell-main" id="main-content" tabIndex={-1} ref={mainRef}>
-          <PageNameProvider publish={publishPageName}>{children}</PageNameProvider>
+          <PageNameProvider publish={publishPageName}>
+            <AnnouncerProvider value={announce}>{children}</AnnouncerProvider>
+          </PageNameProvider>
         </main>
 
         <nav className="shell-bottom-nav" aria-label={t("aria_bottom_nav")}>

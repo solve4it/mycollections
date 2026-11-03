@@ -516,7 +516,17 @@ new route:
   The shell's region (`aria-live="polite"`, `visually-hidden`, no role) is in the document from
   first paint and empty, and receives text afterwards. It sits outside the pathname-keyed wrapper
   in `routes/__root.tsx` on purpose: inside it, it would be rebuilt on every navigation and have
-  the same bug.
+  the same bug. A page speaks through it with `const announce = useAnnounce()` from
+  `lib/announcer.tsx` (a no-op outside the shell, so a screen rendered alone in a test is fine).
+- **Each message is a node of its own** (#41), the technique `@react-aria/live-announcer` uses,
+  built in rather than adopted because that library mounts regions of its own on `<body>`. A new
+  node is an _addition_, which a polite region always reports — so identical words said twice are
+  spoken twice, where writing the same text over itself would change nothing — and a route
+  announcement and a page's own message in one tick both survive instead of the last write
+  winning. Each node is removed after `ANNOUNCEMENT_LIFETIME_MS`; a removal is never read. For the
+  same reason the region is **not** `aria-atomic`, which would re-read every message still held.
+  A test counts what was said by watching added nodes (`recordAnnouncements` in
+  `Shell.navigation.test.tsx`), not by reading the region's text at the end.
 
 The announcement is made once per **page**, where a page is the matched route's own interpolated
 pathname (`/collections/<id>`) — not `location.pathname`, which the router updates a render before
@@ -665,8 +675,8 @@ differently — persistent and empty, never conditional:
 - **Only layout needs a wrapper.** `.undo-toast-region` exists because the toast is `position:
   fixed` with `pointer-events` juggling. A region in normal flow — the two on Settings — is one
   element; an empty one is zero-height and its child's margins collapse straight through it.
-- **No `aria-atomic` unless the whole region is one string.** The shell's announcer replaces one
-  string wholesale, so atomic is right there. A region whose content is replaced in place — a second
+- **No `aria-atomic` unless the whole region is one string.** Nothing in the app is any more: the
+  shell's announcer holds one node per message (above), so it is not atomic either. A region whose content is replaced in place — a second
   delete renaming the toast — would re-read the entire toast instead of the name that changed.
 - **This is about `aria-live`, not about `role="alert"`.** An `alert` is announced when it is inserted — the user agent fires an event on creation — so a failure surface that appears with its message inside it is correct, and the app's error screens are written that way. Everything above applies to the announcer and to the three class-named regions, which are `aria-live` and are not.
 - **Scan the open state.** An interactive state no route-level scan reaches gets its own scan in
