@@ -252,3 +252,35 @@ describe("filters never throw, whatever is stored (#41)", () => {
     }
   });
 });
+
+describe("ItemsRepository.tagValues (#41)", () => {
+  it("counts each tag across the collection's live items, most used first, one spelling per tag", async () => {
+    await add({ title: "a", tags: ["Signed", "first press"] });
+    await add({ title: "b", tags: ["signed", "mono"] });
+    await add({ title: "c", tags: ["signed"] });
+    const trashed = await add({ title: "d", tags: ["promo"] });
+    await handle.items.softDelete(trashed.id);
+    const other = await handle.collections.create({ name: "Other", fields, isFiniteSet: false });
+    await add({ title: "e", tags: ["elsewhere"] }, other);
+    await add({ title: "f", tags: "not-a-list" });
+
+    const { values, truncated } = await handle.items.tagValues(records.id, "tags");
+    expect(values).toEqual([
+      { value: "Signed", count: 3 },
+      { value: "first press", count: 1 },
+      { value: "mono", count: 1 },
+    ]);
+    expect(truncated).toBe(false);
+  });
+
+  it("stops at the limit and says so", async () => {
+    await add({ title: "many", tags: Array.from({ length: 60 }, (_, i) => `tag ${String(i).padStart(2, "0")}`) });
+    const { values, truncated } = await handle.items.tagValues(records.id, "tags");
+    expect(values).toHaveLength(50);
+    expect(truncated).toBe(true);
+  });
+
+  it.each(["genre", "missing", "title"])("refuses %s, which is not a tags field", async (field) => {
+    await expect(handle.items.tagValues(records.id, field)).rejects.toBeInstanceOf(InvalidItemQueryError);
+  });
+});

@@ -17,6 +17,8 @@ export {
   InvalidItemQueryError,
   ItemsRepository,
   type ListItemsOptions,
+  TAG_VALUES_LIMIT,
+  type TagValue,
   type UpdateItemInput,
 } from "./repositories/items.js";
 export { type CreateMediaInput, MediaRepository } from "./repositories/media.js";

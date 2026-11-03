@@ -67,6 +67,15 @@ const itemsSearchKey = sqliteTable("items_search_key", { key: integer("key"), it
  */
 const NAME_SORT_MAX_FIELDS = 100;
 
+/** One tag in use, and how many items carry it. */
+export interface TagValue {
+  value: string;
+  count: number;
+}
+
+/** How many tags `tagValues` suggests at most. */
+export const TAG_VALUES_LIMIT = 50;
+
 /** At most this many distinct search terms are used; the rest are ignored. */
 const MAX_SEARCH_TERMS = 10;
 
@@ -367,6 +376,32 @@ export class ItemsRepository {
       .orderBy(...order)
       .all();
     return rows.map((row) => rowToItem(row.item));
+  }
+
+  /**
+   * The tags in use in one tags field, for suggesting them (#41): live items of
+   * this collection only, counted, most used first, at most `TAG_VALUES_LIMIT`.
+   * Tags compare without case, as the tag filter does, so "Signed" and "signed"
+   * are one entry, shown in the spelling that sorts first.
+   */
+  async tagValues(collectionId: string, fieldId: string): Promise<{ values: TagValue[]; truncated: boolean }> {
+    const field = this.#schemaOf(collectionId).find((candidate) => candidate.id === fieldId);
+    const path = field?.type === "tags" ? fieldPath(field.id) : null;
+    if (path === null) throw new InvalidItemQueryError("Not a tags field");
+    const column = schema.items.fields;
+    const rows = this.#db.all<{ value: string; count: number }>(sql`
+      SELECT MIN("held"."value") AS "value", count(DISTINCT ${schema.items.id}) AS "count"
+      FROM ${schema.items}, json_each(${column}, ${path}) AS "held"
+      WHERE ${schema.items.collectionId} = ${collectionId}
+        AND ${schema.items.deletedAt} IS NULL
+        AND json_type(${column}, ${path}) = 'array'
+        AND "held"."type" = 'text'
+        AND "held"."value" <> ''
+      GROUP BY "held"."value" COLLATE NOCASE
+      ORDER BY "count" DESC, "value" COLLATE NOCASE ASC
+      LIMIT ${TAG_VALUES_LIMIT + 1}
+    `);
+    return { values: rows.slice(0, TAG_VALUES_LIMIT), truncated: rows.length > TAG_VALUES_LIMIT };
   }
 
   /**
