@@ -3,6 +3,7 @@ import {
   type DeletedItem,
   type FieldDefinition,
   type Item,
+  type ItemFilter,
   ItemSchema,
   type ItemSort,
   type ItemStatus,
@@ -34,6 +35,8 @@ export interface ListItemsOptions extends ReadOptions {
   q?: string;
   /** Defaults to search rank when `q` has terms, else insertion order. */
   sort?: ItemSort;
+  /** Structured filters, ANDed (#41); see `item-filter.ts` in core for the vocabulary. */
+  filters?: ItemFilter[];
 }
 
 /**
@@ -128,6 +131,77 @@ function nameSortValue(fields: FieldDefinition[]): SQL | null {
   });
   if (candidates.length === 0) return null;
   return sql`COALESCE(${sql.join(candidates, sql`, `)}, NULL)`;
+}
+
+const LIST_FIELD_TYPES = new Set(["multiselect", "tags"]);
+const BOUNDED_NUMBER_TYPES = new Set(["number", "rating", "currency"]);
+
+/**
+ * One filter as a SQL condition (#41). Three rules hold for every op, each
+ * learned from the reviews before this was written:
+ *
+ * - **Parenthesised.** Drizzle's `and()` does not wrap raw `sql` fragments, so
+ *   an `OR` inside one would escape the collection and trash conditions.
+ * - **Type-guarded.** In SQLite, text sorts above every number, so a stored
+ *   `"1999"` would pass `year >= 1960`; and `json_each` over a scalar yields
+ *   the scalar, so a bare `"jazz"` would pass a tag test. Each op checks
+ *   `json_type` first, as the sort expressions do.
+ * - **Never throws.** Only paths built from the collection's own field ids
+ *   reach SQL; an id that cannot be addressed is a fixed-text 400. Every
+ *   `json_each` column is qualified, since it has an `id` column of its own.
+ *
+ * Text, url, email and image fields take no filters — search covers text.
+ */
+function filterCondition(filter: ItemFilter, fields: FieldDefinition[]): SQL {
+  const field = fields.find((candidate) => candidate.id === filter.field);
+  const path = field ? fieldPath(field.id) : null;
+  if (!field || path === null) throw new InvalidItemQueryError("Unknown filter field");
+  const column = schema.items.fields;
+  const type = sql`json_type(${column}, ${path})`;
+  const value = sql`json_extract(${column}, ${path})`;
+  const isList = LIST_FIELD_TYPES.has(field.type);
+  const unsupported = () => new InvalidItemQueryError("This filter does not suit this field");
+
+  switch (filter.op) {
+    case "empty": {
+      if (!(isList || BOUNDED_NUMBER_TYPES.has(field.type) || ["select", "date", "boolean"].includes(field.type))) {
+        throw unsupported();
+      }
+      return sql`(${type} IS NULL OR ${type} = 'null' OR (${type} = 'text' AND ${value} = '') OR (${type} = 'array' AND json_array_length(${column}, ${path}) = 0))`;
+    }
+    case "in":
+    case "all": {
+      const needles = JSON.stringify(filter.value);
+      if (field.type === "select" && filter.op === "in") {
+        return sql`(${type} = 'text' AND ${value} IN (SELECT "needle"."value" FROM json_each(${needles}) AS "needle"))`;
+      }
+      if (!isList) throw unsupported();
+      // Tags are typed freely, so "Signed" and "signed" are one tag; multiselect
+      // values are the schema's options, matched as stored.
+      const collate = field.type === "tags" ? sql` COLLATE NOCASE` : sql``;
+      const present = sql`EXISTS (SELECT 1 FROM json_each(${column}, ${path}) AS "held" WHERE "held"."type" = 'text' AND "held"."value" = "needle"."value"${collate})`;
+      if (filter.op === "in") {
+        return sql`(${type} = 'array' AND EXISTS (SELECT 1 FROM json_each(${needles}) AS "needle" WHERE ${present}))`;
+      }
+      return sql`(${type} = 'array' AND NOT EXISTS (SELECT 1 FROM json_each(${needles}) AS "needle" WHERE NOT ${present}))`;
+    }
+    case "gte":
+    case "lte": {
+      const compare = filter.op === "gte" ? sql`>=` : sql`<=`;
+      if (BOUNDED_NUMBER_TYPES.has(field.type) && typeof filter.value === "number") {
+        return sql`(${type} IN ('integer', 'real') AND ${value} ${compare} ${filter.value})`;
+      }
+      if (field.type === "date" && typeof filter.value === "string") {
+        // By calendar day: a datetime another client stored is read as its date.
+        return sql`(${type} = 'text' AND ${value} <> '' AND substr(${value}, 1, 10) ${compare} ${filter.value})`;
+      }
+      throw unsupported();
+    }
+    case "eq": {
+      if (field.type !== "boolean") throw unsupported();
+      return sql`(${type} = ${filter.value ? "true" : "false"})`;
+    }
+  }
 }
 
 /**
@@ -261,6 +335,10 @@ export class ItemsRepository {
       conditions.push(eq(schema.items.status, options.status));
     }
     const match = options.q ? toMatchExpression(options.q) : null;
+    if (options.filters && options.filters.length > 0) {
+      const fields = this.#schemaOf(collectionId);
+      for (const filter of options.filters) conditions.push(filterCondition(filter, fields));
+    }
 
     let order: SQL[];
     if (options.sort) {
