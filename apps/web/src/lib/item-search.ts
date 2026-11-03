@@ -1,9 +1,20 @@
-import { type FieldDefinition, ITEM_SEARCH_MAX_LENGTH, isSortableFieldType, parseItemSort } from "@mycollections/core";
+import {
+  type FieldDefinition,
+  filterSuitsField,
+  formatItemFilters,
+  ITEM_SEARCH_MAX_LENGTH,
+  type ItemFilter,
+  isSortableFieldType,
+  parseItemFilters,
+  parseItemSort,
+} from "@mycollections/core";
 
 /** A collection screen's search params (#41). */
 export interface ItemSearch {
   q?: string;
   sort?: string;
+  /** A filter list in canonical form (core's `formatItemFilters`). */
+  filter?: string;
 }
 
 /**
@@ -17,6 +28,10 @@ export function validateItemSearch(raw: Record<string, unknown>): ItemSearch {
   const q = typeof raw.q === "string" || typeof raw.q === "number" ? String(raw.q) : "";
   if (q) search.q = q.slice(0, ITEM_SEARCH_MAX_LENGTH);
   if (typeof raw.sort === "string" && parseItemSort(raw.sort)) search.sort = raw.sort;
+  // Re-spelled canonically, so two spellings of one filter are one URL and one
+  // cache entry. An empty list is no filter at all.
+  const filters = typeof raw.filter === "string" ? parseItemFilters(raw.filter) : null;
+  if (filters && filters.length > 0) search.filter = formatItemFilters(filters);
   return search;
 }
 
@@ -33,4 +48,17 @@ export function effectiveSort(sort: string | undefined, fields: FieldDefinition[
   if (parsed.key !== "field") return sort;
   const field = fields.find((candidate) => candidate.id === parsed.fieldId);
   return field && isSortableFieldType(field.type) ? sort : undefined;
+}
+
+/**
+ * The filters to ask the API for: those whose field this collection still has
+ * and can take them. A filter left in a bookmark after its field was removed or
+ * changed type is dropped rather than answered with a 400.
+ */
+export function effectiveFilters(filter: string | undefined, fields: FieldDefinition[]): ItemFilter[] {
+  const filters = filter ? (parseItemFilters(filter) ?? []) : [];
+  return filters.filter((candidate) => {
+    const field = fields.find((f) => f.id === candidate.field);
+    return field !== undefined && filterSuitsField(candidate, field.type);
+  });
 }

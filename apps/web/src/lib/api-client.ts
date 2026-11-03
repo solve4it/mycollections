@@ -93,6 +93,21 @@ export interface ItemListQuery {
   q?: string;
   /** A sort key in core's `formatItemSort` form. */
   sort?: string;
+  /** A filter list in core's `formatItemFilters` form. */
+  filter?: string;
+}
+
+/** The tags in use in one tags field, most used first (#41). */
+export interface TagValues {
+  values: { value: string; count: number }[];
+  truncated: boolean;
+}
+
+export async function getTagValues(collectionId: string, fieldId: string): Promise<TagValues> {
+  const params = new URLSearchParams({ field: fieldId });
+  const res = await request(`/api/collections/${collectionId}/tag-values?${params.toString()}`);
+  if (!res.ok) throw new ApiError(res.status);
+  return res.json() as Promise<TagValues>;
 }
 
 export async function listItems(collectionId: string, query: ItemListQuery = {}): Promise<Item[]> {
@@ -101,6 +116,7 @@ export async function listItems(collectionId: string, query: ItemListQuery = {})
   const q = query.q?.trim();
   if (q) params.set("q", q);
   if (query.sort) params.set("sort", query.sort);
+  if (query.filter) params.set("filter", query.filter);
   // toString, not `params.size`, which Safari 16 and Chrome 111 lack.
   const encoded = params.toString();
   const search = encoded ? `?${encoded}` : "";

@@ -5,6 +5,7 @@ import {
   deleteItem,
   emptyTrash,
   getCollection,
+  getTagValues,
   type ItemInput,
   type ItemListQuery,
   importData,
@@ -63,7 +64,12 @@ export function useCollection(id: string) {
  * fetches again whichever search is on screen and marks the others stale.
  */
 export function itemsQueryKey(collectionId: string, query: ItemListQuery = {}) {
-  return ["collections", collectionId, "items", { q: query.q?.trim() || undefined, sort: query.sort }] as const;
+  return [
+    "collections",
+    collectionId,
+    "items",
+    { q: query.q?.trim() || undefined, sort: query.sort, filter: query.filter },
+  ] as const;
 }
 
 /**
@@ -77,6 +83,20 @@ export function useItems(collectionId: string, query: ItemListQuery = {}, option
     queryFn: () => listItems(collectionId, query),
     placeholderData: keepPreviousData,
     enabled: options.enabled ?? true,
+  });
+}
+
+/**
+ * The tags in use in one tags field, for the filter panel (#41). Under the
+ * items prefix, so an edit that adds or drops a tag refreshes it; fetched only
+ * while the panel is open.
+ */
+export function useTagValues(collectionId: string, fieldId: string, enabled: boolean) {
+  return useQuery({
+    queryKey: ["collections", collectionId, "items", "tag-values", fieldId],
+    queryFn: () => getTagValues(collectionId, fieldId),
+    enabled,
+    staleTime: 30_000,
   });
 }
 

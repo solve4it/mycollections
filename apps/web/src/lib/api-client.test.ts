@@ -4,6 +4,7 @@ import {
   createItem,
   deleteItem,
   emptyTrash,
+  getTagValues,
   listCollections,
   listItems,
   listTrash,
@@ -163,5 +164,19 @@ describe("api-client item list query (#41)", () => {
     } finally {
       if (descriptor) Object.defineProperty(URLSearchParams.prototype, "size", descriptor);
     }
+  });
+
+  it("sends the filter param as given", async () => {
+    const fetchMock = mockFetch(200, []);
+    await listItems("c1", { filter: '[{"field":"year","op":"empty"}]' });
+    expect(url(fetchMock).searchParams.get("filter")).toBe('[{"field":"year","op":"empty"}]');
+  });
+
+  it("reads the tags in use in a field", async () => {
+    const body = { values: [{ value: "signed", count: 2 }], truncated: false };
+    const fetchMock = mockFetch(200, body);
+    await expect(getTagValues("c1", "my tags")).resolves.toEqual(body);
+    expect(url(fetchMock).pathname).toBe("/api/collections/c1/tag-values");
+    expect(url(fetchMock).searchParams.get("field")).toBe("my tags");
   });
 });
