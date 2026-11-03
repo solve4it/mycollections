@@ -152,4 +152,16 @@ describe("api-client item list query (#41)", () => {
     await listItems("c1", { q: "   " });
     expect(url(fetchMock).search).toBe("");
   });
+
+  it("sends the query on browsers without URLSearchParams.size", async () => {
+    const descriptor = Object.getOwnPropertyDescriptor(URLSearchParams.prototype, "size");
+    Object.defineProperty(URLSearchParams.prototype, "size", { get: () => undefined, configurable: true });
+    try {
+      const fetchMock = mockFetch(200, []);
+      await listItems("c1", { q: "dune" });
+      expect(url(fetchMock).searchParams.get("q")).toBe("dune");
+    } finally {
+      if (descriptor) Object.defineProperty(URLSearchParams.prototype, "size", descriptor);
+    }
+  });
 });

@@ -127,9 +127,15 @@ function CollectionDetailPage() {
   const itemsQuery = useItems(id, itemQuery, { enabled: !search.sort || collectionQuery.data !== undefined });
   const searchInputRef = useRef<HTMLInputElement>(null);
 
-  /** Whether the list as last fetched — the current search — holds this item. */
+  // The search on screen *now*. A mutation's callbacks close over the render in
+  // which it started, and the user may have searched again since: only the
+  // search on screen was fetched again, so only it can say what is shown.
+  const currentItemQuery = useRef(itemQuery);
+  currentItemQuery.current = itemQuery;
+
+  /** Whether the list as last fetched for the search on screen holds this item. */
   function isListed(itemId: string): boolean {
-    const listed = queryClient.getQueryData<Item[]>(itemsQueryKey(id, itemQuery));
+    const listed = queryClient.getQueryData<Item[]>(itemsQueryKey(id, currentItemQuery.current));
     return listed?.some((listedItem) => listedItem.id === itemId) ?? false;
   }
   const createItem = useCreateItem(id);
@@ -181,7 +187,10 @@ function CollectionDetailPage() {
    * The search the page opened on is not announced — the route announcement
    * names the page and the count is on screen — but clearing a search is.
    */
-  const settled = itemsQuery.data !== undefined && !itemsQuery.isPlaceholderData && !itemsQuery.isFetching;
+  // Not gated on `isFetching`: a refetch of the same search (after an edit,
+  // delete or undo) keeps its data, and toggling here would restart the
+  // countdown and speak the count right on top of that action's own message.
+  const settled = itemsQuery.data !== undefined && !itemsQuery.isPlaceholderData;
   const settledQ = settled ? q : null;
   const settledCount = settled ? (itemsQuery.data?.length ?? 0) : null;
   const announcedSearch = useRef(q);

@@ -256,3 +256,36 @@ describe("when a search hides the row the user was on (#41)", () => {
     );
   });
 });
+
+describe("a search that changes while an add is saving (#41)", () => {
+  it("judges whether the new item is shown against the search on screen when it lands", async () => {
+    renderAt(`${BASE}?q=zel`);
+    await waitFor(() => expect(rowTitles()).toEqual(["Zelda", "Zelda II"]));
+
+    const added = item("77777777-7777-4777-8777-777777777777", "Zelda Z");
+    let land: () => void = () => {};
+    vi.mocked(createItem).mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          land = () => {
+            stored = [...stored, added];
+            resolve(added);
+          };
+        }),
+    );
+    const form = document.querySelector<HTMLElement>(".add-item");
+    if (!form) throw new Error("no add form");
+    fireEvent.change(within(form).getByRole("textbox", { name: /title/i }), { target: { value: "Zelda Z" } });
+    fireEvent.click(within(form).getByRole("button", { name: "Save" }));
+
+    // The search is cleared while the add is still in flight.
+    fireEvent.change(searchBox(), { target: { value: "" } });
+    fireEvent.submit(searchBox());
+    await waitFor(() => expect(rowTitles()).toEqual(["Zelda", "Zelda II", "Mario"]));
+    land();
+
+    await waitFor(() => expect(rowTitles()).toContain("Zelda Z"));
+    await waitFor(() => expect(document.querySelector(".add-item-live")).toHaveTextContent("Added “Zelda Z”"));
+    expect(document.querySelector(".add-item-live")).not.toHaveTextContent("isn’t shown");
+  });
+});

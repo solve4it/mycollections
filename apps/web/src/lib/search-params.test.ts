@@ -21,4 +21,14 @@ describe("search params (#41)", () => {
       expect(parseSearch(stringifySearch({ q }))).toEqual({ q });
     }
   });
+
+  it("does not depend on URLSearchParams.size, which Safari 16 and Chrome 111 lack", () => {
+    const descriptor = Object.getOwnPropertyDescriptor(URLSearchParams.prototype, "size");
+    Object.defineProperty(URLSearchParams.prototype, "size", { get: () => undefined, configurable: true });
+    try {
+      expect(stringifySearch({ q: "dune" })).toBe("?q=dune");
+    } finally {
+      if (descriptor) Object.defineProperty(URLSearchParams.prototype, "size", descriptor);
+    }
+  });
 });

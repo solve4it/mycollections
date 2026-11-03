@@ -66,4 +66,28 @@ describe("ItemSearchBox (#41)", () => {
     rerender(<ItemSearchBox value="emm" onSearch={onSearch} />);
     expect(box()).toHaveValue("emma w");
   });
+
+  it("drops a pending search when the URL is cleared from outside, so Clear search sticks", () => {
+    const onSearch = vi.fn();
+    const { rerender } = render(<ItemSearchBox value="sonic" onSearch={onSearch} />);
+    fireEvent.change(box(), { target: { value: "sonics" } });
+    rerender(<ItemSearchBox value="" onSearch={onSearch} />);
+    act(() => vi.advanceTimersByTime(SEARCH_DEBOUNCE_MS));
+    expect(onSearch).not.toHaveBeenCalled();
+    expect(box()).toHaveValue("");
+  });
+
+  it("waits for an IME composition to finish before searching", () => {
+    const onSearch = vi.fn();
+    render(<ItemSearchBox value="" onSearch={onSearch} />);
+    fireEvent.compositionStart(box());
+    fireEvent.change(box(), { target: { value: "にほ" } });
+    act(() => vi.advanceTimersByTime(SEARCH_DEBOUNCE_MS * 4));
+    expect(onSearch).not.toHaveBeenCalled();
+    fireEvent.compositionEnd(box(), { data: "日本" });
+    fireEvent.change(box(), { target: { value: "日本" } });
+    act(() => vi.advanceTimersByTime(SEARCH_DEBOUNCE_MS));
+    expect(onSearch).toHaveBeenCalledTimes(1);
+    expect(onSearch).toHaveBeenCalledWith("日本");
+  });
 });

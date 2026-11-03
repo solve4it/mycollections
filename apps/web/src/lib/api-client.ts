@@ -101,7 +101,9 @@ export async function listItems(collectionId: string, query: ItemListQuery = {})
   const q = query.q?.trim();
   if (q) params.set("q", q);
   if (query.sort) params.set("sort", query.sort);
-  const search = params.size > 0 ? `?${params}` : "";
+  // toString, not `params.size`, which Safari 16 and Chrome 111 lack.
+  const encoded = params.toString();
+  const search = encoded ? `?${encoded}` : "";
   const res = await request(`/api/collections/${collectionId}/items${search}`);
   if (!res.ok) throw new ApiError(res.status);
   return res.json() as Promise<Item[]>;

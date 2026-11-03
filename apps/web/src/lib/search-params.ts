@@ -18,5 +18,8 @@ export function stringifySearch(search: Record<string, unknown>): string {
     if (value === undefined || value === null || value === "") continue;
     params.set(key, typeof value === "object" ? JSON.stringify(value) : String(value));
   }
-  return params.size > 0 ? `?${params}` : "";
+  // toString, not `params.size`: Safari 16 and Chrome 111 — inside Vite's
+  // default build target — have no `size`, and every search would vanish.
+  const query = params.toString();
+  return query ? `?${query}` : "";
 }
