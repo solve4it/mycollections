@@ -1108,7 +1108,7 @@ test.describe("searching a collection (#41)", () => {
       "the successor rule, as for a delete — not <body>",
     ).toBeFocused();
     await expect(page.locator('.visually-hidden[aria-live="polite"]')).toContainText(
-      "Saved “Giant Steps”. It no longer matches the search, so it isn’t shown.",
+      "Saved “Giant Steps”. It no longer matches the current search or filters, so it isn’t shown.",
     );
   });
 

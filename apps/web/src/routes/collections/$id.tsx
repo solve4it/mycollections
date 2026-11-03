@@ -219,7 +219,10 @@ function CollectionDetailPage() {
   // countdown and speak the count right on top of that action's own message.
   const settled = itemsQuery.data !== undefined && !itemsQuery.isPlaceholderData;
   // What the list is narrowed by, as one key: the search text and the filters.
-  const narrowing = JSON.stringify([q, filter ?? ""]);
+  // Keyed on the URL's filter, not the effective one: that is only known once
+  // the collection loads, and the change from "none yet" would read as the user
+  // filtering — announcing the count of the view the page opened on.
+  const narrowing = JSON.stringify([q, search.filter ?? ""]);
   const settledQ = settled ? narrowing : null;
   const settledCount = settled ? (itemsQuery.data?.length ?? 0) : null;
   const announcedSearch = useRef(narrowing);
@@ -526,7 +529,13 @@ function ItemList({
     return (
       <EmptyState
         title={q ? t("no_matches", { q }) : t("no_matches_filtered")}
-        description={q ? t("no_matches_description") : t("no_matches_filtered_description")}
+        description={
+          q && filtered
+            ? t("no_matches_search_filtered_description")
+            : q
+              ? t("no_matches_description")
+              : t("no_matches_filtered_description")
+        }
       >
         {q && (
           <button type="button" className="touch-target button-quiet" onClick={onClearSearch}>
@@ -546,10 +555,14 @@ function ItemList({
     <>
       {query.error && <p role="alert">{t("items_reload_error")}</p>}
       {/* Visible, not live: the announcer speaks it once the search settles. */}
-      {q ? (
-        <p className="item-count">{t("items_match", { count: items.length, q })}</p>
-      ) : (
-        filtered && <p className="item-count">{t("items_match_filtered", { count: items.length })}</p>
+      {(q || filtered) && (
+        <p className="item-count">
+          {q && filtered
+            ? t("items_match_search_filtered", { count: items.length, q })
+            : q
+              ? t("items_match", { count: items.length, q })
+              : t("items_match_filtered", { count: items.length })}
+        </p>
       )}
       <ul className="item-list" aria-busy={query.isPlaceholderData || undefined}>
         {items.map((item, index) => (

@@ -62,7 +62,17 @@ export const ItemFilterSchema = z.discriminatedUnion("op", [
 
 export type ItemFilter = z.infer<typeof ItemFilterSchema>;
 
-export const ItemFilterListSchema = z.array(ItemFilterSchema).max(ITEM_FILTER_MAX);
+/**
+ * At most one filter per field and operator: two `in` filters on one field
+ * would AND into something the filter panel cannot show — it holds one set of
+ * choices per field — and two chips would share an identity.
+ */
+export const ItemFilterListSchema = z
+  .array(ItemFilterSchema)
+  .max(ITEM_FILTER_MAX)
+  .refine((filters) => new Set(filters.map((filter) => `${filter.op} ${filter.field}`)).size === filters.length, {
+    message: "One filter per field and operator",
+  });
 
 /**
  * Reads a `filter` param. Returns null for anything that is not a valid list —

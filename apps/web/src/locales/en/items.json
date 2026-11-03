@@ -38,9 +38,9 @@
   "clear_search": "Clear search",
   "showing_all_one": "Showing all {{count}} item",
   "showing_all_other": "Showing all {{count}} items",
-  "added_status_hidden": "Added “{{name}}”. It doesn’t match the search, so it isn’t shown.",
-  "saved_hidden": "Saved “{{name}}”. It no longer matches the search, so it isn’t shown.",
-  "restored_hidden": "Restored “{{name}}”. It doesn’t match the search, so it isn’t shown.",
+  "added_status_hidden": "Added “{{name}}”. It doesn’t match the current search or filters, so it isn’t shown.",
+  "saved_hidden": "Saved “{{name}}”. It no longer matches the current search or filters, so it isn’t shown.",
+  "restored_hidden": "Restored “{{name}}”. It doesn’t match the current search or filters, so it isn’t shown.",
   "sort_label": "Sort by",
   "sort_best_match": "Best match",
   "sort_added_oldest": "Date added, oldest first",
@@ -86,5 +86,10 @@
   "items_match_filtered_one": "{{count}} item matches",
   "items_match_filtered_other": "{{count}} items match",
   "no_matches_filtered": "No items match these filters",
-  "no_matches_filtered_description": "Remove a filter, or clear them all."
+  "no_matches_filtered_description": "Remove a filter, or clear them all.",
+  "items_match_search_filtered_one": "{{count}} item matches “{{q}}” with these filters",
+  "items_match_search_filtered_other": "{{count}} items match “{{q}}” with these filters",
+  "no_matches_search_filtered_description": "Try fewer or shorter words, or remove a filter.",
+  "filters_loading_tags": "Loading tags…",
+  "filters_tags_error": "Could not load the tags in use."
 }

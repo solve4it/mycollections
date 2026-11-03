@@ -1120,6 +1120,13 @@ p[role="alert"] {
   .filter-range > legend {
     grid-column: 1 / -1;
   }
+
+  /* Inputs default to an intrinsic width (150px or more for number and date),
+     which would push the grid past a narrow viewport. */
+  .filter-range > input {
+    min-width: 0;
+    width: 100%;
+  }
 }
 
 .applied-filters {

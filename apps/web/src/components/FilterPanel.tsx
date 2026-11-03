@@ -5,7 +5,7 @@ import {
   isFilterableFieldType,
   parseItemFilters,
 } from "@mycollections/core";
-import { useId, useState } from "react";
+import { useId, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { draftFromFilters, type FacetDraft, type FilterDraft, filtersFromDraft } from "../lib/filter-draft.js";
 import { useTagValues } from "../lib/queries.js";
@@ -45,13 +45,27 @@ export function FilterPanel({ collectionId, fields, filters, onApply }: FilterPa
   // The draft follows the applied filters when they change from outside (a
   // chip removed, Clear filters, Back) — adjusted during render, so there is no
   // commit showing the stale draft, and nothing remounts under focus.
+  //
+  // Only the facets whose filters changed are re-read: removing the Year chip
+  // must not throw away a box the user has just ticked under Genre.
   const applied = formatItemFilters(filters);
-  const [seenApplied, setSeenApplied] = useState(applied);
+  const [seen, setSeen] = useState({ applied, filters });
   const [draft, setDraft] = useState<FilterDraft>(() => draftFromFilters(filters, fields));
   const [tooMany, setTooMany] = useState(false);
-  if (seenApplied !== applied) {
-    setSeenApplied(applied);
-    setDraft(draftFromFilters(filters, fields));
+  if (seen.applied !== applied) {
+    const incoming = draftFromFilters(filters, fields);
+    const forField = (list: ItemFilter[], id: string) => JSON.stringify(list.filter((f) => f.field === id));
+    setDraft((current) => {
+      const next = { ...current };
+      for (const field of fields) {
+        if (forField(seen.filters, field.id) !== forField(filters, field.id)) {
+          const facet = incoming[field.id];
+          if (facet) next[field.id] = facet;
+        }
+      }
+      return next;
+    });
+    setSeen({ applied, filters });
     setTooMany(false);
   }
 
@@ -126,20 +140,30 @@ function Facet({ collectionId, field, facet, panelOpen, onChange }: FacetProps) 
   const { t } = useTranslation("items");
   const id = useId();
   const tags = useTagValues(collectionId, field.id, panelOpen && field.type === "tags");
+  // Every tag this facet has shown stays offered while it is mounted: a refetch
+  // that no longer lists one (its last use just removed) must not pull a
+  // checkbox out from under focus.
+  const shownTags = useRef<string[]>([]);
+  for (const entry of tags.data?.values ?? []) {
+    if (!shownTags.current.includes(entry.value)) shownTags.current.push(entry.value);
+  }
   if (!facet) return null;
 
   if (facet.kind === "choice") {
-    const offered =
-      field.type === "select" || field.type === "multiselect"
-        ? field.options
-        : (tags.data?.values.map((entry) => entry.value) ?? []);
+    const offered = field.type === "select" || field.type === "multiselect" ? field.options : shownTags.current;
     // A value chosen earlier stays offered even if it fell out of the top tags.
     const options = [...offered, ...facet.values.filter((value) => !offered.includes(value))];
     const canMatchAll = field.type !== "select";
     return (
       <fieldset className="form-row filter-facet">
         <legend>{field.label}</legend>
-        {options.length === 0 && <p className="form-hint">{t("filters_no_tags")}</p>}
+        {field.type === "tags" && tags.isPending && options.length === 0 && (
+          <p className="form-hint">{t("filters_loading_tags")}</p>
+        )}
+        {field.type === "tags" && tags.isError && <p role="alert">{t("filters_tags_error")}</p>}
+        {field.type === "tags" && tags.isSuccess && options.length === 0 && (
+          <p className="form-hint">{t("filters_no_tags")}</p>
+        )}
         {options.map((option) => (
           <label key={option} className="checkbox-row">
             <input
@@ -168,7 +192,7 @@ function Facet({ collectionId, field, facet, panelOpen, onChange }: FacetProps) 
                   checked={facet.match === match}
                   onChange={() => onChange({ ...facet, match })}
                 />
-                {t(match === "in" ? "filters_match_any" : "filters_match_all")}
+                {match === "in" ? t("filters_match_any") : t("filters_match_all")}
               </label>
             ))}
           </fieldset>
@@ -179,18 +203,20 @@ function Facet({ collectionId, field, facet, panelOpen, onChange }: FacetProps) 
 
   if (facet.kind === "range") {
     const type = field.type === "date" ? "date" : "number";
-    const [fromKey, toKey] = field.type === "date" ? ["filters_from", "filters_to"] : ["filters_min", "filters_max"];
+    const isDate = field.type === "date";
+    const fromLabel = isDate ? t("filters_from") : t("filters_min");
+    const toLabel = isDate ? t("filters_to") : t("filters_max");
     return (
       <fieldset className="form-row filter-facet filter-range">
         <legend>{field.label}</legend>
-        <label htmlFor={`${id}-min`}>{t(fromKey)}</label>
+        <label htmlFor={`${id}-min`}>{fromLabel}</label>
         <input
           id={`${id}-min`}
           type={type}
           value={facet.min}
           onChange={(event) => onChange({ ...facet, min: event.target.value })}
         />
-        <label htmlFor={`${id}-max`}>{t(toKey)}</label>
+        <label htmlFor={`${id}-max`}>{toLabel}</label>
         <input
           id={`${id}-max`}
           type={type}
@@ -201,6 +227,13 @@ function Facet({ collectionId, field, facet, panelOpen, onChange }: FacetProps) 
     );
   }
 
+  // Literal keys, so the locale-keys check can see every one.
+  const booleanLabels = {
+    any: t("filters_bool_any"),
+    yes: t("filters_bool_yes"),
+    no: t("filters_bool_no"),
+    unset: t("filters_bool_unset"),
+  };
   return (
     <fieldset className="form-row filter-facet">
       <legend>{field.label}</legend>
@@ -212,7 +245,7 @@ function Facet({ collectionId, field, facet, panelOpen, onChange }: FacetProps) 
             checked={facet.value === value}
             onChange={() => onChange({ kind: "boolean", value })}
           />
-          {t(`filters_bool_${value}`)}
+          {booleanLabels[value]}
         </label>
       ))}
     </fieldset>

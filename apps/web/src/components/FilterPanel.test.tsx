@@ -121,6 +121,48 @@ describe("FilterPanel limits (#41)", () => {
   });
 });
 
+describe("FilterPanel review cases (#41)", () => {
+  it("keeps unsaved ticks in other facets when a filter is removed from outside", () => {
+    const applied: ItemFilter[] = [{ field: "year", op: "gte", value: 1959 }];
+    const { rerender } = render(
+      wrap(<FilterPanel collectionId="c1" fields={FIELDS} filters={applied} onApply={vi.fn()} />),
+    );
+    fireEvent.click(toggle());
+    fireEvent.click(screen.getByRole("checkbox", { name: "Jazz" }));
+    rerender(wrap(<FilterPanel collectionId="c1" fields={FIELDS} filters={[]} onApply={vi.fn()} />));
+    expect(screen.getByRole("checkbox", { name: "Jazz" })).toBeChecked();
+    expect(screen.getByRole("spinbutton", { name: "Minimum" })).toHaveValue(null);
+  });
+
+  it("says the tags are loading, and that they could not be loaded, rather than that there are none", async () => {
+    let fail: (reason: Error) => void = () => {};
+    vi.mocked(getTagValues).mockReturnValue(new Promise((_resolve, reject) => (fail = reject)));
+    render(wrap(<FilterPanel collectionId="c1" fields={FIELDS} filters={[]} onApply={vi.fn()} />));
+    fireEvent.click(toggle());
+    const tags = screen.getByRole("group", { name: "Tags" });
+    expect(within(tags).getByText("Loading tags…")).toBeInTheDocument();
+    expect(within(tags).queryByText("No tags in use yet.")).not.toBeInTheDocument();
+    fail(new Error("down"));
+    expect(await within(tags).findByRole("alert")).toHaveTextContent("Could not load the tags in use.");
+  });
+
+  it("keeps offering a tag it showed, even once a refetch no longer lists it", async () => {
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={qc}>
+        <FilterPanel collectionId="c1" fields={FIELDS} filters={[]} onApply={vi.fn()} />
+      </QueryClientProvider>,
+    );
+    fireEvent.click(toggle());
+    const mono = await screen.findByRole("checkbox", { name: "mono" });
+    mono.focus();
+    vi.mocked(getTagValues).mockResolvedValue({ values: [{ value: "signed", count: 3 }], truncated: false });
+    await qc.invalidateQueries();
+    await waitFor(() => expect(vi.mocked(getTagValues)).toHaveBeenCalledTimes(2));
+    expect(screen.getByRole("checkbox", { name: "mono" })).toHaveFocus();
+  });
+});
+
 describe("AppliedFilters (#41)", () => {
   it("names each filter on a button that removes it, and offers Clear filters", () => {
     const onRemove = vi.fn();

@@ -107,3 +107,19 @@ describe("filterSuitsField", () => {
     expect(filterSuitsField({ field: "f", op: "gte", value: 1 }, "date")).toBe(false);
   });
 });
+
+describe("one filter per field and operator (#41 review)", () => {
+  it("refuses two filters with the same field and operator, which would AND into a list the panel cannot show", () => {
+    const twice = [
+      { field: "genre", op: "in", value: ["rpg"] },
+      { field: "genre", op: "in", value: ["platform"] },
+    ];
+    expect(ItemFilterListSchema.safeParse(twice).success).toBe(false);
+    expect(
+      ItemFilterListSchema.safeParse([
+        { field: "year", op: "gte", value: 1 },
+        { field: "year", op: "lte", value: 2 },
+      ]).success,
+    ).toBe(true);
+  });
+});

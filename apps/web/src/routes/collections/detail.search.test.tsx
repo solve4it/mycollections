@@ -199,7 +199,9 @@ describe("when a search hides the row the user was on (#41)", () => {
     // The successor rule, as for a delete: the row now at its index.
     await waitFor(() => expect(screen.getByRole("button", { name: "Edit “Zelda II”" })).toHaveFocus());
     await waitFor(() =>
-      expect(announcer()).toHaveTextContent("Saved “Link”. It no longer matches the search, so it isn’t shown."),
+      expect(announcer()).toHaveTextContent(
+        "Saved “Link”. It no longer matches the current search or filters, so it isn’t shown.",
+      ),
     );
   });
 
@@ -238,7 +240,7 @@ describe("when a search hides the row the user was on (#41)", () => {
 
     await waitFor(() =>
       expect(document.querySelector(".add-item-live")).toHaveTextContent(
-        "Added “Sonic”. It doesn’t match the search, so it isn’t shown.",
+        "Added “Sonic”. It doesn’t match the current search or filters, so it isn’t shown.",
       ),
     );
   });
@@ -270,7 +272,9 @@ describe("when a search hides the row the user was on (#41)", () => {
     await waitFor(() => expect(screen.queryByRole("button", { name: "Undo" })).not.toBeInTheDocument());
     await waitFor(() => expect(screen.getByRole("button", { name: "Edit “Zelda II”" })).toHaveFocus());
     await waitFor(() =>
-      expect(announcer()).toHaveTextContent("Restored “Link”. It doesn’t match the search, so it isn’t shown."),
+      expect(announcer()).toHaveTextContent(
+        "Restored “Link”. It doesn’t match the current search or filters, so it isn’t shown.",
+      ),
     );
   });
 });
@@ -402,5 +406,34 @@ describe("filtering a collection (#41)", () => {
       filter: undefined,
     });
     expect(screen.queryByRole("list", { name: "Applied filters" })).not.toBeInTheDocument();
+  });
+});
+
+describe("filters and what the page says (#41 review)", () => {
+  it("does not announce the count of a filtered view the page opened on", async () => {
+    renderAt(`${BASE}?filter=${encodeURIComponent('[{"field":"year","op":"gte","value":1986}]')}`);
+    await waitFor(() => expect(rowTitles()).toEqual(["Zelda", "Zelda II"]));
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+    expect(announcer()).not.toHaveTextContent("match");
+  });
+
+  it("says the search or filters hide an added item, not the search alone", async () => {
+    renderAt(`${BASE}?filter=${encodeURIComponent('[{"field":"year","op":"gte","value":1986}]')}`);
+    await waitFor(() => expect(rowTitles()).toEqual(["Zelda", "Zelda II"]));
+    const sonic = item("66666666-6666-4666-8666-666666666666", "Sonic", 1991);
+    const old = { ...sonic, fields: { title: "Pong", year: 1972 } };
+    vi.mocked(createItem).mockImplementation(async () => {
+      stored = [...stored, old];
+      return old;
+    });
+    const form = document.querySelector<HTMLElement>(".add-item");
+    if (!form) throw new Error("no add form");
+    fireEvent.change(within(form).getByRole("textbox", { name: /title/i }), { target: { value: "Pong" } });
+    fireEvent.click(within(form).getByRole("button", { name: "Save" }));
+    await waitFor(() =>
+      expect(document.querySelector(".add-item-live")).toHaveTextContent(
+        "Added “Pong”. It doesn’t match the current search or filters, so it isn’t shown.",
+      ),
+    );
   });
 });
