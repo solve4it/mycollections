@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { ITEM_FILTER_MAX, ItemFilterListSchema, parseItemFilters } from "./item-filter.js";
+import {
+  filterSuitsField,
+  ITEM_FILTER_MAX,
+  type ItemFilter,
+  ItemFilterListSchema,
+  isFilterableFieldType,
+  parseItemFilters,
+} from "./item-filter.js";
 
 describe("ItemFilterListSchema (#41)", () => {
   it("accepts one of each operator", () => {
@@ -62,5 +69,41 @@ describe("parseItemFilters", () => {
     `[${'{"field":"x","op":"empty"},'.repeat(80)}]`,
   ])("returns null for %j", (raw) => {
     expect(parseItemFilters(raw)).toBeNull();
+  });
+});
+
+describe("filterSuitsField", () => {
+  it.each([
+    ["in", "select", true],
+    ["in", "multiselect", true],
+    ["in", "tags", true],
+    ["all", "tags", true],
+    ["all", "select", false],
+    ["gte", "number", true],
+    ["lte", "rating", true],
+    ["gte", "currency", true],
+    ["gte", "date", true],
+    ["gte", "select", false],
+    ["eq", "boolean", true],
+    ["eq", "tags", false],
+    ["empty", "date", true],
+    ["empty", "text", false],
+    ["in", "image", false],
+  ] as const)("%s on %s: %s", (op, type, expected) => {
+    expect(isFilterableFieldType(type) || !expected).toBe(true);
+    const filter =
+      op === "in" || op === "all"
+        ? { field: "f", op, value: ["a"] }
+        : op === "gte" || op === "lte"
+          ? { field: "f", op, value: type === "date" ? "2020-01-01" : 1 }
+          : op === "eq"
+            ? { field: "f", op, value: true }
+            : { field: "f", op };
+    expect(filterSuitsField(filter as ItemFilter, type)).toBe(expected);
+  });
+
+  it("refuses a bound of the wrong kind for the field", () => {
+    expect(filterSuitsField({ field: "f", op: "gte", value: "2020-01-01" }, "number")).toBe(false);
+    expect(filterSuitsField({ field: "f", op: "gte", value: 1 }, "date")).toBe(false);
   });
 });

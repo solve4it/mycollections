@@ -85,3 +85,33 @@ export function parseItemFilters(raw: string): ItemFilter[] | null {
 export function formatItemFilters(filters: ItemFilter[]): string {
   return JSON.stringify(filters);
 }
+
+const NUMERIC_TYPES = new Set(["number", "rating", "currency"]);
+const LIST_TYPES = new Set(["multiselect", "tags"]);
+const FILTERABLE_TYPES = new Set(["select", "multiselect", "tags", "number", "rating", "currency", "date", "boolean"]);
+
+/** Field types that take filters. Text, url, email and image do not — search covers text. */
+export function isFilterableFieldType(type: string): boolean {
+  return FILTERABLE_TYPES.has(type);
+}
+
+/**
+ * Whether a filter can be applied to a field of this type — the one rule the
+ * repository enforces and the web client uses to drop filters a changed schema
+ * no longer supports.
+ */
+export function filterSuitsField(filter: ItemFilter, type: string): boolean {
+  switch (filter.op) {
+    case "empty":
+      return FILTERABLE_TYPES.has(type);
+    case "in":
+      return type === "select" || LIST_TYPES.has(type);
+    case "all":
+      return LIST_TYPES.has(type);
+    case "gte":
+    case "lte":
+      return typeof filter.value === "number" ? NUMERIC_TYPES.has(type) : type === "date";
+    case "eq":
+      return type === "boolean";
+  }
+}
