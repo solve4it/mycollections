@@ -522,3 +522,40 @@ describe("Host pinning", () => {
     expect(res.statusCode).toBe(403);
   });
 });
+
+describe("request logging (#41)", () => {
+  async function logsFor(url: string): Promise<{ status: number; lines: string[] }> {
+    const { Writable } = await import("node:stream");
+    const { buildLoggerOptions } = await import("./logger.js");
+    const lines: string[] = [];
+    const stream = new Writable({
+      write(chunk, _encoding, done) {
+        lines.push(String(chunk));
+        done();
+      },
+    });
+    const app = await buildApp({ db: handle, token: TEST_TOKEN, logger: { ...buildLoggerOptions(), stream } });
+    const res = await app.inject({ method: "GET", url, headers: { Authorization: `Bearer ${TEST_TOKEN}` } });
+    await app.close();
+    return { status: res.statusCode, lines };
+  }
+
+  it("keeps the query string of a matched route out of the log", async () => {
+    const collection = await handle.collections.create({
+      name: "Books",
+      fields: [{ id: "title", type: "text", label: "Title", required: true }],
+      isFiniteSet: false,
+    });
+    const { status, lines } = await logsFor(`/api/collections/${collection.id}/items?q=do-not-report`);
+    expect(status).toBe(200);
+    expect(lines.length).toBeGreaterThan(0);
+    expect(lines.join("")).not.toContain("do-not-report");
+  });
+
+  it("keeps the query string of an unmatched route out of the log and the response", async () => {
+    const { status, lines } = await logsFor("/api/collections/abc/item?q=do-not-report");
+    expect(status).toBe(404);
+    expect(lines.length).toBeGreaterThan(0);
+    expect(lines.join("")).not.toContain("do-not-report");
+  });
+});

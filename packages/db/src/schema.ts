@@ -3,7 +3,12 @@ import { index, integer, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqli
 /**
  * Phase 1 tables only. Later phases add their own tables via new migrations:
  * share_links (#48), plugin_data (#54/#55), licenses (#57),
- * mutations/sync_state (#49), items_fts (#41).
+ * mutations/sync_state (#49).
+ *
+ * items_fts (#41) is a hand-written FTS5 migration (drizzle/0001_items_fts.sql):
+ * drizzle-kit cannot express virtual tables or triggers, so it is deliberately
+ * absent here. Never run `drizzle-kit push`/`pull` against a real database —
+ * they diff against the live schema and would drop the index and its triggers.
  *
  * Timestamps are ISO 8601 strings to match the core Zod schemas. Custom field
  * values live in JSON text columns queryable with json_extract().

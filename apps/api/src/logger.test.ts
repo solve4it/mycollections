@@ -23,4 +23,22 @@ describe("buildLoggerOptions", () => {
     expect(buildLoggerOptions({ isDev: false, level: "verbose" }).level).toBe("info");
     expect(buildLoggerOptions({ isDev: true, level: "" }).level).toBe("debug");
   });
+
+  it("logs a request's path but never its query string, which carries search text (#41)", () => {
+    const { req } = buildLoggerOptions().serializers;
+    const logged = req({
+      method: "GET",
+      url: "/api/collections/1/items?q=do-not-report",
+      host: "localhost:3000",
+      ip: "127.0.0.1",
+      socket: { remotePort: 5555 },
+    });
+    expect(logged).toEqual({
+      method: "GET",
+      url: "/api/collections/1/items",
+      host: "localhost:3000",
+      remoteAddress: "127.0.0.1",
+      remotePort: 5555,
+    });
+  });
 });

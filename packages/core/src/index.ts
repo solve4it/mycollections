@@ -21,6 +21,13 @@ export {
 } from "./field.js";
 export { type DeletedItem, type Item, ItemFieldValueSchema, ItemSchema } from "./item.js";
 export {
+  formatItemSort,
+  ITEM_SEARCH_MAX_LENGTH,
+  type ItemSort,
+  type ItemSortDirection,
+  parseItemSort,
+} from "./item-query.js";
+export {
   MEDIA_KINDS,
   type Media,
   MediaKindSchema,

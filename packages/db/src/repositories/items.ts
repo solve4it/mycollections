@@ -1,7 +1,15 @@
 import { randomUUID } from "node:crypto";
-import { type DeletedItem, type Item, ItemSchema, type ItemStatus } from "@mycollections/core";
-import { and, asc, desc, eq, isNotNull, isNull, sql } from "drizzle-orm";
+import {
+  type DeletedItem,
+  type FieldDefinition,
+  type Item,
+  ItemSchema,
+  type ItemSort,
+  type ItemStatus,
+} from "@mycollections/core";
+import { and, asc, desc, eq, isNotNull, isNull, type SQL, sql } from "drizzle-orm";
 import type { BetterSQLite3Database } from "drizzle-orm/better-sqlite3";
+import { integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
 import * as schema from "../schema.js";
 import type { ReadOptions } from "./collections.js";
 import { stripUndefined } from "./strip-undefined.js";
@@ -22,6 +30,130 @@ export interface UpdateItemInput {
 
 export interface ListItemsOptions extends ReadOptions {
   status?: ItemStatus;
+  /** Free text; every word must prefix-match a searchable value (#41). */
+  q?: string;
+  /** Defaults to search rank when `q` has terms, else insertion order. */
+  sort?: ItemSort;
+}
+
+/**
+ * A list query that names something the collection cannot be ordered or
+ * filtered by. The message is fixed text, safe to return to a client — it never
+ * echoes the field id or the query.
+ */
+export class InvalidItemQueryError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "InvalidItemQueryError";
+  }
+}
+
+/**
+ * The FTS5 index the 0001 migration maintains, and the table giving each item
+ * the stable integer key that is its FTS rowid. Declared here rather than in
+ * `schema.ts` so drizzle-kit never tries to generate DDL for them — the
+ * migration's triggers are their only writers.
+ */
+const itemsFts = sqliteTable("items_fts", { rowid: integer("rowid"), body: text("body") });
+const itemsSearchKey = sqliteTable("items_search_key", { key: integer("key"), itemId: text("item_id") });
+
+/**
+ * How many schema fields, in order, the name sort looks through for a name. It
+ * bounds the SQL: each field is one COALESCE argument, and SQLite refuses more
+ * than 1000. A name past the hundredth field is not a name anyone set out to sort by.
+ */
+const NAME_SORT_MAX_FIELDS = 100;
+
+/** At most this many distinct search terms are used; the rest are ignored. */
+const MAX_SEARCH_TERMS = 10;
+
+/**
+ * Turns free text into an FTS5 MATCH expression that cannot carry FTS syntax:
+ * each word becomes a quoted prefix phrase (`"word"*`, inner quotes doubled),
+ * and the phrases AND together. Control characters are blanked first — a NUL
+ * ends the string early inside SQLite and makes MATCH throw — and words without
+ * a letter or digit are dropped, since a punctuation-only phrase matches nothing.
+ * Returns null when no term survives, meaning "no search".
+ */
+export function toMatchExpression(q: string): string | null {
+  // biome-ignore lint/suspicious/noControlCharactersInRegex: stripping control characters is the point
+  const words = q.replace(/[\u0000-\u001f\u007f]/g, " ").split(/\s+/);
+  const terms = [...new Set(words.filter((word) => /[\p{L}\p{N}]/u.test(word)))].slice(0, MAX_SEARCH_TERMS);
+  if (terms.length === 0) return null;
+  return terms.map((term) => `"${term.replaceAll('"', '""')}"*`).join(" ");
+}
+
+/**
+ * A JSON path addressing one top-level key of an item's fields. Field ids are
+ * free text, so the id is quoted and escaped per JSON string rules. Returns null
+ * for an id holding a NUL, which SQLite's path parser cannot represent.
+ */
+export function fieldPath(fieldId: string): string | null {
+  if (fieldId.includes("\u0000")) return null;
+  return `$."${fieldId.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
+}
+
+const NUMERIC_FIELD_TYPES = new Set(["number", "rating", "currency"]);
+const TEXT_FIELD_TYPES = new Set(["text", "url", "email", "select", "date"]);
+
+/** The sortable value of one field, by its schema type; null for an unsortable type. */
+function fieldSortValue(field: FieldDefinition, path: string): SQL | null {
+  const column = schema.items.fields;
+  if (NUMERIC_FIELD_TYPES.has(field.type)) {
+    return sql`(CASE WHEN json_type(${column}, ${path}) IN ('integer', 'real') THEN json_extract(${column}, ${path}) END)`;
+  }
+  if (TEXT_FIELD_TYPES.has(field.type)) {
+    return sql`(CASE WHEN json_type(${column}, ${path}) = 'text' AND json_extract(${column}, ${path}) <> '' THEN json_extract(${column}, ${path}) END)`;
+  }
+  if (field.type === "boolean") {
+    return sql`(CASE json_type(${column}, ${path}) WHEN 'true' THEN 1 WHEN 'false' THEN 0 END)`;
+  }
+  return null;
+}
+
+/**
+ * An item's display name in SQL: the first schema field, in schema order, whose
+ * value is a non-empty string, a number or a boolean — the rule `itemLabel` in
+ * the web app uses to name an item — among the first {@link NAME_SORT_MAX_FIELDS}.
+ */
+function nameSortValue(fields: FieldDefinition[]): SQL | null {
+  const column = schema.items.fields;
+  const candidates = fields.slice(0, NAME_SORT_MAX_FIELDS).flatMap((field) => {
+    const path = fieldPath(field.id);
+    if (path === null) return [];
+    // Booleans name an item "true"/"false" in the web, so they name it here too.
+    return [
+      sql`CASE json_type(${column}, ${path}) WHEN 'integer' THEN json_extract(${column}, ${path}) WHEN 'real' THEN json_extract(${column}, ${path}) WHEN 'text' THEN NULLIF(json_extract(${column}, ${path}), '') WHEN 'true' THEN 'true' WHEN 'false' THEN 'false' END`,
+    ];
+  });
+  if (candidates.length === 0) return null;
+  return sql`COALESCE(${sql.join(candidates, sql`, `)}, NULL)`;
+}
+
+/**
+ * ORDER BY terms for a sort: empty values last whichever the direction, text
+ * compared case-insensitively (ASCII only — SQLite's NOCASE does not fold é),
+ * and the implicit rowid as the tie-break so equal keys keep insertion order.
+ */
+function orderTerms(sort: ItemSort, fields: FieldDefinition[]): SQL[] {
+  const dir = sort.direction === "desc" ? sql`DESC` : sql`ASC`;
+  const rowid = sql`${schema.items}.rowid ${dir}`;
+  if (sort.key === "createdAt") return [sql`${schema.items.createdAt} ${dir}`, rowid];
+  if (sort.key === "updatedAt") return [sql`${schema.items.updatedAt} ${dir}`, rowid];
+
+  let value: SQL | null;
+  if (sort.key === "name") {
+    value = nameSortValue(fields);
+    if (value === null) return [rowid];
+  } else {
+    const { fieldId } = sort;
+    const field = fields.find((candidate) => candidate.id === fieldId);
+    const path = field ? fieldPath(field.id) : null;
+    if (!field || path === null) throw new InvalidItemQueryError("Unknown sort field");
+    value = fieldSortValue(field, path);
+    if (value === null) throw new InvalidItemQueryError("This field cannot be sorted");
+  }
+  return [sql`(${value}) IS NULL`, sql`${value} COLLATE NOCASE ${dir}`, rowid];
 }
 
 function rowToItem(row: ItemRow): Item {
@@ -121,19 +253,62 @@ export class ItemsRepository {
   }
 
   async listByCollection(collectionId: string, options: ListItemsOptions = {}): Promise<Item[]> {
-    const conditions = [eq(schema.items.collectionId, collectionId)];
+    const conditions: SQL[] = [eq(schema.items.collectionId, collectionId)];
     if (!options.includeDeleted) {
       conditions.push(isNull(schema.items.deletedAt));
     }
     if (options.status) {
       conditions.push(eq(schema.items.status, options.status));
     }
+    const match = options.q ? toMatchExpression(options.q) : null;
+
+    let order: SQL[];
+    if (options.sort) {
+      order = orderTerms(options.sort, this.#schemaOf(collectionId));
+    } else if (match !== null) {
+      order = [sql`bm25(${itemsFts})`, sql`${schema.items}.rowid`];
+    } else {
+      order = [sql`${schema.items}.rowid`];
+    }
+
+    if (match === null) {
+      const rows = this.#db
+        .select()
+        .from(schema.items)
+        .where(and(...conditions))
+        .orderBy(...order)
+        .all();
+      return rows.map(rowToItem);
+    }
     const rows = this.#db
-      .select()
+      .select({ item: schema.items })
       .from(schema.items)
-      .where(and(...conditions))
+      .innerJoin(itemsSearchKey, eq(itemsSearchKey.itemId, schema.items.id))
+      .innerJoin(itemsFts, eq(itemsFts.rowid, itemsSearchKey.key))
+      .where(and(...conditions, sql`${itemsFts} MATCH ${match}`))
+      .orderBy(...order)
       .all();
-    return rows.map(rowToItem);
+    return rows.map((row) => rowToItem(row.item));
+  }
+
+  /**
+   * Rebuilds the search index from scratch. Touching every item's fields fires
+   * the update trigger, which holds the one definition of what is searchable.
+   */
+  reindex(): void {
+    this.#db.transaction((tx) => {
+      tx.run(sql`DELETE FROM ${itemsFts}`);
+      tx.run(sql`UPDATE ${schema.items} SET ${sql.identifier("fields")} = ${sql.identifier("fields")}`);
+    });
+  }
+
+  #schemaOf(collectionId: string): FieldDefinition[] {
+    const row = this.#db
+      .select({ fields: schema.collections.fields })
+      .from(schema.collections)
+      .where(eq(schema.collections.id, collectionId))
+      .get();
+    return row ? (JSON.parse(row.fields) as FieldDefinition[]) : [];
   }
 
   /**
@@ -143,9 +318,8 @@ export class ItemsRepository {
   async findByFieldValue(collectionId: string, fieldId: string, value: string | number | boolean): Promise<Item[]> {
     // JSON booleans come back from json_extract() as integers.
     const compare = typeof value === "boolean" ? (value ? 1 : 0) : value;
-    // The field id is embedded in a JSON path string literal, so escape per JSON string rules.
-    const escaped = fieldId.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
-    const path = `$."${escaped}"`;
+    const path = fieldPath(fieldId);
+    if (path === null) return [];
     const rows = this.#db
       .select()
       .from(schema.items)

@@ -6,6 +6,7 @@ import { createErrorReporter, type ErrorReporter, toReportableError } from "@myc
 import type { DatabaseHandle } from "@mycollections/db";
 import Fastify from "fastify";
 import { DEFAULT_DEV_ORIGINS, isLoopbackHost, normalizeDevOrigins } from "./config.js";
+import { pathOf } from "./logger.js";
 import { registerCollectionRoutes } from "./routes/collections.js";
 import { registerExportRoutes } from "./routes/export.js";
 import { registerItemRoutes } from "./routes/items.js";
@@ -90,6 +91,15 @@ export async function buildApp(options: AppOptions) {
   const errorReporter =
     options.errorReporter ??
     createErrorReporter({ sink: (report) => app.log.error({ errorReport: report }, "error captured") });
+
+  // Fastify's default 404 logs and answers "Route GET:<url> not found" with the
+  // query string inside, which the `req` serializer never sees — and query strings
+  // carry search text, which is collection data (#41). Same shape, path only.
+  app.setNotFoundHandler((request, reply) => {
+    const message = `Route ${request.method}:${pathOf(request.url)} not found`;
+    request.log.info(message);
+    return reply.code(404).send({ statusCode: 404, error: "Not Found", message });
+  });
 
   app.setErrorHandler((error: unknown, request, reply) => {
     const rawStatus = (error as { statusCode?: unknown }).statusCode;
