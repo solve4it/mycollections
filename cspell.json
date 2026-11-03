@@ -76,7 +76,11 @@
     "wordmark",
     "worktree",
     "worktrees",
-    "EEXIST"
+    "EEXIST",
+    "NOCASE",
+    "bm25",
+    "UNINDEXED",
+    "diacritics"
   ],
   "ignoreRegExpList": ["/PVT_[a-zA-Z0-9]+/g", "/PVTSSF_[a-zA-Z0-9]+/g", "/[a-f0-9]{8,}/g"],
   "enableGlobDot": false,

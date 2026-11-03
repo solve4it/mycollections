@@ -14,6 +14,7 @@ export {
 } from "./repositories/collections.js";
 export {
   type CreateItemInput,
+  InvalidItemQueryError,
   ItemsRepository,
   type ListItemsOptions,
   type UpdateItemInput,

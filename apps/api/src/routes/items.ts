@@ -1,5 +1,5 @@
-import { ITEM_STATUSES } from "@mycollections/core";
-import type { DatabaseHandle } from "@mycollections/db";
+import { ITEM_SEARCH_MAX_LENGTH, ITEM_STATUSES, type ItemSort, parseItemSort } from "@mycollections/core";
+import { type DatabaseHandle, InvalidItemQueryError } from "@mycollections/db";
 import type { FastifyInstance } from "fastify";
 
 const createBodySchema = {
@@ -21,21 +21,43 @@ const updateBodySchema = {
   },
 } as const;
 
-const statusQuerySchema = {
+/**
+ * Query for listing items. `q` and `sort` are single strings: a repeated key
+ * arrives as an array and fails validation rather than one value silently
+ * winning. Both carry collection data, so the request logger strips the whole
+ * query string (see logger.ts).
+ */
+const listQuerySchema = {
   type: "object",
   properties: {
     status: { type: "string", enum: ITEM_STATUSES },
+    q: { type: "string", maxLength: ITEM_SEARCH_MAX_LENGTH },
+    // A field id is free text, so allow room for one beyond the `-field:` prefix.
+    sort: { type: "string", minLength: 1, maxLength: 300 },
   },
 } as const;
 
 export async function registerItemRoutes(app: FastifyInstance, db: DatabaseHandle) {
-  app.get("/api/collections/:id/items", { schema: { querystring: statusQuerySchema } }, async (request, _reply) => {
+  app.get("/api/collections/:id/items", { schema: { querystring: listQuerySchema } }, async (request, _reply) => {
     const { id } = request.params as { id: string };
-    const { status } = request.query as { status?: string };
+    const query = request.query as { status?: string; q?: string; sort?: string };
     const collection = await db.collections.getById(id);
     if (!collection) throw app.httpErrors.notFound("Collection not found");
-    // biome-ignore lint/suspicious/noExplicitAny: status narrowed by Fastify schema enum
-    return db.items.listByCollection(id, { status: status as any });
+    let sort: ItemSort | undefined;
+    if (query.sort !== undefined) {
+      const parsed = parseItemSort(query.sort);
+      // Fixed text: the sort key may be a field id, which is collection data.
+      if (!parsed) throw app.httpErrors.badRequest("Invalid sort");
+      sort = parsed;
+    }
+    try {
+      // biome-ignore lint/suspicious/noExplicitAny: status narrowed by Fastify schema enum
+      return await db.items.listByCollection(id, { status: query.status as any, q: query.q, sort });
+    } catch (err) {
+      // InvalidItemQueryError messages are fixed text; anything else is a 500.
+      if (err instanceof InvalidItemQueryError) throw app.httpErrors.badRequest(err.message);
+      throw err;
+    }
   });
 
   app.post("/api/collections/:id/items", { schema: { body: createBodySchema } }, async (request, reply) => {

@@ -13,15 +13,30 @@ An earlier draft of this package called for an in-memory SQLite mirror in front 
 | `media`        | Per-item media (images) with primary designation and `storage_path`                                                       |
 | `user_profile` | Account info from the auth layer plus a JSON settings blob (theme, locale, opt-outs)                                      |
 
-Later phases add their own tables via new migrations: `share_links` (#48), `plugin_data` (#54/#55), `licenses` (#57), `mutations`/`sync_state` (#49), and the `items_fts` FTS5 table (#41).
+Later phases add their own tables via new migrations: `share_links` (#48), `plugin_data` (#54/#55), `licenses` (#57), and `mutations`/`sync_state` (#49).
 
 - **Soft delete**: `collections`, `items`, and `media` carry a nullable `deleted_at`; repositories exclude soft-deleted rows unless asked (`includeDeleted`), and offer `restore()`. Hard deletes cascade (collection → items → media) via foreign keys.
 - **Trash**: `listDeleted()` on collections and items returns what soft delete has hidden, most recently deleted first (ties break on id, so the order is stable). `purge()` permanently removes a row, carrying the `deleted_at` test inside the `DELETE` so a concurrent restore cannot lose the row; it is a no-op on anything live. Deleting a collection stamps no child row — its items are hidden with it and return with it, so `items.listDeleted()` omits items whose collection is itself deleted.
 - **Timestamps** are ISO 8601 strings, matching the core Zod schemas.
 
+## Search (`items_fts`, #41)
+
+`items_fts` is an FTS5 table (`unicode61`, diacritics removed — "cafe" finds "Café") that triggers keep in step with `items`. Its rowid is never `items.rowid`: `items` has a text primary key, so its rowid is implicit and may be renumbered, which would attach one item's text to another. Nor is it found through an item-id column inside the FTS table, which FTS5 cannot index — every write would scan the whole index. A plain table, `items_search_key`, gives each item an `INTEGER PRIMARY KEY` (a rowid alias, which `VACUUM` keeps), and that key is the FTS rowid, so both lookups are indexed. Neither table is in `schema.ts`; the triggers are their only writers.
+
+- **What is searchable is decided by the collection's schema**: values of `text`, `select`, `multiselect`, `tags` and `number` fields (a number stored in a text field included). Urls, emails, dates, ratings, currency, booleans and images are not searched, nor are values left under a key the schema no longer defines. Changing a collection's `fields` re-indexes its items.
+- **Queries cannot carry FTS syntax.** `listByCollection(id, { q })` reduces the text to at most ten distinct words containing a letter or digit, each a quoted prefix phrase (`"dun"*`); all must match. Control characters are blanked first — a NUL would make SQLite throw.
+- **Sort** (`{ sort }`, an `ItemSort` from core): `createdAt`, `updatedAt`, `name` (the first of the schema's first 100 fields holding a string, number or boolean — the web's `itemLabel` rule), or one field by its schema type — numbers numerically, text case-insensitively (ASCII only: SQLite's `NOCASE` does not fold "é"), booleans false first. Empty values sort last in either direction; ties keep insertion order. Tags, multiselect and image fields cannot be sorted (`InvalidItemQueryError`). Without a sort, results come in insertion order, or ranked by `bm25` when `q` has terms.
+- **Recovery**: `items.reindex()` rebuilds the index from `items`.
+
 ## Migrations
 
 Migrations are generated with drizzle-kit (`pnpm generate`) into `drizzle/` and ship with the package. `openDatabase()` applies pending migrations automatically on startup. If the database already has data and migrations are pending, a backup copy is written next to it first (`<path>.<timestamp>.bak`) — restoring is opening that file.
+
+Some migrations are hand-written (`pnpm exec drizzle-kit generate --custom --name <name>`), because drizzle-kit cannot express virtual tables or triggers — `0001_items_fts.sql` is one. Three rules follow:
+
+- **Every statement gets its own `--> statement-breakpoint`.** The migrator prepares each chunk as a single statement; semicolons inside a trigger's `BEGIN … END` are fine.
+- **Never run `drizzle-kit push` or `pull` against a real database.** They diff against the live schema, which holds `items_fts` and its triggers that `schema.ts` cannot describe, and would drop them.
+- **A migration that rebuilds `items`** (drizzle-kit's create-copy-drop-rename pattern for most column changes) drops its triggers with the old table. It must recreate the `items_fts` triggers (and the `items_search_key` foreign key) and end with `DELETE FROM items_fts; UPDATE items SET fields = fields;` to re-index. The trigger-inventory test in `items-query.test.ts` fails if the triggers go missing.
 
 ## File permissions
 
@@ -51,14 +66,15 @@ handle.close();
 
 ## What's exported
 
-| Export                            | Purpose                                                                                                           |
-| --------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
-| `openDatabase` / `DatabaseHandle` | Open + migrate the database; returns repositories, the Drizzle instance (`db`), and the raw connection (`sqlite`) |
-| `CollectionsRepository`           | CRUD, soft delete/restore, `listDeleted()`/`purge()` for the trash, hard delete                                   |
-| `ItemsRepository`                 | CRUD, list/filter by status, `listDeleted()`/`purge()` for the trash, `findByFieldValue()` via `json_extract()`   |
-| `MediaRepository`                 | CRUD plus `setPrimary()` (demotes the previous primary in the same transaction)                                   |
-| `UserProfileRepository`           | `get()` / `upsert()` keyed by the auth layer's account key                                                        |
-| `emptyTrash`                      | Permanently removes every trashed collection (cascading to its items) and every trashed item, in one transaction  |
-| `schema`                          | The Drizzle table definitions, for callers needing custom queries                                                 |
+| Export                            | Purpose                                                                                                                                       |
+| --------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| `openDatabase` / `DatabaseHandle` | Open + migrate the database; returns repositories, the Drizzle instance (`db`), and the raw connection (`sqlite`)                             |
+| `CollectionsRepository`           | CRUD, soft delete/restore, `listDeleted()`/`purge()` for the trash, hard delete                                                               |
+| `ItemsRepository`                 | CRUD, list by status / search (`q`) / `sort`, `reindex()`, `listDeleted()`/`purge()` for the trash, `findByFieldValue()` via `json_extract()` |
+| `MediaRepository`                 | CRUD plus `setPrimary()` (demotes the previous primary in the same transaction)                                                               |
+| `UserProfileRepository`           | `get()` / `upsert()` keyed by the auth layer's account key                                                                                    |
+| `emptyTrash`                      | Permanently removes every trashed collection (cascading to its items) and every trashed item, in one transaction                              |
+| `InvalidItemQueryError`           | Thrown by `listByCollection` for a sort the collection cannot honour; its message is fixed text, safe for a 400                               |
+| `schema`                          | The Drizzle table definitions, for callers needing custom queries                                                                             |
 
 Repositories validate reads and writes with the core Zod schemas, so malformed rows fail loudly at the boundary. All tests run against real SQLite (no mocks).
