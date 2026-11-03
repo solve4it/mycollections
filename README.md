@@ -16,7 +16,7 @@ MyCollections helps you catalog, organize, and explore the things you collect â€
 
 ## Tech Stack
 
-- **Runtime**: Node.js 24 LTS
+- **Runtime**: Node.js 26 (pinned in `.nvmrc`)
 - **Package manager**: pnpm workspaces (monorepo via Turborepo)
 - **Language**: TypeScript
 - **Linting & formatting**: [Biome](https://biomejs.dev/)

@@ -4,16 +4,26 @@ This guide takes you from a fresh clone to a running MyCollections dev environme
 
 ## Prerequisites
 
-- **Node.js 24 LTS** (currently `24.14.1`, pinned in `.nvmrc`). We recommend [fnm](https://github.com/Schniz/fnm) for fast version switching:
+- **Node.js 26** — the exact version is pinned in `.nvmrc`. We recommend [fnm](https://github.com/Schniz/fnm) for fast version switching:
 
   ```bash
   fnm install && fnm use
   ```
-- **pnpm** — the version is pinned in `package.json` via `packageManager` and managed automatically by Corepack:
+- **pnpm** — the version is pinned in `package.json` via `packageManager`, with its sha512, and run through
+  [Corepack](https://github.com/nodejs/corepack). Node 25 stopped shipping Corepack, so install it from npm first:
 
   ```bash
+  npm install -g corepack@latest
   corepack enable
   ```
+
+  `pnpm -v` inside the repo should then print the pinned version. Corepack is the route that checks the
+  hash: it refuses a pnpm download that does not match, where pnpm's own version switching runs it anyway.
+  Global npm packages live inside each Node installation, so after fnm installs a new Node version, run
+  both commands again — otherwise `pnpm` is missing, and the pre-commit hook fails with `pnpm: command not found`.
+  No `sudo`: fnm's Node installations belong to you. If the install stops with `EEXIST` on `pnpm`, `pnpx` or
+  `yarn`, that Node already has a copy installed with npm, which bypasses the hash check — remove it with
+  `npm uninstall -g pnpm @pnpm/exe yarn` (`npm ls -g --depth=0` shows what is there) and install Corepack again.
 - **Git** (any recent version)
 - **Docker Desktop** (or compatible runtime) — only required if you want to use the DevContainer
 
@@ -33,7 +43,7 @@ MyCollections ships with a [Dev Container](https://containers.dev/) definition s
 
 **Requirements:** A running container runtime — typically [Docker Desktop](https://www.docker.com/products/docker-desktop/), but any OCI-compatible runtime supported by the VS Code Dev Containers extension works (Podman, OrbStack, Rancher Desktop, Colima, GitHub Codespaces, etc.). The runtime must be running before you reopen in container.
 
-The container is built on `mcr.microsoft.com/devcontainers/typescript-node:24` and configures Corepack, runs `pnpm install` automatically, forwards the dev-server ports for the API/docs/web apps, and pre-installs the recommended VS Code extensions (Biome, cSpell, Vitest, Astro, GitHub Actions, etc.).
+The container is built on `mcr.microsoft.com/devcontainers/typescript-node:26`, with the Node feature pinned to the `.nvmrc` version (the image's own Node can lag behind it). It uninstalls the pnpm the image ships, installs Corepack from npm, and runs `corepack enable`, so `pnpm` and `pnpx` are Corepack's — the image's copy, and its `pn`/`pnx` aliases (gone from the container), skip the `packageManager` hash check, and the feature is told not to install another (`pnpmVersion: "none"`). It then runs `pnpm install` automatically, forwards the dev-server ports for the API/docs/web apps, and pre-installs the recommended VS Code extensions (Biome, cSpell, Vitest, Astro, GitHub Actions, etc.).
 
 To use it, open the repo in VS Code and choose **"Reopen in Container"** (or run `Dev Containers: Reopen in Container` from the command palette). The first build downloads the image; subsequent opens are instant. The DevContainer config lives in [`.devcontainer/devcontainer.json`](./.devcontainer/devcontainer.json).
 
