@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   createCollection,
   createItem,
@@ -6,6 +6,7 @@ import {
   emptyTrash,
   getCollection,
   type ItemInput,
+  type ItemListQuery,
   importData,
   listCollections,
   listItems,
@@ -56,8 +57,27 @@ export function useCollection(id: string) {
   return useQuery({ queryKey: ["collections", id], queryFn: () => getCollection(id) });
 }
 
-export function useItems(collectionId: string) {
-  return useQuery({ queryKey: ["collections", collectionId, "items"], queryFn: () => listItems(collectionId) });
+/**
+ * The cache key of one view of a collection's items (#41). Under the
+ * `["collections", id, "items"]` prefix every mutation invalidates, so a change
+ * fetches again whichever search is on screen and marks the others stale.
+ */
+export function itemsQueryKey(collectionId: string, query: ItemListQuery = {}) {
+  return ["collections", collectionId, "items", { q: query.q?.trim() || undefined, sort: query.sort }] as const;
+}
+
+/**
+ * A collection's items, narrowed and ordered by `query`. The previous view
+ * stays on screen while the next one loads (`keepPreviousData`), so each
+ * keystroke of a search does not flash the list back to a skeleton.
+ */
+export function useItems(collectionId: string, query: ItemListQuery = {}, options: { enabled?: boolean } = {}) {
+  return useQuery({
+    queryKey: itemsQueryKey(collectionId, query),
+    queryFn: () => listItems(collectionId, query),
+    placeholderData: keepPreviousData,
+    enabled: options.enabled ?? true,
+  });
 }
 
 export function useCreateItem(collectionId: string) {

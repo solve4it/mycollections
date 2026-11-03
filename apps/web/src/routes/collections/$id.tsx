@@ -1,19 +1,23 @@
 import type { Collection, Item } from "@mycollections/core";
-import type { UseQueryResult } from "@tanstack/react-query";
-import { createRoute, Link, redirect } from "@tanstack/react-router";
+import { type UseQueryResult, useQueryClient } from "@tanstack/react-query";
+import { createRoute, Link, redirect, useNavigate } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { DynamicItemForm } from "../../components/DynamicItemForm.js";
 import { EmptyState } from "../../components/EmptyState.js";
 import { FailureSurface } from "../../components/ErrorScreen.js";
 import { Icon } from "../../components/Icon.js";
+import { ItemSearchBox } from "../../components/ItemSearchBox.js";
 import { CollectionDetailSkeleton, ItemListSkeleton } from "../../components/Skeleton.js";
 import { UndoToast } from "../../components/UndoToast.js";
+import { useAnnounce } from "../../lib/announcer.js";
 import { getToken } from "../../lib/api-client.js";
 import { type FocusDestination, useFocusHandoff } from "../../lib/focus-handoff.js";
+import { effectiveSort, type ItemSearch, validateItemSearch } from "../../lib/item-search.js";
 import { CONTENT_LINK_ACTIVE_OPTIONS } from "../../lib/links.js";
 import { type PageName, usePageTitle } from "../../lib/page-title.js";
 import {
+  itemsQueryKey,
   useCollection,
   useCreateItem,
   useDeleteItem,
@@ -30,6 +34,9 @@ export const collectionDetailRoute = createRoute({
   // arrives; `dynamicTitle` is what tells the shell a better name is coming and
   // that the route-change announcement should wait for it (#309).
   staticData: { titleKey: "collections:detail_title", dynamicTitle: true },
+  // The search box's state (#41). Shape only — whether a sort suits this
+  // collection is decided once its fields are known (`effectiveSort`).
+  validateSearch: validateItemSearch,
   beforeLoad: () => {
     if (!getToken()) throw redirect({ to: "/setup" });
   },
@@ -52,6 +59,14 @@ export const collectionDetailRoute = createRoute({
  * between them.
  */
 export const ADD_CONFIRMATION_MS = 10_000;
+
+/**
+ * How long a search result has to stay put before its count is spoken (#41).
+ * The count is visible as soon as it arrives; the announcement waits so it
+ * does not talk over a user who is still typing — GOV.UK's accessible
+ * autocomplete waits about as long before its status message.
+ */
+export const RESULT_ANNOUNCE_DELAY_MS = 1_000;
 
 /**
  * Renders a stored field value. Booleans become a labelled icon rather than the
@@ -100,7 +115,23 @@ function CollectionDetailPage() {
   // took the dashboard's plural copy for want of (#347).
   const { t: tCollections } = useTranslation("collections");
   const collectionQuery = useCollection(id);
-  const itemsQuery = useItems(id);
+  const search = collectionDetailRoute.useSearch();
+  const navigate = useNavigate({ from: collectionDetailRoute.fullPath });
+  const announce = useAnnounce();
+  const queryClient = useQueryClient();
+  const q = search.q?.trim() ?? "";
+  const sort = collectionQuery.data ? effectiveSort(search.sort, collectionQuery.data.fields) : undefined;
+  const itemQuery = { q: q || undefined, sort };
+  // A sort in the URL waits for the collection: only its fields say whether
+  // the sort can be honoured, and asking without knowing risks a 400.
+  const itemsQuery = useItems(id, itemQuery, { enabled: !search.sort || collectionQuery.data !== undefined });
+  const searchInputRef = useRef<HTMLInputElement>(null);
+
+  /** Whether the list as last fetched — the current search — holds this item. */
+  function isListed(itemId: string): boolean {
+    const listed = queryClient.getQueryData<Item[]>(itemsQueryKey(id, itemQuery));
+    return listed?.some((listedItem) => listedItem.id === itemId) ?? false;
+  }
   const createItem = useCreateItem(id);
   const restoreItem = useRestoreItem(id);
   // The undo shortcut outlives the row that spawned it: once the delete lands and
@@ -114,7 +145,7 @@ function CollectionDetailPage() {
   // resets it, and this sentence needs a life span of its own (#336 made the
   // same move for the trash). Each success stores a new object, so the effect
   // below restarts on exactly the event that should restart it.
-  const [added, setAdded] = useState<{ name: string } | null>(null);
+  const [added, setAdded] = useState<{ name: string; hidden: boolean } | null>(null);
   // Bumped on each successful add to clear the form (#368). A count rather than
   // a boolean: two adds in a row have to clear it twice.
   const [addedCount, setAddedCount] = useState(0);
@@ -132,6 +163,38 @@ function CollectionDetailPage() {
   // here, at the page, because the page is what survives all three.
   const handOffFocus = useFocusHandoff();
   const itemsHeadingRef = useRef<HTMLHeadingElement>(null);
+
+  function setSearch(next: string) {
+    // `replace` so keystrokes do not fill the history; `resetScroll: false` or
+    // the router scrolls to the top on every search (#41).
+    void navigate({
+      search: (prev: ItemSearch) => ({ ...prev, q: next || undefined }),
+      replace: true,
+      resetScroll: false,
+    });
+  }
+
+  /**
+   * The result count, spoken once a search settles (#41). Keyed on the search
+   * itself, not on fetches: a refetch after an edit, delete or undo re-runs the
+   * same search, and repeating the count on top of the toast would be noise.
+   * The search the page opened on is not announced — the route announcement
+   * names the page and the count is on screen — but clearing a search is.
+   */
+  const settled = itemsQuery.data !== undefined && !itemsQuery.isPlaceholderData && !itemsQuery.isFetching;
+  const settledQ = settled ? q : null;
+  const settledCount = settled ? (itemsQuery.data?.length ?? 0) : null;
+  const announcedSearch = useRef(q);
+  useEffect(() => {
+    if (settledQ === null || settledCount === null || settledQ === announcedSearch.current) return;
+    const timer = setTimeout(() => {
+      announcedSearch.current = settledQ;
+      if (!settledQ) announce(t("showing_all", { count: settledCount }));
+      else if (settledCount === 0) announce(t("no_matches", { q: settledQ }));
+      else announce(t("items_match", { count: settledCount, q: settledQ }));
+    }, RESULT_ANNOUNCE_DELAY_MS);
+    return () => clearTimeout(timer);
+  }, [settledQ, settledCount, announce, t]);
 
   /**
    * Where focus goes when the row at `index` is removed.
@@ -206,9 +269,31 @@ function CollectionDetailPage() {
       <h2 ref={itemsHeadingRef} tabIndex={-1}>
         {t("items_heading")}
       </h2>
+      <ItemSearchBox value={search.q ?? ""} onSearch={setSearch} inputRef={searchInputRef} />
       <ItemList
         collection={collection}
         query={itemsQuery}
+        q={q}
+        onClearSearch={() => {
+          // The button goes with the empty state it sits in, so focus goes to
+          // the box whose text was cleared — where the next search starts.
+          handOffFocus(() => searchInputRef.current);
+          setSearch("");
+        }}
+        onSaved={(saved, index) => {
+          // The row's own Edit if the saved item is still listed (return to
+          // invoker); if the search no longer matches it, the row that took its
+          // place (successor, as for a delete). Decided here, at the page,
+          // because the row may be the thing that disappears (#41).
+          if (isListed(saved.id)) {
+            handOffFocus(
+              () => document.querySelector<HTMLElement>(`[data-item-id="${saved.id}"] [data-row-edit]`) ?? null,
+            );
+          } else {
+            handOffFocus(rowDestination(index));
+            announce(t("saved_hidden", { name: itemLabel(collection, saved, t("untitled")) }));
+          }
+        }}
         onDeleting={(index) => handOffFocus(rowDestination(index))}
         onDeleted={(item, index) => {
           // Drop any failure from a previous undo: the new toast is about a new
@@ -248,7 +333,15 @@ function CollectionDetailPage() {
               dismissLabel={t("dismiss_undo")}
               onAction={() =>
                 restoreItem.mutate(undo.itemId, {
-                  onSuccess: () => {
+                  onSuccess: (restored) => {
+                    // A search can hide the restored item (#41); then focus
+                    // goes where the delete left it, as Dismiss does.
+                    if (!isListed(undo.itemId)) {
+                      handOffFocus(rowDestination(undo.index));
+                      announce(t("restored_hidden", { name: itemLabel(collection, restored, t("untitled")) }));
+                      setUndo(null);
+                      return;
+                    }
                     // Focus follows the item back. The destination does not
                     // exist yet at this point — the toast unmounts on the next
                     // line and the row only reappears once the list has been
@@ -284,7 +377,9 @@ function CollectionDetailPage() {
           onSubmit={(payload) =>
             createItem.mutate(payload, {
               onSuccess: (item) => {
-                setAdded({ name: itemLabel(collection, item, t("untitled")) });
+                // Runs after the list has been fetched again, so whether the
+                // search shows the new item is known now and said once (#41).
+                setAdded({ name: itemLabel(collection, item, t("untitled")), hidden: !isListed(item.id) });
                 setAddedCount((count) => count + 1);
               },
             })
@@ -304,7 +399,7 @@ function CollectionDetailPage() {
             lose the announcement. The failure below stays outside it, keeping
             `role="alert"` as a live region in its own right. */}
         <div className="add-item-live" aria-live="polite">
-          {added && <p>{t("added_status", { name: added.name })}</p>}
+          {added && <p>{t(added.hidden ? "added_status_hidden" : "added_status", { name: added.name })}</p>}
         </div>
         {createItem.isError && <p role="alert">{t("create_error")}</p>}
       </section>
@@ -315,6 +410,11 @@ function CollectionDetailPage() {
 interface ItemListProps {
   collection: Collection;
   query: UseQueryResult<Item[]>;
+  /** The search in force, trimmed; empty when none (#41). */
+  q: string;
+  onClearSearch: () => void;
+  /** After a row's Save has landed and the list has been fetched again. */
+  onSaved: (item: Item, index: number) => void;
   /** Asked for as a delete starts, while the row is still on screen. */
   onDeleting: (index: number) => void;
   onDeleted: (item: Item, index: number) => void;
@@ -325,7 +425,7 @@ interface ItemListProps {
  * and there are none" as distinct outcomes — collapsing the two is what made a
  * failed load read as an empty collection (#228).
  */
-function ItemList({ collection, query, onDeleting, onDeleted }: ItemListProps) {
+function ItemList({ collection, query, q, onClearSearch, onSaved, onDeleting, onDeleted }: ItemListProps) {
   const { t } = useTranslation("items");
   const items = query.data;
 
@@ -340,12 +440,24 @@ function ItemList({ collection, query, onDeleting, onDeleted }: ItemListProps) {
     return <ItemListSkeleton label={t("loading_items")} />;
   }
 
+  // "Nothing matches" and "nothing here" are different news, with different
+  // ways out (#41).
+  if (items.length === 0 && q)
+    return (
+      <EmptyState title={t("no_matches", { q })} description={t("no_matches_description")}>
+        <button type="button" className="touch-target button-quiet" onClick={onClearSearch}>
+          {t("clear_search")}
+        </button>
+      </EmptyState>
+    );
   if (items.length === 0) return <EmptyState title={t("empty_items")} description={t("empty_items_description")} />;
 
   return (
     <>
       {query.error && <p role="alert">{t("items_reload_error")}</p>}
-      <ul className="item-list">
+      {/* Visible, not live: the announcer speaks it once the search settles. */}
+      {q && <p className="item-count">{t("items_match", { count: items.length, q })}</p>}
+      <ul className="item-list" aria-busy={query.isPlaceholderData || undefined}>
         {items.map((item, index) => (
           <ItemRow
             key={item.id}
@@ -353,6 +465,7 @@ function ItemList({ collection, query, onDeleting, onDeleted }: ItemListProps) {
             item={item}
             onDeleting={() => onDeleting(index)}
             onDeleted={() => onDeleted(item, index)}
+            onSaved={(saved) => onSaved(saved, index)}
           />
         ))}
       </ul>
@@ -363,11 +476,12 @@ function ItemList({ collection, query, onDeleting, onDeleted }: ItemListProps) {
 interface ItemRowProps {
   collection: Collection;
   item: Item;
+  onSaved: (item: Item) => void;
   onDeleting: () => void;
   onDeleted: () => void;
 }
 
-function ItemRow({ collection, item, onDeleting, onDeleted }: ItemRowProps) {
+function ItemRow({ collection, item, onDeleting, onDeleted, onSaved }: ItemRowProps) {
   const { t } = useTranslation("items");
   const updateItem = useUpdateItem(collection.id);
   const deleteItem = useDeleteItem(collection.id);
@@ -417,8 +531,11 @@ function ItemRow({ collection, item, onDeleting, onDeleted }: ItemRowProps) {
               updateItem.mutate(
                 { itemId: item.id, input: payload },
                 {
-                  onSuccess: () => {
-                    handOffFocus(toEdit);
+                  // The page picks the destination: a search may have taken
+                  // this row off the list, and this row's handoff would die
+                  // with it (#41).
+                  onSuccess: (saved) => {
+                    onSaved(saved);
                     setEditing(false);
                   },
                 },

@@ -56,7 +56,9 @@ export function ItemSearchBox({ value, onSearch, inputRef }: ItemSearchBoxProps)
     // `<search>` is the search landmark in every current browser. jsdom does not
     // map it, so the unit tests find it by tag and the e2e run checks the role.
     <search className="item-search">
+      {/* .form-row: the same label and control styling as every other form. */}
       <form
+        className="form-row"
         onSubmit={(event) => {
           event.preventDefault();
           push(text);
