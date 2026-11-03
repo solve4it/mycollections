@@ -212,8 +212,8 @@ If your browser is not on the same machine as the API — a VM, WSL, a devcontai
 
 The API logs structured JSON via Fastify's built-in [pino](https://getpino.io/) logger — every request is logged automatically. `LOG_LEVEL` overrides the level (`fatal`–`trace`; defaults to `debug` in dev, `info` in production). `Authorization` and `Cookie` request headers are redacted. Two rules when touching logging:
 
-- **Never log request bodies** — they contain collection data. The default `req` serializer only logs method/URL/host; don't add a custom serializer that includes headers or bodies.
-- **Never put user data or secrets in query strings** — the request URL is logged as-is.
+- **Never log request bodies** — they contain collection data. The `req` serializer in `apps/api/src/logger.ts` logs method, path, host and remote address; don't extend it with headers or bodies.
+- **Query strings are not logged either.** Item search (`?q=`) and sort keys naming fields (`?sort=field:<id>`) carry collection data, so the serializer cuts the URL at `?` (#41). Never put secrets in a query string regardless — it still reaches browser history and any proxy in between.
 
 ### Error reporting
 
