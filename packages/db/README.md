@@ -21,11 +21,11 @@ Later phases add their own tables via new migrations: `share_links` (#48), `plug
 
 ## Search (`items_fts`, #41)
 
-`items_fts` is an FTS5 table (`unicode61`, diacritics removed — "cafe" finds "Café") that triggers keep in step with `items`. It is keyed by an `item_id` column, never by rowid: `items` has a text primary key, so its rowid is implicit and may be renumbered, which would attach one item's text to another.
+`items_fts` is an FTS5 table (`unicode61`, diacritics removed — "cafe" finds "Café") that triggers keep in step with `items`. Its rowid is never `items.rowid`: `items` has a text primary key, so its rowid is implicit and may be renumbered, which would attach one item's text to another. Nor is it found through an item-id column inside the FTS table, which FTS5 cannot index — every write would scan the whole index. A plain table, `items_search_key`, gives each item an `INTEGER PRIMARY KEY` (a rowid alias, which `VACUUM` keeps), and that key is the FTS rowid, so both lookups are indexed. Neither table is in `schema.ts`; the triggers are their only writers.
 
-- **What is searchable is decided by the collection's schema**: values of `text`, `select`, `multiselect`, `tags` and `number` fields. Urls, emails, dates, ratings, currency, booleans and images are not searched, nor are values left under a key the schema no longer defines. Changing a collection's `fields` re-indexes its items.
+- **What is searchable is decided by the collection's schema**: values of `text`, `select`, `multiselect`, `tags` and `number` fields (a number stored in a text field included). Urls, emails, dates, ratings, currency, booleans and images are not searched, nor are values left under a key the schema no longer defines. Changing a collection's `fields` re-indexes its items.
 - **Queries cannot carry FTS syntax.** `listByCollection(id, { q })` reduces the text to at most ten distinct words containing a letter or digit, each a quoted prefix phrase (`"dun"*`); all must match. Control characters are blanked first — a NUL would make SQLite throw.
-- **Sort** (`{ sort }`, an `ItemSort` from core): `createdAt`, `updatedAt`, `name` (the first schema field with a scalar value), or one field by its schema type — numbers numerically, text case-insensitively (ASCII only: SQLite's `NOCASE` does not fold "é"), booleans false first. Empty values sort last in either direction; ties keep insertion order. Tags, multiselect and image fields cannot be sorted (`InvalidItemQueryError`). With `q` and no sort, results are ranked by `bm25`.
+- **Sort** (`{ sort }`, an `ItemSort` from core): `createdAt`, `updatedAt`, `name` (the first of the schema's first 100 fields holding a string, number or boolean — the web's `itemLabel` rule), or one field by its schema type — numbers numerically, text case-insensitively (ASCII only: SQLite's `NOCASE` does not fold "é"), booleans false first. Empty values sort last in either direction; ties keep insertion order. Tags, multiselect and image fields cannot be sorted (`InvalidItemQueryError`). Without a sort, results come in insertion order, or ranked by `bm25` when `q` has terms.
 - **Recovery**: `items.reindex()` rebuilds the index from `items`.
 
 ## Migrations
@@ -36,7 +36,7 @@ Some migrations are hand-written (`pnpm exec drizzle-kit generate --custom --nam
 
 - **Every statement gets its own `--> statement-breakpoint`.** The migrator prepares each chunk as a single statement; semicolons inside a trigger's `BEGIN … END` are fine.
 - **Never run `drizzle-kit push` or `pull` against a real database.** They diff against the live schema, which holds `items_fts` and its triggers that `schema.ts` cannot describe, and would drop them.
-- **A migration that rebuilds `items`** (drizzle-kit's create-copy-drop-rename pattern for most column changes) drops its triggers with the old table. It must recreate the `items_fts` triggers and end with `DELETE FROM items_fts; UPDATE items SET fields = fields;` to re-index. The trigger-inventory test in `items-query.test.ts` fails if the triggers go missing.
+- **A migration that rebuilds `items`** (drizzle-kit's create-copy-drop-rename pattern for most column changes) drops its triggers with the old table. It must recreate the `items_fts` triggers (and the `items_search_key` foreign key) and end with `DELETE FROM items_fts; UPDATE items SET fields = fields;` to re-index. The trigger-inventory test in `items-query.test.ts` fails if the triggers go missing.
 
 ## File permissions
 

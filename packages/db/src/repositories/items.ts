@@ -9,7 +9,7 @@ import {
 } from "@mycollections/core";
 import { and, asc, desc, eq, isNotNull, isNull, type SQL, sql } from "drizzle-orm";
 import type { BetterSQLite3Database } from "drizzle-orm/better-sqlite3";
-import { sqliteTable, text } from "drizzle-orm/sqlite-core";
+import { integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
 import * as schema from "../schema.js";
 import type { ReadOptions } from "./collections.js";
 import { stripUndefined } from "./strip-undefined.js";
@@ -49,10 +49,20 @@ export class InvalidItemQueryError extends Error {
 }
 
 /**
- * The FTS5 index the 0001 migration maintains. Declared here rather than in
- * `schema.ts` so drizzle-kit never tries to generate DDL for a virtual table.
+ * The FTS5 index the 0001 migration maintains, and the table giving each item
+ * the stable integer key that is its FTS rowid. Declared here rather than in
+ * `schema.ts` so drizzle-kit never tries to generate DDL for them — the
+ * migration's triggers are their only writers.
  */
-const itemsFts = sqliteTable("items_fts", { itemId: text("item_id"), body: text("body") });
+const itemsFts = sqliteTable("items_fts", { rowid: integer("rowid"), body: text("body") });
+const itemsSearchKey = sqliteTable("items_search_key", { key: integer("key"), itemId: text("item_id") });
+
+/**
+ * How many schema fields, in order, the name sort looks through for a name. It
+ * bounds the SQL: each field is one COALESCE argument, and SQLite refuses more
+ * than 1000. A name past the hundredth field is not a name anyone set out to sort by.
+ */
+const NAME_SORT_MAX_FIELDS = 100;
 
 /** At most this many distinct search terms are used; the rest are ignored. */
 const MAX_SEARCH_TERMS = 10;
@@ -103,16 +113,17 @@ function fieldSortValue(field: FieldDefinition, path: string): SQL | null {
 
 /**
  * An item's display name in SQL: the first schema field, in schema order, whose
- * value is a non-empty string or a number — the rule `itemLabel` in the web app
- * uses to name an item.
+ * value is a non-empty string, a number or a boolean — the rule `itemLabel` in
+ * the web app uses to name an item — among the first {@link NAME_SORT_MAX_FIELDS}.
  */
 function nameSortValue(fields: FieldDefinition[]): SQL | null {
   const column = schema.items.fields;
-  const candidates = fields.flatMap((field) => {
+  const candidates = fields.slice(0, NAME_SORT_MAX_FIELDS).flatMap((field) => {
     const path = fieldPath(field.id);
     if (path === null) return [];
+    // Booleans name an item "true"/"false" in the web, so they name it here too.
     return [
-      sql`CASE WHEN json_type(${column}, ${path}) IN ('integer', 'real') OR (json_type(${column}, ${path}) = 'text' AND json_extract(${column}, ${path}) <> '') THEN json_extract(${column}, ${path}) END`,
+      sql`CASE json_type(${column}, ${path}) WHEN 'integer' THEN json_extract(${column}, ${path}) WHEN 'real' THEN json_extract(${column}, ${path}) WHEN 'text' THEN NULLIF(json_extract(${column}, ${path}), '') WHEN 'true' THEN 'true' WHEN 'false' THEN 'false' END`,
     ];
   });
   if (candidates.length === 0) return null;
@@ -272,7 +283,8 @@ export class ItemsRepository {
     const rows = this.#db
       .select({ item: schema.items })
       .from(schema.items)
-      .innerJoin(itemsFts, eq(itemsFts.itemId, schema.items.id))
+      .innerJoin(itemsSearchKey, eq(itemsSearchKey.itemId, schema.items.id))
+      .innerJoin(itemsFts, eq(itemsFts.rowid, itemsSearchKey.key))
       .where(and(...conditions, sql`${itemsFts} MATCH ${match}`))
       .orderBy(...order)
       .all();

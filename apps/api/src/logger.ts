@@ -15,16 +15,21 @@ export interface LoggerOptions {
   serializers: { req: (request: SerializableRequest) => Record<string, unknown> };
 }
 
+/** A request url without its query string — the only form of a url that may be logged. */
+export function pathOf(url: string): string {
+  const queryStart = url.indexOf("?");
+  return queryStart === -1 ? url : url.slice(0, queryStart);
+}
+
 /**
  * Fastify's default `req` serializer with the query string cut off the url.
  * Search text (`?q=`) and sort keys naming fields are collection data, held to
  * the same rule as request bodies (#41).
  */
 function serializeRequest(request: SerializableRequest): Record<string, unknown> {
-  const queryStart = request.url.indexOf("?");
   return {
     method: request.method,
-    url: queryStart === -1 ? request.url : request.url.slice(0, queryStart),
+    url: pathOf(request.url),
     host: request.host,
     remoteAddress: request.ip,
     remotePort: request.socket?.remotePort,

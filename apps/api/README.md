@@ -40,13 +40,13 @@ All routes require `Authorization: Bearer <token>` except `GET /api/health`.
 
 `GET /api/collections/:id/items` takes, all optional and combinable:
 
-| Param    | Meaning                                                                                                                                                                                                                  |
-| -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `status` | `owned`, `wanted` or `ordered`                                                                                                                                                                                           |
-| `q`      | Search text, at most 200 characters. Each word must prefix-match a text, select, multiselect, tags or number value (case- and accent-insensitive). Results are ranked by relevance unless `sort` is given.               |
-| `sort`   | One key, JSON:API style — `-` prefix for descending: `createdAt` (the default), `updatedAt`, `name`, or `field:<fieldId>`. Empty values sort last. Tags, multiselect and image fields cannot be sorted; that is a `400`. |
+| Param    | Meaning                                                                                                                                                                                                                                                                                                 |
+| -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `status` | `owned`, `wanted` or `ordered`                                                                                                                                                                                                                                                                          |
+| `q`      | Search text, at most 200 characters. Each word must prefix-match a text, select, multiselect, tags or number value (case- and accent-insensitive). Results are ranked by relevance unless `sort` is given.                                                                                              |
+| `sort`   | One key, JSON:API style — `-` prefix for descending: `createdAt`, `updatedAt`, `name`, or `field:<fieldId>`. Empty values sort last. Without `sort`, items come in the order they were added, or by relevance when `q` has terms. Tags, multiselect and image fields cannot be sorted; that is a `400`. |
 
-A repeated `q` or `sort` is a `400`, never one value silently winning. Error messages are fixed text and never echo the query, and the request log records the path without its query string — search text is collection data, held to the same rule as request bodies.
+A repeated `q` or `sort` is a `400`, never one value silently winning. Error messages are fixed text and never echo the query, and the request log records the path without its query string — search text is collection data, held to the same rule as request bodies. That includes the 404 for an unknown route, whose log line and response message name the path only.
 
 In dev mode, OpenAPI docs are available at `GET /api/docs`.
 

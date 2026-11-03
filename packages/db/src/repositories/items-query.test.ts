@@ -66,6 +66,11 @@ describe("ItemsRepository search (q)", () => {
     expect(await titles({ q: "Title" })).toEqual([]);
   });
 
+  it("searches a number stored in a text field, as the name sort already reads it", async () => {
+    await add({ title: 1984 });
+    expect(await titles({ q: "1984" })).toEqual([1984]);
+  });
+
   it("does not search values whose key is not in the collection's schema", async () => {
     await add({ title: "Emma", leftover: "orphaned" });
     expect(await titles({ q: "orphaned" })).toEqual([]);
@@ -166,9 +171,9 @@ describe("the search index's triggers", () => {
       .map((row) => (row as { name: string }).name);
     expect(names).toEqual([
       "collections_fields_reindex",
-      "items_fts_after_delete",
       "items_fts_after_insert",
       "items_fts_after_update",
+      "items_fts_before_delete",
     ]);
   });
 });
@@ -195,6 +200,40 @@ describe("ItemsRepository sort", () => {
     await add({ tags: ["only", "tags"] });
     const items = await handle.items.listByCollection(books.id, { sort: { key: "name", direction: "asc" } });
     expect(items.map((i) => i.fields.title ?? i.fields.pages ?? null)).toEqual([7, "Apple", "banana", null]);
+  });
+
+  it("counts a boolean as a name, as the web's itemLabel does", async () => {
+    const flagged = await handle.collections.create({
+      name: "Flags",
+      fields: [
+        { id: "done", type: "boolean", label: "Done", required: false },
+        { id: "title", type: "text", label: "Title", required: false },
+      ],
+      isFiniteSet: false,
+    });
+    await add({ done: true, title: "a" }, flagged);
+    await add({ title: "b" }, flagged);
+    await add({ done: false, title: "c" }, flagged);
+    const items = await handle.items.listByCollection(flagged.id, { sort: { key: "name", direction: "asc" } });
+    // Names are "true", "b", "false": b < false < true.
+    expect(items.map((item) => item.fields.title)).toEqual(["b", "c", "a"]);
+  });
+
+  it("sorts by name in a collection with more fields than SQLite allows function arguments", async () => {
+    const wide = await handle.collections.create({
+      name: "Wide",
+      fields: Array.from({ length: 1100 }, (_, i) => ({
+        id: `f${i}`,
+        type: "text" as const,
+        label: `F${i}`,
+        required: false,
+      })),
+      isFiniteSet: false,
+    });
+    await add({ f0: "zulu" }, wide);
+    await add({ f0: "alpha" }, wide);
+    const items = await handle.items.listByCollection(wide.id, { sort: { key: "name", direction: "asc" } });
+    expect(items.map((item) => item.fields.f0)).toEqual(["alpha", "zulu"]);
   });
 
   it("orders a number field numerically, with empty values last in both directions", async () => {
