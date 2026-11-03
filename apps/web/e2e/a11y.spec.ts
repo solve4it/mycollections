@@ -243,7 +243,7 @@ test.describe("accessibility", () => {
     await api.createItem(collection.id, { title: "Blue Train", year: 1958, signed: false }, "wanted");
 
     await page.goto(`/collections/${collection.id}`);
-    await page.getByRole("button", { name: "Filters" }).click();
+    await page.getByRole("button", { name: "Filters", exact: true }).click();
     await expect(page.getByRole("form", { name: "Filters" })).toBeVisible();
     await expectNoAccessibilityViolations(page);
 

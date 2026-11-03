@@ -1145,7 +1145,7 @@ test.describe("filtering a collection (#41)", () => {
     await api.createItem(collection.id, { title: "Kind of Blue", year: 1959 });
 
     await page.goto(`/collections/${collection.id}`);
-    const toggle = page.getByRole("button", { name: "Filters" });
+    const toggle = page.getByRole("button", { name: "Filters", exact: true });
     await toggle.focus();
     await page.keyboard.press("Enter");
     await expect(toggle).toHaveAttribute("aria-expanded", "true");
