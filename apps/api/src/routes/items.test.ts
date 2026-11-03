@@ -132,6 +132,121 @@ describe("GET /api/collections/:id/items — search and sort (#41)", () => {
   });
 });
 
+describe("GET /api/collections/:id/items — filters (#41)", () => {
+  const fields: FieldDefinition[] = [
+    { id: "title", type: "text", label: "Title", required: true },
+    { id: "year", type: "number", label: "Year", required: false },
+    { id: "tags", type: "tags", label: "Tags", required: false },
+  ];
+  let records: Collection;
+
+  beforeEach(async () => {
+    records = await handle.collections.create({ name: "Records", fields, isFiniteSet: false });
+    await handle.items.create({
+      collectionId: records.id,
+      fields: { title: "Kind of Blue", year: 1959, tags: ["signed"] },
+    });
+    await handle.items.create({
+      collectionId: records.id,
+      fields: { title: "Blue Train", year: 1958, tags: ["mono"] },
+    });
+  });
+
+  async function list(filter: unknown, extra = "") {
+    const app = await makeApp();
+    const raw = typeof filter === "string" ? filter : JSON.stringify(filter);
+    return app.inject({
+      method: "GET",
+      url: `/api/collections/${records.id}/items?filter=${encodeURIComponent(raw)}${extra}`,
+      headers: auth,
+    });
+  }
+
+  it("applies the filters", async () => {
+    const res = await list([{ field: "year", op: "gte", value: 1959 }]);
+    expect(res.statusCode).toBe(200);
+    expect(res.json<Item[]>().map((item) => item.fields.title)).toEqual(["Kind of Blue"]);
+    const tagged = await list([{ field: "tags", op: "in", value: ["MONO"] }], "&q=blue");
+    expect(tagged.json<Item[]>().map((item) => item.fields.title)).toEqual(["Blue Train"]);
+  });
+
+  it.each([
+    ["not JSON", "[{"],
+    ["the wrong shape", [{ field: "year", op: "between", value: [1, 2] }]],
+    ["an extra key", [{ field: "year", op: "empty", leak: "do-not-report" }]],
+    ["an unknown field", [{ field: "do-not-report", op: "empty" }]],
+    ["an op the field cannot take", [{ field: "title", op: "empty" }]],
+    ["more than the raw cap", "x".repeat(2049)],
+  ])("rejects %s with a 400 that echoes nothing", async (_why, filter) => {
+    const res = await list(filter);
+    expect(res.statusCode).toBe(400);
+    expect(res.body).not.toContain("do-not-report");
+    expect(res.body).not.toContain("leak");
+  });
+
+  it("rejects a repeated filter param rather than picking one", async () => {
+    const raw = encodeURIComponent(JSON.stringify([{ field: "year", op: "empty" }]));
+    const app = await makeApp();
+    const res = await app.inject({
+      method: "GET",
+      url: `/api/collections/${records.id}/items?filter=${raw}&filter=${raw}`,
+      headers: auth,
+    });
+    expect(res.statusCode).toBe(400);
+  });
+});
+
+describe("GET /api/collections/:id/tag-values (#41)", () => {
+  const fields: FieldDefinition[] = [
+    { id: "title", type: "text", label: "Title", required: true },
+    { id: "tags", type: "tags", label: "Tags", required: false },
+  ];
+
+  it("lists the tags in use with their counts", async () => {
+    const records = await handle.collections.create({ name: "Records", fields, isFiniteSet: false });
+    await handle.items.create({ collectionId: records.id, fields: { title: "a", tags: ["signed", "mono"] } });
+    await handle.items.create({ collectionId: records.id, fields: { title: "b", tags: ["Signed"] } });
+    const app = await makeApp();
+    const res = await app.inject({
+      method: "GET",
+      url: `/api/collections/${records.id}/tag-values?field=tags`,
+      headers: auth,
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({
+      values: [
+        { value: "Signed", count: 2 },
+        { value: "mono", count: 1 },
+      ],
+      truncated: false,
+    });
+  });
+
+  it("answers 400 for a field that is not a tags field, and 404 for a trashed collection", async () => {
+    const records = await handle.collections.create({ name: "Records", fields, isFiniteSet: false });
+    const app = await makeApp();
+    const bad = await app.inject({
+      method: "GET",
+      url: `/api/collections/${records.id}/tag-values?field=title`,
+      headers: auth,
+    });
+    expect(bad.statusCode).toBe(400);
+    const missing = await app.inject({
+      method: "GET",
+      url: `/api/collections/${records.id}/tag-values`,
+      headers: auth,
+    });
+    expect(missing.statusCode).toBe(400);
+    await handle.collections.softDelete(records.id);
+    const gone = await app.inject({
+      method: "GET",
+      url: `/api/collections/${records.id}/tag-values?field=tags`,
+      headers: auth,
+    });
+    expect(gone.statusCode).toBe(404);
+  });
+});
+
 describe("POST /api/collections/:id/items", () => {
   it("creates an item with default status and returns 201", async () => {
     const app = await makeApp();

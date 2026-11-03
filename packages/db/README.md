@@ -28,6 +28,16 @@ Later phases add their own tables via new migrations: `share_links` (#48), `plug
 - **Sort** (`{ sort }`, an `ItemSort` from core): `createdAt`, `updatedAt`, `name` (the first of the schema's first 100 fields holding a string, number or boolean — the web's `itemLabel` rule), or one field by its schema type — numbers numerically, text case-insensitively (ASCII only: SQLite's `NOCASE` does not fold "é"), booleans false first. Empty values sort last in either direction; ties keep insertion order. Tags, multiselect and image fields cannot be sorted (`InvalidItemQueryError`). Without a sort, results come in insertion order, or ranked by `bm25` when `q` has terms.
 - **Recovery**: `items.reindex()` rebuilds the index from `items`.
 
+## Filters (#41)
+
+`listByCollection(id, { filters })` takes core's `ItemFilter[]` (`in`, `all`, `gte`, `lte`, `eq`, `empty`; see `apps/api/README.md` for which suits which field type). Every condition is built by `filterCondition` and follows three rules:
+
+- **Parenthesised.** Drizzle's `and()` does not wrap raw `sql` fragments, so an `OR` inside one — `empty` has three — would escape the collection and trash conditions. `items-filter.test.ts` holds a leak regression for every op that fails without the parentheses.
+- **Type-guarded with `json_type`.** SQLite sorts text above every number, and `json_each` over a scalar yields the scalar, so unguarded comparisons match the wrong shapes. The API does not check item fields against the schema, so any shape can be stored.
+- **Never throws.** Only paths built from the collection's own field ids reach SQL; anything else is an `InvalidItemQueryError` with fixed text. `json_each` columns are always qualified, since `json_each` has an `id` column of its own.
+
+Tags compare without case (`COLLATE NOCASE`, ASCII only); select and multiselect values are the schema's options and compare as stored. `tagValues(id, fieldId)` counts the tags in use for suggestions.
+
 ## Migrations
 
 Migrations are generated with drizzle-kit (`pnpm generate`) into `drizzle/` and ship with the package. `openDatabase()` applies pending migrations automatically on startup. If the database already has data and migrations are pending, a backup copy is written next to it first (`<path>.<timestamp>.bak`) — restoring is opening that file.
@@ -66,15 +76,15 @@ handle.close();
 
 ## What's exported
 
-| Export                            | Purpose                                                                                                                                       |
-| --------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| `openDatabase` / `DatabaseHandle` | Open + migrate the database; returns repositories, the Drizzle instance (`db`), and the raw connection (`sqlite`)                             |
-| `CollectionsRepository`           | CRUD, soft delete/restore, `listDeleted()`/`purge()` for the trash, hard delete                                                               |
-| `ItemsRepository`                 | CRUD, list by status / search (`q`) / `sort`, `reindex()`, `listDeleted()`/`purge()` for the trash, `findByFieldValue()` via `json_extract()` |
-| `MediaRepository`                 | CRUD plus `setPrimary()` (demotes the previous primary in the same transaction)                                                               |
-| `UserProfileRepository`           | `get()` / `upsert()` keyed by the auth layer's account key                                                                                    |
-| `emptyTrash`                      | Permanently removes every trashed collection (cascading to its items) and every trashed item, in one transaction                              |
-| `InvalidItemQueryError`           | Thrown by `listByCollection` for a sort the collection cannot honour; its message is fixed text, safe for a 400                               |
-| `schema`                          | The Drizzle table definitions, for callers needing custom queries                                                                             |
+| Export                            | Purpose                                                                                                                                                                  |
+| --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `openDatabase` / `DatabaseHandle` | Open + migrate the database; returns repositories, the Drizzle instance (`db`), and the raw connection (`sqlite`)                                                        |
+| `CollectionsRepository`           | CRUD, soft delete/restore, `listDeleted()`/`purge()` for the trash, hard delete                                                                                          |
+| `ItemsRepository`                 | CRUD, list by status / search (`q`) / `sort` / `filters`, `tagValues()`, `reindex()`, `listDeleted()`/`purge()` for the trash, `findByFieldValue()` via `json_extract()` |
+| `MediaRepository`                 | CRUD plus `setPrimary()` (demotes the previous primary in the same transaction)                                                                                          |
+| `UserProfileRepository`           | `get()` / `upsert()` keyed by the auth layer's account key                                                                                                               |
+| `emptyTrash`                      | Permanently removes every trashed collection (cascading to its items) and every trashed item, in one transaction                                                         |
+| `InvalidItemQueryError`           | Thrown by `listByCollection` for a sort the collection cannot honour; its message is fixed text, safe for a 400                                                          |
+| `schema`                          | The Drizzle table definitions, for callers needing custom queries                                                                                                        |
 
 Repositories validate reads and writes with the core Zod schemas, so malformed rows fail loudly at the boundary. All tests run against real SQLite (no mocks).
