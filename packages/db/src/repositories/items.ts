@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import {
   type DeletedItem,
   type FieldDefinition,
+  filterSuitsField,
   ITEM_FILTER_MAX_VALUE_LENGTH,
   type Item,
   type ItemFilter,
@@ -146,7 +147,6 @@ function nameSortValue(fields: FieldDefinition[]): SQL | null {
   return sql`COALESCE(${sql.join(candidates, sql`, `)}, NULL)`;
 }
 
-const LIST_FIELD_TYPES = new Set(["multiselect", "tags"]);
 const BOUNDED_NUMBER_TYPES = new Set(["number", "rating", "currency"]);
 
 /**
@@ -172,14 +172,12 @@ function filterCondition(filter: ItemFilter, fields: FieldDefinition[]): SQL {
   const column = schema.items.fields;
   const type = sql`json_type(${column}, ${path})`;
   const value = sql`json_extract(${column}, ${path})`;
-  const isList = LIST_FIELD_TYPES.has(field.type);
-  const unsupported = () => new InvalidItemQueryError("This filter does not suit this field");
+  // The suitability rule lives in core, shared with the web client that drops
+  // filters a changed schema no longer supports; the switch below only builds SQL.
+  if (!filterSuitsField(filter, field.type)) throw new InvalidItemQueryError("This filter does not suit this field");
 
   switch (filter.op) {
     case "empty": {
-      if (!(isList || BOUNDED_NUMBER_TYPES.has(field.type) || ["select", "date", "boolean"].includes(field.type))) {
-        throw unsupported();
-      }
       return sql`(${type} IS NULL OR ${type} = 'null' OR (${type} = 'text' AND ${value} = '') OR (${type} = 'array' AND json_array_length(${column}, ${path}) = 0))`;
     }
     case "in":
@@ -190,7 +188,6 @@ function filterCondition(filter: ItemFilter, fields: FieldDefinition[]): SQL {
         // stored with stray spaces is still that value.
         return sql`(${type} = 'text' AND trim(${value}) IN (SELECT "needle"."value" FROM json_each(${needles}) AS "needle"))`;
       }
-      if (!isList) throw unsupported();
       // Tags are typed freely, so "Signed" and "signed" are one tag; multiselect
       // values are the schema's options, matched as stored.
       const collate = field.type === "tags" ? sql` COLLATE NOCASE` : sql``;
@@ -212,10 +209,9 @@ function filterCondition(filter: ItemFilter, fields: FieldDefinition[]): SQL {
         // is not one — compared as text it would pass bounds it should not.
         return sql`(${type} = 'text' AND ${value} GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]*' AND substr(${value}, 1, 10) ${compare} ${filter.value})`;
       }
-      throw unsupported();
+      return sql`(0)`; // Unreachable: filterSuitsField matched the bound's kind to the field.
     }
     case "eq": {
-      if (field.type !== "boolean") throw unsupported();
       return sql`(${type} = ${filter.value ? "true" : "false"})`;
     }
   }

@@ -230,6 +230,36 @@ test.describe("accessibility", () => {
   });
 
   /**
+   * The filter panel open, filters in force as chips, and filters that match
+   * nothing (#41) — three states no route-level scan reaches.
+   */
+  test("a collection with its filter panel open, filters applied, and filters matching nothing", async ({
+    page,
+    api,
+  }) => {
+    await api.reset();
+    const collection = await api.createCollection({ name: "Vinyl records", fields: FIELDS });
+    await api.createItem(collection.id, { title: "Kind of Blue", year: 1959, signed: true }, "owned");
+    await api.createItem(collection.id, { title: "Blue Train", year: 1958, signed: false }, "wanted");
+
+    await page.goto(`/collections/${collection.id}`);
+    await page.getByRole("button", { name: "Filters", exact: true }).click();
+    await expect(page.getByRole("form", { name: "Filters" })).toBeVisible();
+    await expectNoAccessibilityViolations(page);
+
+    await page.getByRole("radio", { name: "Yes" }).check();
+    await page.getByRole("button", { name: "Apply filters" }).click();
+    await expect(page.getByRole("button", { name: "Remove filter Signed: yes" })).toBeVisible();
+    await expect(page.getByText("1 item matches")).toBeVisible();
+    await expectNoAccessibilityViolations(page);
+
+    await page.getByRole("spinbutton", { name: "Minimum" }).fill("2000");
+    await page.getByRole("button", { name: "Apply filters" }).click();
+    await expect(page.getByText("No items match these filters")).toBeVisible();
+    await expectNoAccessibilityViolations(page);
+  });
+
+  /**
    * The state with two item forms on the screen at once (#369): a row's editor,
    * open above the add-item form, both built from the same fields. They shared
    * DOM ids, so every label resolved to the editor — its controls were named

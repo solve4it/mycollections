@@ -5,8 +5,9 @@
  * TanStack Router's default JSON-parses each value, so `?q=1984` reached the
  * screen as the number 1984, `?q=01984` lost its zero and `?q=true` became a
  * boolean — and on the way out a string that looked like JSON was written with
- * quotes (`?q=%221984%22`). Search text is text; nothing in this app puts a
- * structured value in the URL.
+ * quotes (`?q=%221984%22`). Search text is text. The one structured value —
+ * the item filter list — travels as a JSON string the screen parses itself
+ * (core's `parseItemFilters`), so it is opaque here too.
  */
 export function parseSearch(searchStr: string): Record<string, string> {
   return Object.fromEntries(new URLSearchParams(searchStr));

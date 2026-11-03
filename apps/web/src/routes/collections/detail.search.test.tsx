@@ -33,28 +33,33 @@ const COLLECTION: Collection = {
   deletedAt: null,
 };
 
-function item(id: string, title: string): Item {
+function item(id: string, title: string, year?: number): Item {
   return {
     id,
     collectionId: COLLECTION.id,
     status: "owned",
-    fields: { title },
+    fields: year === undefined ? { title } : { title, year },
     createdAt: "2024-01-02T00:00:00.000Z",
     updatedAt: "2024-01-02T00:00:00.000Z",
     deletedAt: null,
   };
 }
 
-const ZELDA = item("22222222-2222-4222-8222-222222222222", "Zelda");
-const ZELDA_II = item("33333333-3333-4333-8333-333333333333", "Zelda II");
-const MARIO = item("44444444-4444-4444-8444-444444444444", "Mario");
+const ZELDA = item("22222222-2222-4222-8222-222222222222", "Zelda", 1986);
+const ZELDA_II = item("33333333-3333-4333-8333-333333333333", "Zelda II", 1987);
+const MARIO = item("44444444-4444-4444-8444-444444444444", "Mario", 1985);
 
 /** The server, played by the mock: a case-insensitive title match. */
 let stored: Item[];
 function serve(_collectionId: string, query: ItemListQuery = {}): Promise<Item[]> {
   const q = query.q?.trim().toLowerCase();
   const titleOf = (it: Item) => String(it.fields.title ?? "").toLowerCase();
-  const found = q ? stored.filter((it) => titleOf(it).includes(q)) : [...stored];
+  let found = q ? stored.filter((it) => titleOf(it).includes(q)) : [...stored];
+  for (const f of query.filter ? (JSON.parse(query.filter) as { field: string; op: string; value: number }[]) : []) {
+    const yearOf = (it: Item) => (typeof it.fields[f.field] === "number" ? (it.fields[f.field] as number) : null);
+    if (f.op === "gte") found = found.filter((it) => (yearOf(it) ?? -Infinity) >= f.value);
+    if (f.op === "lte") found = found.filter((it) => (yearOf(it) ?? Infinity) <= f.value);
+  }
   if (query.sort === "name" || query.sort === "-name") {
     found.sort((a, b) => titleOf(a).localeCompare(titleOf(b)));
     if (query.sort === "-name") found.reverse();
@@ -122,7 +127,11 @@ describe("searching a collection (#41)", () => {
     await waitFor(() => expect(rowTitles()).toEqual(["Zelda", "Zelda II"]));
     expect(router.state.location.search).toEqual({ q: "zel" });
     expect(screen.getByText("2 items match “zel”")).toBeInTheDocument();
-    expect(vi.mocked(listItems)).toHaveBeenLastCalledWith(COLLECTION.id, { q: "zel", sort: undefined });
+    expect(vi.mocked(listItems)).toHaveBeenLastCalledWith(COLLECTION.id, {
+      q: "zel",
+      sort: undefined,
+      filter: undefined,
+    });
     // Spoken once the result has settled, through the shell's announcer.
     await waitFor(() => expect(announcer()).toHaveTextContent("2 items match “zel”"), { timeout: 3000 });
   });
@@ -160,7 +169,11 @@ describe("searching a collection (#41)", () => {
   it("drops a sort the collection cannot honour instead of failing to load", async () => {
     renderAt(`${BASE}?sort=field:gone`);
     await waitFor(() => expect(rowTitles()).toEqual(["Zelda", "Zelda II", "Mario"]));
-    expect(vi.mocked(listItems)).toHaveBeenCalledWith(COLLECTION.id, { q: undefined, sort: undefined });
+    expect(vi.mocked(listItems)).toHaveBeenCalledWith(COLLECTION.id, {
+      q: undefined,
+      sort: undefined,
+      filter: undefined,
+    });
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 });
@@ -186,7 +199,9 @@ describe("when a search hides the row the user was on (#41)", () => {
     // The successor rule, as for a delete: the row now at its index.
     await waitFor(() => expect(screen.getByRole("button", { name: "Edit “Zelda II”" })).toHaveFocus());
     await waitFor(() =>
-      expect(announcer()).toHaveTextContent("Saved “Link”. It no longer matches the search, so it isn’t shown."),
+      expect(announcer()).toHaveTextContent(
+        "Saved “Link”. It no longer matches the current search or filters, so it isn’t shown.",
+      ),
     );
   });
 
@@ -225,7 +240,7 @@ describe("when a search hides the row the user was on (#41)", () => {
 
     await waitFor(() =>
       expect(document.querySelector(".add-item-live")).toHaveTextContent(
-        "Added “Sonic”. It doesn’t match the search, so it isn’t shown.",
+        "Added “Sonic”. It doesn’t match the current search or filters, so it isn’t shown.",
       ),
     );
   });
@@ -257,7 +272,9 @@ describe("when a search hides the row the user was on (#41)", () => {
     await waitFor(() => expect(screen.queryByRole("button", { name: "Undo" })).not.toBeInTheDocument());
     await waitFor(() => expect(screen.getByRole("button", { name: "Edit “Zelda II”" })).toHaveFocus());
     await waitFor(() =>
-      expect(announcer()).toHaveTextContent("Restored “Link”. It doesn’t match the search, so it isn’t shown."),
+      expect(announcer()).toHaveTextContent(
+        "Restored “Link”. It doesn’t match the current search or filters, so it isn’t shown.",
+      ),
     );
   });
 });
@@ -308,7 +325,11 @@ describe("sorting a collection (#41)", () => {
 
     await waitFor(() => expect(rowTitles()).toEqual(["Zelda II", "Zelda", "Mario"]));
     expect(router.state.location.search).toEqual({ sort: "-name" });
-    expect(vi.mocked(listItems)).toHaveBeenLastCalledWith(COLLECTION.id, { q: undefined, sort: "-name" });
+    expect(vi.mocked(listItems)).toHaveBeenLastCalledWith(COLLECTION.id, {
+      q: undefined,
+      sort: "-name",
+      filter: undefined,
+    });
 
     fireEvent.change(sortSelect(), { target: { value: "" } });
     await waitFor(() => expect(router.state.location.search).toEqual({}));
@@ -332,5 +353,87 @@ describe("sorting a collection (#41)", () => {
 
     await waitFor(() => expect(rowTitles()).toEqual(["Zelda", "Zelda II", "Zzz"]));
     await waitFor(() => expect(screen.getByRole("button", { name: "Edit “Zzz”" })).toHaveFocus());
+  });
+});
+
+describe("filtering a collection (#41)", () => {
+  it("applies filters from the panel, puts them in the URL, says how many match, and shows a chip", async () => {
+    const { router } = renderAt(BASE);
+    await waitFor(() => expect(rowTitles()).toEqual(["Zelda", "Zelda II", "Mario"]));
+
+    fireEvent.click(screen.getByRole("button", { name: "Filters" }));
+    fireEvent.change(screen.getByRole("spinbutton", { name: "Minimum" }), { target: { value: "1986" } });
+    fireEvent.click(screen.getByRole("button", { name: "Apply filters" }));
+
+    await waitFor(() => expect(rowTitles()).toEqual(["Zelda", "Zelda II"]));
+    expect(router.state.location.search).toEqual({ filter: '[{"field":"year","op":"gte","value":1986}]' });
+    expect(screen.getByText("2 items match")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Remove filter Year: from 1986" })).toBeInTheDocument();
+    await waitFor(() => expect(announcer()).toHaveTextContent("2 items match"), { timeout: 3000 });
+  });
+
+  it("removing the last chip hands focus to the Filters toggle and shows everything again", async () => {
+    renderAt(`${BASE}?filter=${encodeURIComponent('[{"field":"year","op":"lte","value":1985}]')}`);
+    await waitFor(() => expect(rowTitles()).toEqual(["Mario"]));
+
+    const chip = screen.getByRole("button", { name: "Remove filter Year: up to 1985" });
+    chip.focus();
+    fireEvent.click(chip);
+
+    await waitFor(() => expect(rowTitles()).toEqual(["Zelda", "Zelda II", "Mario"]));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Filters" })).toHaveFocus());
+  });
+
+  it("a filter that matches nothing offers Clear filters, which hands focus to the toggle", async () => {
+    renderAt(`${BASE}?filter=${encodeURIComponent('[{"field":"year","op":"gte","value":2000}]')}`);
+    expect(await screen.findByText("No items match these filters")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Clear search" })).not.toBeInTheDocument();
+
+    const clear = screen.getAllByRole("button", { name: "Clear filters" }).at(-1) as HTMLElement;
+    clear.focus();
+    fireEvent.click(clear);
+
+    await waitFor(() => expect(rowTitles()).toEqual(["Zelda", "Zelda II", "Mario"]));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Filters" })).toHaveFocus());
+  });
+
+  it("drops a filter the collection's fields cannot take instead of failing to load", async () => {
+    renderAt(`${BASE}?filter=${encodeURIComponent('[{"field":"title","op":"empty"}]')}`);
+    await waitFor(() => expect(rowTitles()).toEqual(["Zelda", "Zelda II", "Mario"]));
+    expect(vi.mocked(listItems)).toHaveBeenLastCalledWith(COLLECTION.id, {
+      q: undefined,
+      sort: undefined,
+      filter: undefined,
+    });
+    expect(screen.queryByRole("list", { name: "Applied filters" })).not.toBeInTheDocument();
+  });
+});
+
+describe("filters and what the page says (#41 review)", () => {
+  it("does not announce the count of a filtered view the page opened on", async () => {
+    renderAt(`${BASE}?filter=${encodeURIComponent('[{"field":"year","op":"gte","value":1986}]')}`);
+    await waitFor(() => expect(rowTitles()).toEqual(["Zelda", "Zelda II"]));
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+    expect(announcer()).not.toHaveTextContent("match");
+  });
+
+  it("says the search or filters hide an added item, not the search alone", async () => {
+    renderAt(`${BASE}?filter=${encodeURIComponent('[{"field":"year","op":"gte","value":1986}]')}`);
+    await waitFor(() => expect(rowTitles()).toEqual(["Zelda", "Zelda II"]));
+    const sonic = item("66666666-6666-4666-8666-666666666666", "Sonic", 1991);
+    const old = { ...sonic, fields: { title: "Pong", year: 1972 } };
+    vi.mocked(createItem).mockImplementation(async () => {
+      stored = [...stored, old];
+      return old;
+    });
+    const form = document.querySelector<HTMLElement>(".add-item");
+    if (!form) throw new Error("no add form");
+    fireEvent.change(within(form).getByRole("textbox", { name: /title/i }), { target: { value: "Pong" } });
+    fireEvent.click(within(form).getByRole("button", { name: "Save" }));
+    await waitFor(() =>
+      expect(document.querySelector(".add-item-live")).toHaveTextContent(
+        "Added “Pong”. It doesn’t match the current search or filters, so it isn’t shown.",
+      ),
+    );
   });
 });

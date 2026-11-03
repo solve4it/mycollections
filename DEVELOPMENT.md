@@ -467,6 +467,8 @@ its comment:
 | Save, when a search no longer matches it  | the row that takes its place — as for a Delete (#41)                           | successor element                 |
 | Undo, when a search does not match it     | wherever the delete handed focus — as for Dismiss (#41)                        | successor element                 |
 | Clear search (in the no-match state)      | the search box                                                                 | return to where the input began   |
+| Remove a filter chip                      | the chip now in its place, else the one before, else the Filters toggle        | successor element                 |
+| Clear filters                             | the Filters toggle                                                             | return to where the filters began |
 
 Two things that look like details and are not. A destination has to be a control whose name says
 where the user now is, which is why Remove field goes to the next field's label rather than to its

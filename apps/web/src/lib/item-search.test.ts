@@ -1,6 +1,6 @@
 import type { FieldDefinition } from "@mycollections/core";
 import { describe, expect, it } from "vitest";
-import { effectiveSort, validateItemSearch } from "./item-search.js";
+import { effectiveFilters, effectiveSort, validateItemSearch } from "./item-search.js";
 
 describe("validateItemSearch (#41)", () => {
   it("keeps a search and a well-formed sort", () => {
@@ -36,5 +36,31 @@ describe("effectiveSort", () => {
     expect(effectiveSort("field:gone", fields)).toBeUndefined();
     expect(effectiveSort("field:tags", fields)).toBeUndefined();
     expect(effectiveSort(undefined, fields)).toBeUndefined();
+  });
+});
+
+describe("filters in the URL (#41)", () => {
+  const fields: FieldDefinition[] = [
+    { id: "genre", type: "select", label: "Genre", required: false, options: ["Jazz", "Blues"] },
+    { id: "year", type: "number", label: "Year", required: false },
+    { id: "title", type: "text", label: "Title", required: true },
+  ];
+
+  it("keeps a valid filter list in its canonical spelling, and drops anything else", () => {
+    const raw = '[ {"op":"gte", "field":"year", "value":1959} ]';
+    expect(validateItemSearch({ filter: raw })).toEqual({ filter: '[{"field":"year","op":"gte","value":1959}]' });
+    expect(validateItemSearch({ filter: "not json" })).toEqual({});
+    expect(validateItemSearch({ filter: "[]" })).toEqual({});
+  });
+
+  it("applies only the filters this collection's fields can take", () => {
+    const filter = JSON.stringify([
+      { field: "genre", op: "in", value: ["Jazz"] },
+      { field: "gone", op: "empty" },
+      { field: "title", op: "empty" },
+      { field: "year", op: "in", value: ["1959"] },
+    ]);
+    expect(effectiveFilters(filter, fields)).toEqual([{ field: "genre", op: "in", value: ["Jazz"] }]);
+    expect(effectiveFilters(undefined, fields)).toEqual([]);
   });
 });
