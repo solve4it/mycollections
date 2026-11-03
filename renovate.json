@@ -35,9 +35,12 @@
   ],
   "customManagers": [
     {
-      "description": "The devcontainer installs Corepack by exact version in postCreateCommand (Node 25+ no longer bundles it) — see #388",
+      "description": "The devcontainer and CI install Corepack by exact version (Node 25+ no longer bundles it) — see #388 and #391",
       "customType": "regex",
-      "managerFilePatterns": ["/^\\.devcontainer/devcontainer\\.json$/"],
+      "managerFilePatterns": [
+        "/^\\.devcontainer/devcontainer\\.json$/",
+        "/^\\.github/actions/setup-pnpm/action\\.yml$/"
+      ],
       "matchStrings": ["corepack@(?<currentValue>\\d+\\.\\d+\\.\\d+)"],
       "depNameTemplate": "corepack",
       "datasourceTemplate": "npm"

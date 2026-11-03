@@ -1,0 +1,49 @@
+name: Setup Node and pnpm
+description: >-
+  Installs the Node version in .nvmrc and the pnpm pinned in package.json's
+  packageManager, through Corepack, which verifies that pin's sha512 (#391).
+
+# Not pnpm/action-setup: it strips the sha512 from packageManager and runs
+# `pnpm self-update`, which trusts whatever the registry serves for that
+# version. Corepack refuses a download whose hash does not match the pin.
+#
+# Never cache COREPACK_HOME (~/.cache/node/corepack). Corepack only verifies a
+# download; a version already in its cache runs whatever the pin says. Hosted
+# runners start empty, so every job verifies the pnpm it runs.
+runs:
+  using: composite
+  steps:
+    - name: Setup Node
+      uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+      with:
+        node-version-file: .nvmrc
+
+    # Node 25+ no longer ships Corepack. The version is bumped by Renovate
+    # (renovate.json's customManagers), alongside the devcontainer's.
+    - name: Install Corepack
+      shell: bash
+      run: npm install -g corepack@0.36.0
+
+    # `pnpm` only: a bare `corepack enable` also shims yarn, which nothing here uses.
+    - name: Enable pnpm
+      shell: bash
+      run: corepack enable pnpm
+
+    # The first `pnpm` call is the download Corepack verifies, so a tampered or
+    # substituted pnpm stops the job here. The PATH checks make sure what ran was
+    # this Corepack: the runner image's default Node (22, under /usr/local) brings
+    # an older Corepack of its own.
+    - name: Verify pnpm
+      shell: bash
+      env:
+        COREPACK_ENABLE_DOWNLOAD_PROMPT: "0"
+      run: |
+        node_bin=$(dirname "$(command -v node)")
+        # What `npm install -g` above put in place, so the version lives in one line.
+        want_corepack=$(npm ls -g corepack --json | node -p 'JSON.parse(require("fs").readFileSync(0)).dependencies.corepack.version')
+        want_pnpm=$(node -p 'require("./package.json").packageManager.split("@")[1].split("+")[0]')
+        [ "$(corepack --version)" = "$want_corepack" ] || { echo "::error::corepack is $(corepack --version), expected $want_corepack"; exit 1; }
+        [ "$(dirname "$(command -v pnpm)")" = "$node_bin" ] || { echo "::error::pnpm resolves to $(command -v pnpm), not Corepack's shim in $node_bin"; exit 1; }
+        got_pnpm=$(pnpm -v)
+        [ "$got_pnpm" = "$want_pnpm" ] || { echo "::error::pnpm is $got_pnpm, expected $want_pnpm"; exit 1; }
+        echo "pnpm $got_pnpm via corepack $want_corepack ($node_bin)"
