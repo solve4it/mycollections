@@ -36,7 +36,7 @@ Later phases add their own tables via new migrations: `share_links` (#48), `plug
 - **Type-guarded with `json_type`.** SQLite sorts text above every number, and `json_each` over a scalar yields the scalar, so unguarded comparisons match the wrong shapes. The API does not check item fields against the schema, so any shape can be stored.
 - **Never throws.** Only paths built from the collection's own field ids reach SQL; anything else is an `InvalidItemQueryError` with fixed text. `json_each` columns are always qualified, since `json_each` has an `id` column of its own.
 
-Tags compare without case (`COLLATE NOCASE`, ASCII only); select and multiselect values are the schema's options and compare as stored. `tagValues(id, fieldId)` counts the tags in use for suggestions.
+Tags compare without case (`COLLATE NOCASE`, ASCII only); select and multiselect values are the schema's options and compare as stored. `tagValues(id, fieldId)` counts the tags in use for suggestions — only tags a filter can ask for (trimmed, 1–200 characters, no control characters), so every suggestion finds its items. Stored values are compared trimmed, and a date bound only matches text that starts with a padded `YYYY-MM-DD`.
 
 ## Migrations
 
@@ -84,7 +84,7 @@ handle.close();
 | `MediaRepository`                 | CRUD plus `setPrimary()` (demotes the previous primary in the same transaction)                                                                                          |
 | `UserProfileRepository`           | `get()` / `upsert()` keyed by the auth layer's account key                                                                                                               |
 | `emptyTrash`                      | Permanently removes every trashed collection (cascading to its items) and every trashed item, in one transaction                                                         |
-| `InvalidItemQueryError`           | Thrown by `listByCollection` for a sort the collection cannot honour; its message is fixed text, safe for a 400                                                          |
+| `InvalidItemQueryError`           | Thrown by `listByCollection` for a sort or filter the collection cannot honour, and by `tagValues` for a field that is not tags; fixed text, safe for a 400              |
 | `schema`                          | The Drizzle table definitions, for callers needing custom queries                                                                                                        |
 
 Repositories validate reads and writes with the core Zod schemas, so malformed rows fail loudly at the boundary. All tests run against real SQLite (no mocks).
