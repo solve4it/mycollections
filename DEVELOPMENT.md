@@ -367,6 +367,28 @@ announcement is a check on the shape of the DOM. See
 [#24](https://github.com/solve4it/mycollections/issues/24) for what is still outstanding, including
 the manual screen-reader pass.
 
+### Ids belong to the instance
+
+A component that can be rendered more than once takes the DOM ids its labels and descriptions
+point at from React's `useId()`, never from a literal and never from an array index
+([#369](https://github.com/solve4it/mycollections/issues/369)). `<label for>` resolves to the
+_first_ element in the document with that id, so two instances sharing one quietly label the first
+instance twice and leave the second unnamed — the collection screen did exactly this with the
+add-item form and a row's editor open at the same time. An index renumbers ids under rows that
+survive a removal; key the suffix by the same thing React keys the row by.
+
+Build the id with `scopedId(prefix, part, key?)` from `src/lib/dom-id.ts` rather than by
+concatenating. A data key (a field id is any non-empty string) can contain whitespace, which an id
+may not and which splits an `aria-describedby` list; it can contain a dash, so a dash-joined
+`part`-`key` pair can spell another row's id; it can contain characters such as `:` that break a
+`#id` selector, which the e2e specs build from these ids; and `encodeURIComponent` throws on an
+unpaired surrogate. `scopedId` escapes the key totally into a plain CSS identifier and joins it
+with a separator the escape never emits.
+
+axe files duplicate ids under `incomplete` rather than `violations`, which
+`expectNoAccessibilityViolations` fails on too, but only if a scan actually enters the state where
+both instances are on screen.
+
 ### Focus has to survive the action
 
 Two rules, both learned from the sweep above finding thirteen places that broke them.

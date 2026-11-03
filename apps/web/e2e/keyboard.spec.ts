@@ -21,10 +21,8 @@ import { expect, focusedControl, NOTHING_FOCUSED, tabOrder, test } from "./fixtu
  * the control holding it (#367). Those blocks assert a specific named control
  * rather than "not `<body>`", which would pass for a focus landing anywhere.
  *
- * Two states this file traverses are knowingly wrong in ways it does not assert:
- * a row's open editor collides DOM ids with the add-item form, so one form's
- * labels double up and the other's vanish (#369), and a collection card is
- * announced code-then-count-then-name (#370).
+ * One state this file traverses is knowingly wrong in a way it does not assert:
+ * a collection card is announced code-then-count-then-name (#370).
  */
 
 const FIELDS = [
@@ -879,7 +877,12 @@ test.describe("focus when the control holding it goes away", () => {
       page.getByRole("form", { name: "Editing “Kind of Blue”" }),
       "the editor must say which item it is editing",
     ).toBeVisible();
-    await expect(row.getByRole("combobox"), "focus must enter the editor that opened").toBeFocused();
+    // Named, not just found: with the add form on the same screen the two used
+    // to share ids, and this control was announced as "Status Status" (#369).
+    await expect(
+      row.getByRole("combobox", { name: "Status", exact: true }),
+      "focus must enter the editor that opened",
+    ).toBeFocused();
   });
 
   test("cancelling a row's editor hands focus back to the Edit that opened it", async ({ page, api }) => {

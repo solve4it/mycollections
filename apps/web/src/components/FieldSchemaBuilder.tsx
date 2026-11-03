@@ -1,6 +1,7 @@
 import { BUILT_IN_FIELD_TYPES, type BuiltInFieldType, type FieldDefinition } from "@mycollections/core";
-import { useRef } from "react";
+import { useId, useRef } from "react";
 import { useTranslation } from "react-i18next";
+import { scopedId } from "../lib/dom-id.js";
 import { useFocusHandoff } from "../lib/focus-handoff.js";
 import { Icon } from "./Icon.js";
 
@@ -79,6 +80,12 @@ export function FieldSchemaBuilder({ fields, onChange, lockedTypeKeys, lockedTyp
   const handOffFocus = useFocusHandoff();
   const addFieldRef = useRef<HTMLButtonElement>(null);
 
+  // Keyed by the field's own key, the same thing React keys the row by (#369).
+  // Array positions renumbered the ids under every row that survived a removal,
+  // and a literal prefix would collide with a second builder on the screen.
+  const idPrefix = useId();
+  const rowId = (key: string, part: string) => scopedId(idPrefix, part, key);
+
   function updateField(key: string, patch: Partial<FieldDraft>) {
     onChange(fields.map((f) => (f.key === key ? { ...f, ...patch } : f)));
   }
@@ -87,11 +94,11 @@ export function FieldSchemaBuilder({ fields, onChange, lockedTypeKeys, lockedTyp
     <fieldset className="fields-builder">
       <legend>{t("fields_legend")}</legend>
       {fields.map((field, index) => {
-        const labelId = `field-label-${index}`;
-        const typeId = `field-type-${index}`;
-        const optionsId = `field-options-${index}`;
-        const requiredId = `field-required-${index}`;
-        const hintId = `field-type-hint-${index}`;
+        const labelId = rowId(field.key, "label");
+        const typeId = rowId(field.key, "type");
+        const optionsId = rowId(field.key, "options");
+        const requiredId = rowId(field.key, "required");
+        const hintId = rowId(field.key, "type-hint");
         const typeLocked = lockedTypeKeys?.has(field.key) ?? false;
         return (
           <div className="field-row" key={field.key}>
@@ -167,11 +174,14 @@ export function FieldSchemaBuilder({ fields, onChange, lockedTypeKeys, lockedTyp
                 // successor-element rule (#367) — its *label*, not its own
                 // Remove field: the label names the surviving field, so arrival
                 // says where the user is, where a second destructive control
-                // under the keyboard says nothing and invites a slip. The ids
-                // are positional, so the row that moves up into this index is
-                // the one this looks up; with none left, the control that makes
-                // one.
-                handOffFocus(() => document.getElementById(`field-label-${index}`) ?? addFieldRef.current);
+                // under the keyboard says nothing and invites a slip. The
+                // successor is the row after this one, named by its key now
+                // rather than looked up at this index; with none after it, the
+                // control that makes one.
+                const next = fields[index + 1];
+                handOffFocus(
+                  () => (next ? document.getElementById(rowId(next.key, "label")) : null) ?? addFieldRef.current,
+                );
                 onChange(fields.filter((f) => f.key !== field.key));
               }}
             >

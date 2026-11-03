@@ -1,7 +1,8 @@
 import { type FieldDefinition, ITEM_STATUSES, type ItemStatus } from "@mycollections/core";
-import { type FormEvent, useEffect, useRef, useState } from "react";
+import { type FormEvent, useEffect, useId, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { ItemInput } from "../lib/api-client.js";
+import { scopedId } from "../lib/dom-id.js";
 
 type DraftValue = string | boolean | string[];
 
@@ -86,6 +87,12 @@ export function DynamicItemForm({
   resetSignal = 0,
 }: DynamicItemFormProps) {
   const { t } = useTranslation("items");
+  // Per instance, never literal (#369): the collection screen renders this form
+  // twice at once — the add-item form and a row's editor, from the same fields —
+  // and a `<label for>` resolves to the first element in the document with that
+  // id, so shared ids named one form's controls twice and the other's not at all.
+  const idPrefix = useId();
+  const statusId = scopedId(idPrefix, "status");
   const [status, setStatus] = useState<ItemStatus>(initialStatus ?? "owned");
   const [values, setValues] = useState<Record<string, DraftValue>>(() =>
     Object.fromEntries(fields.map((f) => [f.id, toDraft(f, initialValues[f.id])])),
@@ -130,13 +137,8 @@ export function DynamicItemForm({
   return (
     <form onSubmit={handleSubmit} className="dynamic-item-form" aria-label={label}>
       <div className="form-row">
-        <label htmlFor="item-status">{t("status_label")}</label>
-        <select
-          id="item-status"
-          ref={statusRef}
-          value={status}
-          onChange={(e) => setStatus(e.target.value as ItemStatus)}
-        >
+        <label htmlFor={statusId}>{t("status_label")}</label>
+        <select id={statusId} ref={statusRef} value={status} onChange={(e) => setStatus(e.target.value as ItemStatus)}>
           {ITEM_STATUSES.map((s) => (
             <option key={s} value={s}>
               {t(`status_${s}`)}
@@ -149,6 +151,7 @@ export function DynamicItemForm({
         <FieldControl
           key={field.id}
           field={field}
+          inputId={scopedId(idPrefix, "field", field.id)}
           value={values[field.id] ?? ""}
           onChange={(v) => setValue(field.id, v)}
         />
@@ -170,13 +173,13 @@ export function DynamicItemForm({
 
 interface FieldControlProps {
   field: FieldDefinition;
+  /** Unique to this form instance; see `idPrefix` in `DynamicItemForm`. */
+  inputId: string;
   value: DraftValue;
   onChange: (value: DraftValue) => void;
 }
 
-function FieldControl({ field, value, onChange }: FieldControlProps) {
-  const inputId = `field-${field.id}`;
-
+function FieldControl({ field, inputId, value, onChange }: FieldControlProps) {
   if (field.type === "boolean") {
     return (
       <div className="form-row">

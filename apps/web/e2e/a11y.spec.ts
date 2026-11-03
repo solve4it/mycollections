@@ -24,6 +24,10 @@ test.describe("accessibility of the setup screen", () => {
     await page.goto("/setup");
     await expect(page).toHaveURL(/\/setup$/);
     await expect(page.getByLabel("API Token")).toBeVisible();
+    // The shell's nav renders here too (#369 asked for it to be scanned), so a
+    // change that dropped it from this screen must not quietly shrink the scan.
+    // Not named: which nav is shown depends on the viewport.
+    await expect(page.getByRole("navigation").first()).toBeVisible();
 
     await expectNoAccessibilityViolations(page);
   });
@@ -193,6 +197,42 @@ test.describe("accessibility", () => {
     // with any value — so it is asserted beside the scan rather than by it.
     await expect(page.locator('[aria-current="page"]'), "nothing here is the page the user is on").toHaveCount(0);
     await expect(page.locator('.sidebar-nav a[href="/collections"]')).toHaveAttribute("aria-current", "true");
+
+    await expectNoAccessibilityViolations(page);
+  });
+
+  /**
+   * The state with two item forms on the screen at once (#369): a row's editor,
+   * open above the add-item form, both built from the same fields. They shared
+   * DOM ids, so every label resolved to the editor — its controls were named
+   * twice and the add form's not at all. axe files both symptoms under
+   * `incomplete` rather than `violations` (`duplicate-id-aria`,
+   * `form-field-multiple-labels`), which the fixture fails on too; the gap was
+   * only that no scan ever opened the editor.
+   */
+  test("a collection with a row's editor open", async ({ page, api }) => {
+    await api.reset();
+    const collection = await api.createCollection({ name: "Vinyl records", fields: FIELDS });
+    await api.createItem(collection.id, { title: "Kind of Blue", year: 1959, signed: true }, "owned");
+    await api.createItem(collection.id, { title: "Blue Train", year: 1958, signed: false }, "wanted");
+
+    await page.goto(`/collections/${collection.id}`);
+    await expect(page).toHaveURL(`/collections/${collection.id}`);
+    await page.getByRole("button", { name: "Edit “Kind of Blue”" }).click();
+    const editor = page.getByRole("form", { name: "Editing “Kind of Blue”" });
+    await expect(editor).toBeVisible();
+
+    // Each control named once, by its own form's label — the names axe cannot
+    // be asked about directly, asserted where a screen reader would read them.
+    const addForm = page.locator("section.add-item");
+    for (const form of [editor, addForm]) {
+      await expect(form.getByRole("combobox", { name: "Status", exact: true })).toHaveCount(1);
+      await expect(form.getByRole("textbox", { name: "Title", exact: true })).toHaveCount(1);
+      await expect(form.getByRole("spinbutton", { name: "Year", exact: true })).toHaveCount(1);
+      await expect(form.getByRole("checkbox", { name: "Signed", exact: true })).toHaveCount(1);
+    }
+    await expect(editor.getByRole("textbox", { name: "Title", exact: true })).toHaveValue("Kind of Blue");
+    await expect(addForm.getByRole("textbox", { name: "Title", exact: true })).toHaveValue("");
 
     await expectNoAccessibilityViolations(page);
   });
