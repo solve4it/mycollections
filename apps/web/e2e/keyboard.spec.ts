@@ -239,6 +239,7 @@ test.describe("keyboard traversal of every screen", () => {
       'link "All collections"',
       'link "Edit collection"',
       'searchbox "Search items"',
+      'combobox "Sort by"',
       editStop("Kind of Blue"),
       deleteStop("Kind of Blue"),
       editStop("Blue Train"),
@@ -1108,5 +1109,29 @@ test.describe("searching a collection (#41)", () => {
     await expect(page.locator('.visually-hidden[aria-live="polite"]')).toContainText(
       "Saved “Giant Steps”. It no longer matches the search, so it isn’t shown.",
     );
+  });
+
+  test("a save that moves the row under the sort keeps focus on that row's Edit", async ({ page, api }) => {
+    await api.reset();
+    const collection = await api.createCollection({ name: "Vinyl records", fields: FIELDS });
+    await api.createItem(collection.id, { title: "Blue Train", year: 1958 });
+    await api.createItem(collection.id, { title: "Kind of Blue", year: 1959 });
+
+    await page.goto(`/collections/${collection.id}`);
+    await page.getByRole("combobox", { name: "Sort by" }).selectOption({ label: "Name, A to Z" });
+    await expect(page).toHaveURL(`/collections/${collection.id}?sort=name`);
+
+    // Renamed to sort last: React moves the row with insertBefore, which takes
+    // the node out of the document for a moment, and a browser sends focus that
+    // was inside it to <body>. The page's handoff has to put it back.
+    await page.getByRole("button", { name: editName("Blue Train") }).click();
+    const editor = page.getByRole("form", { name: "Editing “Blue Train”" });
+    await editor.getByRole("textbox", { name: "Title" }).fill("Ziggurat");
+    const save = editor.getByRole("button", { name: "Save" });
+    await save.focus();
+    await page.keyboard.press("Enter");
+
+    await expect(page.getByRole("listitem").last()).toContainText("Ziggurat");
+    await expect(page.getByRole("button", { name: editName("Ziggurat") })).toBeFocused();
   });
 });

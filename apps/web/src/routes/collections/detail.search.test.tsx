@@ -54,7 +54,12 @@ let stored: Item[];
 function serve(_collectionId: string, query: ItemListQuery = {}): Promise<Item[]> {
   const q = query.q?.trim().toLowerCase();
   const titleOf = (it: Item) => String(it.fields.title ?? "").toLowerCase();
-  return Promise.resolve(q ? stored.filter((it) => titleOf(it).includes(q)) : [...stored]);
+  const found = q ? stored.filter((it) => titleOf(it).includes(q)) : [...stored];
+  if (query.sort === "name" || query.sort === "-name") {
+    found.sort((a, b) => titleOf(a).localeCompare(titleOf(b)));
+    if (query.sort === "-name") found.reverse();
+  }
+  return Promise.resolve(found);
 }
 
 function renderAt(path: string) {
@@ -287,5 +292,45 @@ describe("a search that changes while an add is saving (#41)", () => {
     await waitFor(() => expect(rowTitles()).toContain("Zelda Z"));
     await waitFor(() => expect(document.querySelector(".add-item-live")).toHaveTextContent("Added “Zelda Z”"));
     expect(document.querySelector(".add-item-live")).not.toHaveTextContent("isn’t shown");
+  });
+});
+
+describe("sorting a collection (#41)", () => {
+  function sortSelect() {
+    return screen.getByRole("combobox", { name: "Sort by" });
+  }
+
+  it("orders the list by the option chosen and keeps it in the URL", async () => {
+    const { router } = renderAt(BASE);
+    await waitFor(() => expect(rowTitles()).toEqual(["Zelda", "Zelda II", "Mario"]));
+
+    fireEvent.change(sortSelect(), { target: { value: "-name" } });
+
+    await waitFor(() => expect(rowTitles()).toEqual(["Zelda II", "Zelda", "Mario"]));
+    expect(router.state.location.search).toEqual({ sort: "-name" });
+    expect(vi.mocked(listItems)).toHaveBeenLastCalledWith(COLLECTION.id, { q: undefined, sort: "-name" });
+
+    fireEvent.change(sortSelect(), { target: { value: "" } });
+    await waitFor(() => expect(router.state.location.search).toEqual({}));
+  });
+
+  it("a save that moves the row under the sort keeps focus on that row's Edit", async () => {
+    renderAt(`${BASE}?sort=name`);
+    await waitFor(() => expect(rowTitles()).toEqual(["Mario", "Zelda", "Zelda II"]));
+
+    const edit = screen.getByRole("button", { name: "Edit “Mario”" });
+    edit.focus();
+    fireEvent.click(edit);
+    const renamed = { ...MARIO, fields: { title: "Zzz" } };
+    vi.mocked(updateItem).mockImplementation(async () => {
+      stored = stored.map((it) => (it.id === MARIO.id ? renamed : it));
+      return renamed;
+    });
+    const editor = screen.getByRole("form", { name: "Editing “Mario”" });
+    fireEvent.change(within(editor).getByRole("textbox", { name: /title/i }), { target: { value: "Zzz" } });
+    fireEvent.click(within(editor).getByRole("button", { name: "Save" }));
+
+    await waitFor(() => expect(rowTitles()).toEqual(["Zelda", "Zelda II", "Zzz"]));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Edit “Zzz”" })).toHaveFocus());
   });
 });

@@ -1071,6 +1071,23 @@ p[role="alert"] {
   color: var(--accent-text);
 }
 
+/* The search box and the sort select side by side where there is room, the
+   box taking the slack; stacked on a phone (#41). */
+.item-list-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 var(--space-3);
+  align-items: flex-end;
+}
+
+.item-list-controls .item-search {
+  flex: 1 1 16rem;
+}
+
+.item-list-controls .item-sort {
+  flex: 0 1 16rem;
+}
+
 /* How many items a search matched (#41). Plain text, not a live region — the
    shell's announcer speaks it once the search settles. */
 .item-count {
