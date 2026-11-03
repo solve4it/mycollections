@@ -238,6 +238,7 @@ test.describe("keyboard traversal of every screen", () => {
     await expectTabOrder(page, "a collection with items", [
       'link "All collections"',
       'link "Edit collection"',
+      'searchbox "Search items"',
       editStop("Kind of Blue"),
       deleteStop("Kind of Blue"),
       editStop("Blue Train"),
@@ -1054,5 +1055,58 @@ test.describe("focus when the control holding it goes away", () => {
       page.locator("section.settings-trash"),
       "an emptied trash must hand focus to its section",
     ).toBeFocused();
+  });
+});
+
+test.describe("searching a collection (#41)", () => {
+  test("Clear search hands focus to the search box, and Escape empties it", async ({ page, api }) => {
+    await api.reset();
+    const collection = await api.createCollection({ name: "Vinyl records", fields: FIELDS });
+    await api.createItem(collection.id, { title: "Kind of Blue", year: 1959 });
+
+    await page.goto(`/collections/${collection.id}?q=sonic`);
+    await expect(page.getByText("No items match “sonic”")).toBeVisible();
+
+    const clear = page.getByRole("button", { name: "Clear search" });
+    await clear.focus();
+    await page.keyboard.press("Enter");
+
+    const box = page.getByRole("searchbox", { name: "Search items" });
+    await expect(page.getByRole("button", { name: editName("Kind of Blue") })).toBeVisible();
+    await expect(box, "Clear search goes with the empty state, so focus goes to the box").toBeFocused();
+    await expect(page).toHaveURL(`/collections/${collection.id}`);
+
+    await box.fill("blue");
+    await expect(page).toHaveURL(`/collections/${collection.id}?q=blue`);
+    await page.keyboard.press("Escape");
+    await expect(box).toHaveValue("");
+    await expect(page).toHaveURL(`/collections/${collection.id}`);
+  });
+
+  test("saving an item so the search no longer matches it hands focus to the row in its place", async ({
+    page,
+    api,
+  }) => {
+    await api.reset();
+    const collection = await api.createCollection({ name: "Vinyl records", fields: FIELDS });
+    await api.createItem(collection.id, { title: "Blue Train", year: 1958 });
+    await api.createItem(collection.id, { title: "Kind of Blue", year: 1959 });
+
+    await page.goto(`/collections/${collection.id}?q=blue`);
+    await page.getByRole("button", { name: editName("Blue Train") }).click();
+    const editor = page.getByRole("form", { name: "Editing “Blue Train”" });
+    await editor.getByRole("textbox", { name: "Title" }).fill("Giant Steps");
+    const save = editor.getByRole("button", { name: "Save" });
+    await save.focus();
+    await page.keyboard.press("Enter");
+
+    await expect(page.getByRole("button", { name: editName("Giant Steps") })).toHaveCount(0);
+    await expect(
+      page.getByRole("button", { name: editName("Kind of Blue") }),
+      "the successor rule, as for a delete — not <body>",
+    ).toBeFocused();
+    await expect(page.locator('.visually-hidden[aria-live="polite"]')).toContainText(
+      "Saved “Giant Steps”. It no longer matches the search, so it isn’t shown.",
+    );
   });
 });

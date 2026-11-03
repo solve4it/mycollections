@@ -202,6 +202,34 @@ test.describe("accessibility", () => {
   });
 
   /**
+   * A search in force and a search that matched nothing (#41) — the two states
+   * the search box adds, neither reachable from a route-level scan. The count
+   * line is plain text, so the check beside the scan is that it is *not* a live
+   * region; the announcer speaks it. The landmark is asserted here because jsdom
+   * cannot: it has no implicit role for `<search>`.
+   */
+  test("a collection with a search in force, and one that matched nothing", async ({ page, api }) => {
+    await api.reset();
+    const collection = await api.createCollection({ name: "Vinyl records", fields: FIELDS });
+    await api.createItem(collection.id, { title: "Kind of Blue", year: 1959, signed: true }, "owned");
+    await api.createItem(collection.id, { title: "Blue Train", year: 1958, signed: false }, "wanted");
+    await api.createItem(collection.id, { title: "Giant Steps", year: 1960, signed: false }, "owned");
+
+    await page.goto(`/collections/${collection.id}?q=blue`);
+    await expect(page.getByRole("search")).toContainText("Search items");
+    await expect(page.getByText("2 items match “blue”")).toBeVisible();
+    await expect(page.locator(".item-count")).not.toHaveAttribute("aria-live");
+    await expect(page.getByRole("searchbox", { name: "Search items" })).toHaveValue("blue");
+    await expectNoAccessibilityViolations(page);
+
+    await page.getByRole("searchbox", { name: "Search items" }).fill("sonic");
+    await expect(page.getByText("No items match “sonic”")).toBeVisible();
+    await expect(page.getByRole("button", { name: "Clear search" })).toBeVisible();
+    await expect(page.locator('.visually-hidden[aria-live="polite"] > *').last()).toHaveText("No items match “sonic”");
+    await expectNoAccessibilityViolations(page);
+  });
+
+  /**
    * The state with two item forms on the screen at once (#369): a row's editor,
    * open above the add-item form, both built from the same fields. They shared
    * DOM ids, so every label resolved to the editor — its controls were named
