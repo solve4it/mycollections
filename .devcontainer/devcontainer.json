@@ -9,7 +9,7 @@
       "pnpmVersion": "none"
     }
   },
-  "postCreateCommand": "find . -type d -name node_modules -prune -exec rm -rf {} + 2>/dev/null; npm install -g --force corepack@0.36.0 && corepack enable && pnpm -v && pnpm install",
+  "postCreateCommand": "find . -type d -name node_modules -prune -exec rm -rf {} + 2>/dev/null; npm uninstall -g --prefix /usr/local/share/npm-global pnpm && npm install -g --force corepack@0.36.0 && corepack enable && pnpm -v && pnpm install",
   "forwardPorts": [3000, 4321, 5173],
   "portsAttributes": {
     "3000": { "label": "Fastify API" },

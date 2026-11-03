@@ -21,9 +21,9 @@ This guide takes you from a fresh clone to a running MyCollections dev environme
   hash: it refuses a pnpm download that does not match, where pnpm's own version switching runs it anyway.
   Global npm packages live inside each Node installation, so after fnm installs a new Node version, run
   both commands again — otherwise `pnpm` is missing, and the pre-commit hook fails with `pnpm: command not found`.
-  No `sudo`: fnm's Node installations belong to you. If the install stops with `EEXIST` on `pnpm` or `yarn`, that
-  Node already has a copy installed with npm, which bypasses the hash check — `npm uninstall -g pnpm yarn` and
-  install Corepack again.
+  No `sudo`: fnm's Node installations belong to you. If the install stops with `EEXIST` on `pnpm`, `pnpx` or
+  `yarn`, that Node already has a copy installed with npm, which bypasses the hash check — remove it with
+  `npm uninstall -g pnpm @pnpm/exe yarn` (`npm ls -g --depth=0` shows what is there) and install Corepack again.
 - **Git** (any recent version)
 - **Docker Desktop** (or compatible runtime) — only required if you want to use the DevContainer
 
