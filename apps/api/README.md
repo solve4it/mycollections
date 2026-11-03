@@ -25,6 +25,8 @@ All routes require `Authorization: Bearer <token>` except `GET /api/health`.
 | `POST`   | `/api/collections/:id/restore`               | Restore a soft-deleted collection                                                                      |
 | `GET`    | `/api/collections/:id/items`                 | List items (`?status=owned\|wanted\|ordered`, `?q=` search, `?sort=` — see below)                      |
 | `POST`   | `/api/collections/:id/items`                 | Create an item                                                                                         |
+| `POST`   | `/api/collections/:id/tags/rename`           | Rename or merge a tag across the collection's items (see below)                                        |
+| `POST`   | `/api/collections/:id/tags/remove`           | Remove a tag from the collection's items                                                               |
 | `GET`    | `/api/collections/:id/tag-values`            | Tags in use in a tags field (`?field=`), for suggestions                                               |
 | `GET`    | `/api/collections/:id/items/:itemId`         | Get an item                                                                                            |
 | `PATCH`  | `/api/collections/:id/items/:itemId`         | Update an item                                                                                         |
@@ -62,6 +64,15 @@ All routes require `Authorization: Bearer <token>` except `GET /api/health`.
 Text, url, email and image fields take no filters; search covers text. Stored values are compared trimmed; tags ignore case for ASCII letters only (SQLite's `NOCASE`, so "É" and "é" differ); a date bound matches only stored text that starts `YYYY-MM-DD`. The 2048-character cap counts characters, not bytes: a filter full of non-ASCII text can exceed Node's 16 KB request-header limit first and be refused with a `431` before the API sees it, so the web client checks the encoded length itself. Each operator checks the stored type, so a number stored as text never passes a numeric bound. An invalid filter is a `400` "Invalid filter" (or "Unknown filter field" / "This filter does not suit this field"), never quoting the request.
 
 `GET /api/collections/:id/tag-values?field=<id>` lists the tags in use in one tags field — `{ values: [{ value, count }], truncated }`, live items only, most used first, at most 50.
+
+**Tag management** (#41) — a tag is a value inside items, not a resource with an id, so these are custom-method endpoints (Google AIP-136) with the tag in the body (tags run to 200 characters; Fastify's path parameters stop at 100):
+
+| Method | Path                               | Body                  | Does                                                                                 |
+| ------ | ---------------------------------- | --------------------- | ------------------------------------------------------------------------------------ |
+| `POST` | `/api/collections/:id/tags/rename` | `{ field, from, to }` | Renames the tag on every item, trashed ones too; into an existing tag, the two merge |
+| `POST` | `/api/collections/:id/tags/remove` | `{ field, value }`    | Takes the tag off every item, trashed ones too                                       |
+
+Both answer `{ updated: n }` — the items actually changed — and match tags as filters do (spaces trimmed, ASCII case ignored). A new name cannot contain a comma, which the item form would split into two tags. A trashed collection is a `404`; a field that is not tags, or an invalid tag, a fixed-text `400`. Renaming 50,000 items runs in one transaction of about a second, almost all of it the search index updating each row. `tag-values` also takes `q`, a part of the name, to reach tags beyond the most used fifty.
 
 A repeated `q`, `sort` or `filter` is a `400`, never one value silently winning. Error messages are fixed text and never echo the query, and the request log records the path without its query string — search text is collection data, held to the same rule as request bodies. That includes the 404 for an unknown route, whose log line and response message name the path only.
 

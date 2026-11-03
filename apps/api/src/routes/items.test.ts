@@ -247,6 +247,81 @@ describe("GET /api/collections/:id/tag-values (#41)", () => {
   });
 });
 
+describe("tag management routes (#41)", () => {
+  const fields: FieldDefinition[] = [
+    { id: "title", type: "text", label: "Title", required: true },
+    { id: "tags", type: "tags", label: "Tags", required: false },
+  ];
+
+  async function post(collectionId: string, action: string, body: unknown) {
+    const app = await makeApp();
+    return app.inject({
+      method: "POST",
+      url: `/api/collections/${collectionId}/tags/${action}`,
+      headers: { ...auth, "content-type": "application/json" },
+      payload: JSON.stringify(body),
+    });
+  }
+
+  it("renames a tag and says how many items changed", async () => {
+    const records = await handle.collections.create({ name: "Records", fields, isFiniteSet: false });
+    const item = await handle.items.create({ collectionId: records.id, fields: { title: "a", tags: ["signed"] } });
+    const res = await post(records.id, "rename", { field: "tags", from: "Signed", to: "autographed" });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ updated: 1 });
+    expect((await handle.items.getById(item.id))?.fields.tags).toEqual(["autographed"]);
+  });
+
+  it("removes a tag", async () => {
+    const records = await handle.collections.create({ name: "Records", fields, isFiniteSet: false });
+    const item = await handle.items.create({
+      collectionId: records.id,
+      fields: { title: "a", tags: ["signed", "mono"] },
+    });
+    const res = await post(records.id, "remove", { field: "tags", value: "signed" });
+    expect(res.json()).toEqual({ updated: 1 });
+    expect((await handle.items.getById(item.id))?.fields.tags).toEqual(["mono"]);
+  });
+
+  it.each([
+    ["rename", { field: "title", from: "a", to: "b" }, 400],
+    ["rename", { field: "tags", from: "a", to: "rock, pop" }, 400],
+    ["rename", { field: "tags", from: "a" }, 400],
+    // Fastify's Ajv strips an unknown key (removeAdditional) rather than failing
+    // the request — so it has no effect, and is never quoted back.
+    ["rename", { field: "tags", from: "a", to: "b", extra: "do-not-report" }, 200],
+    ["remove", { field: "tags", value: "" }, 400],
+    ["remove", { field: "tags", value: "x".repeat(201) }, 400],
+  ])("%s with %j answers %i, quoting nothing", async (action, body, status) => {
+    const records = await handle.collections.create({ name: "Records", fields, isFiniteSet: false });
+    const res = await post(records.id, action, body);
+    expect(res.statusCode).toBe(status);
+    expect(res.body).not.toContain("do-not-report");
+    expect(res.body).not.toContain("rock");
+  });
+
+  it("answers 404 for a trashed collection and changes nothing", async () => {
+    const records = await handle.collections.create({ name: "Records", fields, isFiniteSet: false });
+    const item = await handle.items.create({ collectionId: records.id, fields: { title: "a", tags: ["signed"] } });
+    await handle.collections.softDelete(records.id);
+    const res = await post(records.id, "remove", { field: "tags", value: "signed" });
+    expect(res.statusCode).toBe(404);
+    expect((await handle.items.getById(item.id, { includeDeleted: true }))?.fields.tags).toEqual(["signed"]);
+  });
+
+  it("finds tags by part of their name through tag-values", async () => {
+    const records = await handle.collections.create({ name: "Records", fields, isFiniteSet: false });
+    await handle.items.create({ collectionId: records.id, fields: { title: "a", tags: ["rare find", "common"] } });
+    const app = await makeApp();
+    const res = await app.inject({
+      method: "GET",
+      url: `/api/collections/${records.id}/tag-values?field=tags&q=rare`,
+      headers: auth,
+    });
+    expect(res.json()).toEqual({ values: [{ value: "rare find", count: 1 }], truncated: false });
+  });
+});
+
 describe("POST /api/collections/:id/items", () => {
   it("creates an item with default status and returns 201", async () => {
     const app = await makeApp();
