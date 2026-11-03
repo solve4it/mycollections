@@ -553,4 +553,45 @@ describe("CollectionDetailPage", () => {
       await waitFor(() => expect(screen.queryByRole("alert")).not.toBeInTheDocument());
     });
   });
+
+  // #369: with a row's editor open the screen holds two item forms built from
+  // the same fields. They used to share DOM ids, so both sets of labels pointed
+  // at the editor — its controls were named twice, and the add form's not at all.
+  describe("two item forms on one screen (#369)", () => {
+    it("names each form's controls once, after its own labels", async () => {
+      vi.mocked(listItems).mockResolvedValue([ITEM]);
+      renderDetail();
+      await screen.findByText("Zelda");
+      fireEvent.click(screen.getByRole("button", { name: /edit/i }));
+
+      const row = screen.getAllByRole("listitem")[0] as HTMLElement;
+      const addSection = document.querySelector(".add-item") as HTMLElement;
+      expect(within(row).getByRole("textbox", { name: "Title" })).toHaveValue("Zelda");
+      expect(within(row).getByRole("spinbutton", { name: "Year" })).toHaveValue(2017);
+      expect(within(row).getByRole("combobox", { name: "Status" })).toHaveValue("owned");
+      expect(within(addSection).getByRole("textbox", { name: "Title" })).toHaveValue("");
+      expect(within(addSection).getByRole("spinbutton", { name: "Year" })).toHaveValue(null);
+      expect(within(addSection).getByRole("combobox", { name: "Status" })).toHaveValue("owned");
+    });
+
+    it("adds what was typed into the add form while an editor is open", async () => {
+      vi.mocked(listItems).mockResolvedValue([ITEM]);
+      renderDetail();
+      await screen.findByText("Zelda");
+      fireEvent.click(screen.getByRole("button", { name: /edit/i }));
+
+      const addSection = document.querySelector(".add-item") as HTMLElement;
+      fireEvent.change(within(addSection).getByLabelText("Title"), { target: { value: "Mario" } });
+      fireEvent.click(within(addSection).getByRole("button", { name: "Save" }));
+
+      await waitFor(() =>
+        expect(createItem).toHaveBeenCalledWith(COLLECTION.id, {
+          status: "owned",
+          fields: { title: "Mario", year: null },
+        }),
+      );
+      const row = screen.getAllByRole("listitem")[0] as HTMLElement;
+      expect(within(row).getByRole("textbox", { name: "Title" })).toHaveValue("Zelda");
+    });
+  });
 });

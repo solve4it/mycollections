@@ -1,5 +1,5 @@
 import type { FieldDefinition } from "@mycollections/core";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import "../i18n/index.js";
 import { DynamicItemForm } from "./DynamicItemForm.js";
@@ -90,5 +90,57 @@ describe("DynamicItemForm", () => {
     expect(screen.getByLabelText("Title")).toHaveValue("Mario");
     expect(screen.getByLabelText("Year")).toHaveValue(1985);
     expect(screen.getByLabelText(/status/i)).toHaveValue("wanted");
+  });
+
+  // #369: the collection screen renders two of these at once — the add-item
+  // form and a row's editor — built from the same fields. With hardcoded ids,
+  // `<label for>` resolved both labels to the first instance in tree order, so
+  // one form's controls were named twice ("Title Title") and the other's not at
+  // all. Asserted on the computed names, which is what a screen reader reads.
+  it("keeps every control labelled by its own form when two instances share a screen", () => {
+    render(
+      <>
+        <DynamicItemForm fields={FIELDS} onSubmit={vi.fn()} label="Edit Zelda" initialValues={{ title: "Zelda" }} />
+        <DynamicItemForm fields={FIELDS} onSubmit={vi.fn()} label="Add item" />
+      </>,
+    );
+    const editor = screen.getByRole("form", { name: "Edit Zelda" });
+    const adder = screen.getByRole("form", { name: "Add item" });
+
+    for (const form of [editor, adder]) {
+      expect(within(form).getByRole("combobox", { name: "Status" })).toBeInTheDocument();
+      expect(within(form).getByRole("textbox", { name: "Title" })).toBeInTheDocument();
+      expect(within(form).getByRole("spinbutton", { name: "Year" })).toBeInTheDocument();
+      expect(within(form).getByRole("checkbox", { name: "Owned" })).toBeInTheDocument();
+      expect(within(form).getByRole("combobox", { name: "Platform" })).toBeInTheDocument();
+      expect(within(form).getByRole("textbox", { name: "Labels" })).toBeInTheDocument();
+      // Every label points into the form it sits in, not into its twin.
+      for (const label of form.querySelectorAll("label[for]")) {
+        expect(form.contains((label as HTMLLabelElement).control)).toBe(true);
+      }
+    }
+    expect(within(editor).getByRole("textbox", { name: "Title" })).toHaveValue("Zelda");
+    expect(within(adder).getByRole("textbox", { name: "Title" })).toHaveValue("");
+
+    const ids = Array.from(document.querySelectorAll("[id]"), (el) => el.id);
+    expect(new Set(ids).size).toBe(ids.length);
+  });
+
+  // A field id is any non-empty string, and an HTML id may not contain
+  // whitespace. Two ids that differ only in a space and an underscore must not
+  // collapse into one either.
+  it("labels fields whose ids contain spaces, without colliding with similar ids", () => {
+    render(
+      <DynamicItemForm
+        fields={[
+          { id: "release year", label: "Release year", type: "text", required: false },
+          { id: "release_year", label: "Year released", type: "text", required: false },
+        ]}
+        onSubmit={vi.fn()}
+      />,
+    );
+    expect(screen.getByRole("textbox", { name: "Release year" })).toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: "Year released" })).toBeInTheDocument();
+    for (const el of document.querySelectorAll("[id]")) expect(el.id).not.toMatch(/\s/);
   });
 });
