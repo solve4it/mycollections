@@ -469,6 +469,9 @@ its comment:
 | Clear search (in the no-match state)      | the search box                                                                 | return to where the input began   |
 | Remove a filter chip                      | the chip now in its place, else the one before, else the Filters toggle        | successor element                 |
 | Clear filters                             | the Filters toggle                                                             | return to where the filters began |
+| A tag's Rename (opens its box)            | the rename box                                                                 | disclosure: enter what you opened |
+| A tag rename's Save, Cancel or Escape     | the renamed tag's Rename — or, after a merge, the Rename of the tag it joined  | dialog: return to the invoker     |
+| A confirmed tag removal                   | the next tag's Rename, else the one before, else the section heading           | successor element                 |
 
 Two things that look like details and are not. A destination has to be a control whose name says
 where the user now is, which is why Remove field goes to the next field's label rather than to its

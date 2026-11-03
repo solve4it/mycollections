@@ -86,6 +86,32 @@ export async function getCollection(id: string): Promise<Collection> {
   return res.json() as Promise<Collection>;
 }
 
+/** Renames a tag across a collection's items (#41); answers how many changed. */
+export async function renameTag(
+  collectionId: string,
+  input: { field: string; from: string; to: string },
+): Promise<{ updated: number }> {
+  const res = await request(`/api/collections/${collectionId}/tags/rename`, {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+  if (!res.ok) throw new ApiError(res.status);
+  return res.json() as Promise<{ updated: number }>;
+}
+
+/** Removes a tag from a collection's items (#41); answers how many changed. */
+export async function removeTag(
+  collectionId: string,
+  input: { field: string; value: string },
+): Promise<{ updated: number }> {
+  const res = await request(`/api/collections/${collectionId}/tags/remove`, {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+  if (!res.ok) throw new ApiError(res.status);
+  return res.json() as Promise<{ updated: number }>;
+}
+
 /** What a list of items is narrowed and ordered by (#41). Empty values are left out of the request. */
 export interface ItemListQuery {
   status?: ItemStatus;
@@ -103,8 +129,9 @@ export interface TagValues {
   truncated: boolean;
 }
 
-export async function getTagValues(collectionId: string, fieldId: string): Promise<TagValues> {
+export async function getTagValues(collectionId: string, fieldId: string, q?: string): Promise<TagValues> {
   const params = new URLSearchParams({ field: fieldId });
+  if (q?.trim()) params.set("q", q.trim());
   const res = await request(`/api/collections/${collectionId}/tag-values?${params.toString()}`);
   if (!res.ok) throw new ApiError(res.status);
   return res.json() as Promise<TagValues>;

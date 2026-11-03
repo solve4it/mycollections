@@ -1171,3 +1171,44 @@ test.describe("filtering a collection (#41)", () => {
     await expect(toggle, "with no chip left, focus goes to the Filters toggle").toBeFocused();
   });
 });
+
+test.describe("managing tags (#41)", () => {
+  const TAG_FIELDS = [
+    { id: "title", label: "Title", type: "text", required: true },
+    { id: "tags", label: "Tags", type: "tags" },
+  ];
+
+  test("renaming a tag by keyboard, then removing one, with focus where each action leaves it", async ({
+    page,
+    api,
+  }) => {
+    await api.reset();
+    const collection = await api.createCollection({ name: "Vinyl records", fields: TAG_FIELDS });
+    await api.createItem(collection.id, { title: "Kind of Blue", tags: ["signed", "mono"] });
+    await api.createItem(collection.id, { title: "Blue Train", tags: ["signed"] });
+
+    await page.goto(`/collections/${collection.id}/edit`);
+    const rename = page.getByRole("button", { name: "Rename “signed”" });
+    await rename.focus();
+    await page.keyboard.press("Enter");
+    const box = page.getByRole("textbox", { name: "New name for “signed”" });
+    await expect(box, "the rename box takes focus").toBeFocused();
+    await box.fill("autographed");
+    await page.keyboard.press("Enter");
+
+    await expect(page.getByRole("button", { name: "Rename “autographed”" })).toBeFocused();
+    await expect(page.getByText("2 items", { exact: true })).toBeVisible();
+    await expect(page.locator('.visually-hidden[aria-live="polite"]')).toContainText(
+      "Renamed “signed” to “autographed” on 2 items",
+    );
+    // The schema form above was not submitted by that Enter.
+    await expect(page).toHaveURL(`/collections/${collection.id}/edit`);
+
+    const remove = page.getByRole("button", { name: "Remove “autographed”" });
+    await remove.focus();
+    await page.keyboard.press("Enter");
+    await page.getByRole("button", { name: "Remove “autographed”" }).last().press("Enter");
+    await expect(page.getByRole("button", { name: "Rename “autographed”" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Rename “mono”" }), "the successor row").toBeFocused();
+  });
+});

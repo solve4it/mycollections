@@ -5,6 +5,7 @@ import { FailureSurface } from "../../components/ErrorScreen.js";
 import { buildField, type FieldDraft, FieldSchemaBuilder, fieldToDraft } from "../../components/FieldSchemaBuilder.js";
 import { Icon } from "../../components/Icon.js";
 import { CollectionDetailSkeleton } from "../../components/Skeleton.js";
+import { TagManager } from "../../components/TagManager.js";
 import { getToken } from "../../lib/api-client.js";
 import { CONTENT_LINK_ACTIVE_OPTIONS } from "../../lib/links.js";
 import { useCollection, useItems, useTrash, useUpdateCollection } from "../../lib/queries.js";
@@ -166,6 +167,10 @@ function EditCollectionPage() {
           </button>
         </div>
       </form>
+      {/* After the form and outside it, on the stored schema (#41): Enter in a
+          rename box must not submit the draft above, and a tags field added in
+          the draft carries no tags until it is saved. */}
+      <TagManager collectionId={id} fields={collection.fields} />
     </div>
   );
 }

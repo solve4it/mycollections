@@ -259,6 +259,28 @@ test.describe("accessibility", () => {
     await expectNoAccessibilityViolations(page);
   });
 
+  /** Tags in use on the collection editor (#41), and a removal asking to confirm. */
+  test("the collection editor's tags in use, and a tag removal asking to confirm", async ({ page, api }) => {
+    await api.reset();
+    const collection = await api.createCollection({
+      name: "Vinyl records",
+      fields: [
+        { id: "title", label: "Title", type: "text", required: true },
+        { id: "tags", label: "Tags", type: "tags" },
+      ],
+    });
+    await api.createItem(collection.id, { title: "Kind of Blue", tags: ["signed", "mono"] }, "owned");
+
+    await page.goto(`/collections/${collection.id}/edit`);
+    await expect(page.getByRole("region", { name: "Tags in use: Tags" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Rename “signed”" })).toBeVisible();
+    await expectNoAccessibilityViolations(page);
+
+    await page.getByRole("button", { name: "Remove “mono”" }).click();
+    await expect(page.getByText("Remove “mono” from 1 item? This cannot be undone.")).toBeVisible();
+    await expectNoAccessibilityViolations(page);
+  });
+
   /**
    * The state with two item forms on the screen at once (#369): a row's editor,
    * open above the add-item form, both built from the same fields. They shared
