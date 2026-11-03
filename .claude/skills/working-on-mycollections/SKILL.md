@@ -129,8 +129,9 @@ Tests passing is CI's evidence, not yours. Before "done" or "fixed":
   Killing by port is not enough for `pnpm --filter @mycollections/api dev`: it is `tsx watch`,
   whose parent survives and restarts the server — against its original `DB_PATH` — the next time
   you edit a source file, so later curls silently hit a stale server. For verification runs start
-  it without the watcher (`pnpm exec tsx src/server.ts` from `apps/api`), or `pkill -f "tsx watch
-  src/server.ts"` before relaunching.
+  it without the watcher (`pnpm exec tsx src/server.ts` from `apps/api`), or `pkill -f "tsx/dist/cli.mjs watch
+  src/server.ts"` before relaunching — the shorter `"tsx watch src/server.ts"` matches only the
+  `sh -c` wrapper and leaves the watcher running.
 - **Fastify v5 specifics.** `setErrorHandler` receives `unknown` (narrow it; use core's
   `toReportableError`); the matched route pattern is `request.routeOptions.url` (undefined on
   unmatched routes), not `routerPath`.
