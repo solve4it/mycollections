@@ -5,6 +5,7 @@ import {
   deleteItem,
   emptyTrash,
   listCollections,
+  listItems,
   listTrash,
   purgeCollection,
   purgeItem,
@@ -127,5 +128,28 @@ describe("api-client trash", () => {
   it("reports a failed purge rather than resolving quietly", async () => {
     mockFetch(404);
     await expect(purgeItem("gone")).rejects.toBeInstanceOf(ApiError);
+  });
+});
+
+describe("api-client item list query (#41)", () => {
+  const url = (fetchMock: ReturnType<typeof mockFetch>) => new URL(String(fetchMock.mock.calls[0]?.[0]), "http://x");
+
+  it("asks for every item when given no query", async () => {
+    const fetchMock = mockFetch(200, []);
+    await listItems("c1");
+    expect(url(fetchMock).pathname).toBe("/api/collections/c1/items");
+    expect(url(fetchMock).search).toBe("");
+  });
+
+  it("sends search text and sort, encoded, and leaves out what is empty", async () => {
+    const fetchMock = mockFetch(200, []);
+    await listItems("c1", { q: "café & co?", sort: "-field:a:b", status: undefined });
+    expect(Object.fromEntries(url(fetchMock).searchParams)).toEqual({ q: "café & co?", sort: "-field:a:b" });
+  });
+
+  it("does not send a search made only of spaces", async () => {
+    const fetchMock = mockFetch(200, []);
+    await listItems("c1", { q: "   " });
+    expect(url(fetchMock).search).toBe("");
   });
 });

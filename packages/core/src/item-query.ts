@@ -44,3 +44,23 @@ export function formatItemSort(sort: ItemSort): string {
   const prefix = sort.direction === "desc" ? "-" : "";
   return sort.key === "field" ? `${prefix}${FIELD_PREFIX}${sort.fieldId}` : `${prefix}${sort.key}`;
 }
+
+/**
+ * Field types a list can be ordered by. Tags, multiselect and image values are
+ * lists or files with no single value to compare, so the API refuses them.
+ */
+const SORTABLE_FIELD_TYPES = new Set([
+  "text",
+  "number",
+  "boolean",
+  "date",
+  "url",
+  "email",
+  "select",
+  "rating",
+  "currency",
+]);
+
+export function isSortableFieldType(type: string): boolean {
+  return SORTABLE_FIELD_TYPES.has(type);
+}
