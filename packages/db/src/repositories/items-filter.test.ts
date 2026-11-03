@@ -284,3 +284,28 @@ describe("ItemsRepository.tagValues (#41)", () => {
     await expect(handle.items.tagValues(records.id, field)).rejects.toBeInstanceOf(InvalidItemQueryError);
   });
 });
+
+describe("tags as stored by other clients (#41 review)", () => {
+  it("suggests only tags a filter can ask for, and a suggested tag finds its items", async () => {
+    await add({ title: "padded", tags: [" jazz", "x\ny", "  ", "Rock", "t".repeat(201)] });
+    const { values } = await handle.items.tagValues(records.id, "tags");
+    expect(values.map((entry) => entry.value)).toEqual(["jazz", "Rock"]);
+    expect(await titles([{ field: "tags", op: "in", value: ["jazz"] }])).toEqual(["padded"]);
+    expect(await titles([{ field: "tags", op: "all", value: ["jazz", "rock"] }])).toEqual(["padded"]);
+  });
+
+  it("matches a select value stored with stray spaces", async () => {
+    await add({ title: "spaced", genre: " Jazz " });
+    expect(await titles([{ field: "genre", op: "in", value: ["Jazz"] }])).toEqual(["spaced"]);
+  });
+
+  it("does not treat text that is not a calendar date as one", async () => {
+    await add({ title: "year only", released: "1999" });
+    await add({ title: "short month", released: "2020-5-3" });
+    const found = await titles([
+      { field: "released", op: "gte", value: "1990-01-01" },
+      { field: "released", op: "lte", value: "2030-01-01" },
+    ]);
+    expect(found).toEqual([]);
+  });
+});

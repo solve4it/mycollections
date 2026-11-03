@@ -29,9 +29,13 @@ export const ITEM_FILTER_MAX_VALUES = 20;
 /** Longest single value. */
 export const ITEM_FILTER_MAX_VALUE_LENGTH = 200;
 /**
- * Longest raw `filter` param accepted, checked before `JSON.parse` so a
- * crafted link cannot hand the parser megabytes. Sized to stay well inside
- * Node's 16 KB request-header limit once URL-encoded.
+ * Longest raw `filter` param accepted, in characters, checked before
+ * `JSON.parse` so a crafted link cannot hand the parser megabytes.
+ *
+ * It does not by itself keep a request inside Node's 16 KB header limit: URL
+ * encoding can take a character to 9 bytes, so 2048 characters of non-ASCII
+ * text arrive as an 18 KB URL that Node refuses with a 431 before the API sees
+ * it. The web client measures the encoded URL before it sends one.
  */
 export const ITEM_FILTER_MAX_RAW_LENGTH = 2048;
 

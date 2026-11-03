@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import {
   type DeletedItem,
   type FieldDefinition,
+  ITEM_FILTER_MAX_VALUE_LENGTH,
   type Item,
   type ItemFilter,
   ItemSchema,
@@ -72,6 +73,9 @@ export interface TagValue {
   value: string;
   count: number;
 }
+
+/** Any control character, as a GLOB pattern (NUL cannot occur in one, nor in a bound value). */
+const CONTROL_CHARACTER_GLOB = "*[\u0001-\u001f\u007f]*";
 
 /** How many tags `tagValues` suggests at most. */
 export const TAG_VALUES_LIMIT = 50;
@@ -182,13 +186,15 @@ function filterCondition(filter: ItemFilter, fields: FieldDefinition[]): SQL {
     case "all": {
       const needles = JSON.stringify(filter.value);
       if (field.type === "select" && filter.op === "in") {
-        return sql`(${type} = 'text' AND ${value} IN (SELECT "needle"."value" FROM json_each(${needles}) AS "needle"))`;
+        // Trimmed: filter values are trimmed, and a value another client
+        // stored with stray spaces is still that value.
+        return sql`(${type} = 'text' AND trim(${value}) IN (SELECT "needle"."value" FROM json_each(${needles}) AS "needle"))`;
       }
       if (!isList) throw unsupported();
       // Tags are typed freely, so "Signed" and "signed" are one tag; multiselect
       // values are the schema's options, matched as stored.
       const collate = field.type === "tags" ? sql` COLLATE NOCASE` : sql``;
-      const present = sql`EXISTS (SELECT 1 FROM json_each(${column}, ${path}) AS "held" WHERE "held"."type" = 'text' AND "held"."value" = "needle"."value"${collate})`;
+      const present = sql`EXISTS (SELECT 1 FROM json_each(${column}, ${path}) AS "held" WHERE "held"."type" = 'text' AND trim("held"."value") = "needle"."value"${collate})`;
       if (filter.op === "in") {
         return sql`(${type} = 'array' AND EXISTS (SELECT 1 FROM json_each(${needles}) AS "needle" WHERE ${present}))`;
       }
@@ -201,8 +207,10 @@ function filterCondition(filter: ItemFilter, fields: FieldDefinition[]): SQL {
         return sql`(${type} IN ('integer', 'real') AND ${value} ${compare} ${filter.value})`;
       }
       if (field.type === "date" && typeof filter.value === "string") {
-        // By calendar day: a datetime another client stored is read as its date.
-        return sql`(${type} = 'text' AND ${value} <> '' AND substr(${value}, 1, 10) ${compare} ${filter.value})`;
+        // By calendar day: a datetime another client stored is read as its date,
+        // and text that does not start with a padded date ("1999", "2020-5-3")
+        // is not one — compared as text it would pass bounds it should not.
+        return sql`(${type} = 'text' AND ${value} GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]*' AND substr(${value}, 1, 10) ${compare} ${filter.value})`;
       }
       throw unsupported();
     }
@@ -382,7 +390,10 @@ export class ItemsRepository {
    * The tags in use in one tags field, for suggesting them (#41): live items of
    * this collection only, counted, most used first, at most `TAG_VALUES_LIMIT`.
    * Tags compare without case, as the tag filter does, so "Signed" and "signed"
-   * are one entry, shown in the spelling that sorts first.
+   * are one entry, shown in the spelling that sorts first. Only tags a filter
+   * can ask for are suggested — trimmed, 1 to 200 characters, no control
+   * characters, the rules core's filter schema applies — so every suggestion
+   * finds its items.
    */
   async tagValues(collectionId: string, fieldId: string): Promise<{ values: TagValue[]; truncated: boolean }> {
     const field = this.#schemaOf(collectionId).find((candidate) => candidate.id === fieldId);
@@ -390,14 +401,15 @@ export class ItemsRepository {
     if (path === null) throw new InvalidItemQueryError("Not a tags field");
     const column = schema.items.fields;
     const rows = this.#db.all<{ value: string; count: number }>(sql`
-      SELECT MIN("held"."value") AS "value", count(DISTINCT ${schema.items.id}) AS "count"
+      SELECT MIN(trim("held"."value")) AS "value", count(DISTINCT ${schema.items.id}) AS "count"
       FROM ${schema.items}, json_each(${column}, ${path}) AS "held"
       WHERE ${schema.items.collectionId} = ${collectionId}
         AND ${schema.items.deletedAt} IS NULL
         AND json_type(${column}, ${path}) = 'array'
         AND "held"."type" = 'text'
-        AND "held"."value" <> ''
-      GROUP BY "held"."value" COLLATE NOCASE
+        AND length(trim("held"."value")) BETWEEN 1 AND ${ITEM_FILTER_MAX_VALUE_LENGTH}
+        AND "held"."value" NOT GLOB ${CONTROL_CHARACTER_GLOB}
+      GROUP BY trim("held"."value") COLLATE NOCASE
       ORDER BY "count" DESC, "value" COLLATE NOCASE ASC
       LIMIT ${TAG_VALUES_LIMIT + 1}
     `);
