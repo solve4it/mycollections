@@ -23,7 +23,7 @@ All routes require `Authorization: Bearer <token>` except `GET /api/health`.
 | `PATCH`  | `/api/collections/:id`                       | Update a collection, its field schema included (see [Editing a field schema](#editing-a-field-schema)) |
 | `DELETE` | `/api/collections/:id`                       | Soft-delete a collection                                                                               |
 | `POST`   | `/api/collections/:id/restore`               | Restore a soft-deleted collection                                                                      |
-| `GET`    | `/api/collections/:id/items`                 | List items (`?status=owned\|wanted\|ordered`)                                                          |
+| `GET`    | `/api/collections/:id/items`                 | List items (`?status=owned\|wanted\|ordered`, `?q=` search, `?sort=` — see below)                      |
 | `POST`   | `/api/collections/:id/items`                 | Create an item                                                                                         |
 | `GET`    | `/api/collections/:id/items/:itemId`         | Get an item                                                                                            |
 | `PATCH`  | `/api/collections/:id/items/:itemId`         | Update an item                                                                                         |
@@ -35,6 +35,18 @@ All routes require `Authorization: Bearer <token>` except `GET /api/health`.
 | `DELETE` | `/api/trash/collections/:id`                 | Permanently delete a trashed collection and its items                                                  |
 | `GET`    | `/api/export`                                | Download a JSON backup of all collections and items                                                    |
 | `POST`   | `/api/import`                                | Restore a backup document (`?mode=skip`)                                                               |
+
+### Searching and sorting items (#41)
+
+`GET /api/collections/:id/items` takes, all optional and combinable:
+
+| Param    | Meaning                                                                                                                                                                                                                  |
+| -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `status` | `owned`, `wanted` or `ordered`                                                                                                                                                                                           |
+| `q`      | Search text, at most 200 characters. Each word must prefix-match a text, select, multiselect, tags or number value (case- and accent-insensitive). Results are ranked by relevance unless `sort` is given.               |
+| `sort`   | One key, JSON:API style — `-` prefix for descending: `createdAt` (the default), `updatedAt`, `name`, or `field:<fieldId>`. Empty values sort last. Tags, multiselect and image fields cannot be sorted; that is a `400`. |
+
+A repeated `q` or `sort` is a `400`, never one value silently winning. Error messages are fixed text and never echo the query, and the request log records the path without its query string — search text is collection data, held to the same rule as request bodies.
 
 In dev mode, OpenAPI docs are available at `GET /api/docs`.
 
