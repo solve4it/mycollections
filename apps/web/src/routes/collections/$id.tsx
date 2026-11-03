@@ -1,4 +1,4 @@
-import type { Collection, Item } from "@mycollections/core";
+import { type Collection, formatItemFilters, type Item, type ItemFilter } from "@mycollections/core";
 import { type UseQueryResult, useQueryClient } from "@tanstack/react-query";
 import { createRoute, Link, redirect, useNavigate } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
@@ -6,6 +6,7 @@ import { useTranslation } from "react-i18next";
 import { DynamicItemForm } from "../../components/DynamicItemForm.js";
 import { EmptyState } from "../../components/EmptyState.js";
 import { FailureSurface } from "../../components/ErrorScreen.js";
+import { AppliedFilters, FilterPanel } from "../../components/FilterPanel.js";
 import { Icon } from "../../components/Icon.js";
 import { ItemSearchBox } from "../../components/ItemSearchBox.js";
 import { ItemSortSelect } from "../../components/ItemSortSelect.js";
@@ -14,7 +15,7 @@ import { UndoToast } from "../../components/UndoToast.js";
 import { useAnnounce } from "../../lib/announcer.js";
 import { getToken } from "../../lib/api-client.js";
 import { type FocusDestination, useFocusHandoff } from "../../lib/focus-handoff.js";
-import { effectiveSort, type ItemSearch, validateItemSearch } from "../../lib/item-search.js";
+import { effectiveFilters, effectiveSort, type ItemSearch, validateItemSearch } from "../../lib/item-search.js";
 import { CONTENT_LINK_ACTIVE_OPTIONS } from "../../lib/links.js";
 import { type PageName, usePageTitle } from "../../lib/page-title.js";
 import {
@@ -122,10 +123,16 @@ function CollectionDetailPage() {
   const queryClient = useQueryClient();
   const q = search.q?.trim() ?? "";
   const sort = collectionQuery.data ? effectiveSort(search.sort, collectionQuery.data.fields) : undefined;
-  const itemQuery = { q: q || undefined, sort };
-  // A sort in the URL waits for the collection: only its fields say whether
-  // the sort can be honoured, and asking without knowing risks a 400.
-  const itemsQuery = useItems(id, itemQuery, { enabled: !search.sort || collectionQuery.data !== undefined });
+  const filters: ItemFilter[] = collectionQuery.data
+    ? effectiveFilters(search.filter, collectionQuery.data.fields)
+    : [];
+  const filter = filters.length > 0 ? formatItemFilters(filters) : undefined;
+  const itemQuery = { q: q || undefined, sort, filter };
+  // A sort or filter in the URL waits for the collection: only its fields say
+  // whether they can be honoured, and asking without knowing risks a 400.
+  const itemsQuery = useItems(id, itemQuery, {
+    enabled: !(search.sort || search.filter) || collectionQuery.data !== undefined,
+  });
   const searchInputRef = useRef<HTMLInputElement>(null);
 
   // The search on screen *now*. A mutation's callbacks close over the render in
@@ -187,6 +194,19 @@ function CollectionDetailPage() {
     void navigate({ search: (prev: ItemSearch) => ({ ...prev, sort: next }), replace: true, resetScroll: false });
   }
 
+  function setFilters(next: ItemFilter[]) {
+    // Pushed, not replaced: applying filters is a deliberate step, and Back
+    // should undo it (#41).
+    void navigate({
+      search: (prev: ItemSearch) => ({ ...prev, filter: next.length > 0 ? formatItemFilters(next) : undefined }),
+      resetScroll: false,
+    });
+  }
+
+  /** The Filters toggle — where focus goes when the control holding it goes with the last filter. */
+  const filtersToggle: FocusDestination = () =>
+    document.querySelector<HTMLElement>(".filter-panel > button[aria-expanded]");
+
   /**
    * The result count, spoken once a search settles (#41). Keyed on the search
    * itself, not on fetches: a refetch after an edit, delete or undo re-runs the
@@ -198,16 +218,21 @@ function CollectionDetailPage() {
   // delete or undo) keeps its data, and toggling here would restart the
   // countdown and speak the count right on top of that action's own message.
   const settled = itemsQuery.data !== undefined && !itemsQuery.isPlaceholderData;
-  const settledQ = settled ? q : null;
+  // What the list is narrowed by, as one key: the search text and the filters.
+  const narrowing = JSON.stringify([q, filter ?? ""]);
+  const settledQ = settled ? narrowing : null;
   const settledCount = settled ? (itemsQuery.data?.length ?? 0) : null;
-  const announcedSearch = useRef(q);
+  const announcedSearch = useRef(narrowing);
   useEffect(() => {
     if (settledQ === null || settledCount === null || settledQ === announcedSearch.current) return;
     const timer = setTimeout(() => {
       announcedSearch.current = settledQ;
-      if (!settledQ) announce(t("showing_all", { count: settledCount }));
-      else if (settledCount === 0) announce(t("no_matches", { q: settledQ }));
-      else announce(t("items_match", { count: settledCount, q: settledQ }));
+      const [settledText, settledFilter] = JSON.parse(settledQ) as [string, string];
+      if (!settledText && !settledFilter) announce(t("showing_all", { count: settledCount }));
+      else if (settledCount === 0)
+        announce(settledText ? t("no_matches", { q: settledText }) : t("no_matches_filtered"));
+      else if (settledText) announce(t("items_match", { count: settledCount, q: settledText }));
+      else announce(t("items_match_filtered", { count: settledCount }));
     }, RESULT_ANNOUNCE_DELAY_MS);
     return () => clearTimeout(timer);
   }, [settledQ, settledCount, announce, t]);
@@ -289,10 +314,33 @@ function CollectionDetailPage() {
         <ItemSearchBox value={search.q ?? ""} onSearch={setSearch} inputRef={searchInputRef} />
         <ItemSortSelect value={sort} searching={q !== ""} fields={collection.fields} onSort={setSort} />
       </div>
+      <FilterPanel collectionId={id} fields={collection.fields} filters={filters} onApply={setFilters} />
+      <AppliedFilters
+        fields={collection.fields}
+        filters={filters}
+        onRemove={(index) => {
+          // Successor rule, as for any removal: the chip now at this index, else
+          // the one before, else — with no chip left — the Filters toggle.
+          handOffFocus(() => {
+            const chips = Array.from(document.querySelectorAll<HTMLElement>("[data-filter-chip]"));
+            return chips[index] ?? chips[chips.length - 1] ?? filtersToggle();
+          });
+          setFilters(filters.filter((_, i) => i !== index));
+        }}
+        onClear={() => {
+          handOffFocus(filtersToggle);
+          setFilters([]);
+        }}
+      />
       <ItemList
         collection={collection}
         query={itemsQuery}
         q={q}
+        filtered={filters.length > 0}
+        onClearFilters={() => {
+          handOffFocus(filtersToggle);
+          setFilters([]);
+        }}
         onClearSearch={() => {
           // The button goes with the empty state it sits in, so focus goes to
           // the box whose text was cleared — where the next search starts.
@@ -432,6 +480,9 @@ interface ItemListProps {
   /** The search in force, trimmed; empty when none (#41). */
   q: string;
   onClearSearch: () => void;
+  /** Whether filters narrow the list (#41). */
+  filtered: boolean;
+  onClearFilters: () => void;
   /** After a row's Save has landed and the list has been fetched again. */
   onSaved: (item: Item, index: number) => void;
   /** Asked for as a delete starts, while the row is still on screen. */
@@ -444,7 +495,17 @@ interface ItemListProps {
  * and there are none" as distinct outcomes — collapsing the two is what made a
  * failed load read as an empty collection (#228).
  */
-function ItemList({ collection, query, q, onClearSearch, onSaved, onDeleting, onDeleted }: ItemListProps) {
+function ItemList({
+  collection,
+  query,
+  q,
+  filtered,
+  onClearSearch,
+  onClearFilters,
+  onSaved,
+  onDeleting,
+  onDeleted,
+}: ItemListProps) {
   const { t } = useTranslation("items");
   const items = query.data;
 
@@ -461,12 +522,22 @@ function ItemList({ collection, query, q, onClearSearch, onSaved, onDeleting, on
 
   // "Nothing matches" and "nothing here" are different news, with different
   // ways out (#41).
-  if (items.length === 0 && q)
+  if (items.length === 0 && (q || filtered))
     return (
-      <EmptyState title={t("no_matches", { q })} description={t("no_matches_description")}>
-        <button type="button" className="touch-target button-quiet" onClick={onClearSearch}>
-          {t("clear_search")}
-        </button>
+      <EmptyState
+        title={q ? t("no_matches", { q }) : t("no_matches_filtered")}
+        description={q ? t("no_matches_description") : t("no_matches_filtered_description")}
+      >
+        {q && (
+          <button type="button" className="touch-target button-quiet" onClick={onClearSearch}>
+            {t("clear_search")}
+          </button>
+        )}
+        {filtered && (
+          <button type="button" className="touch-target button-quiet" onClick={onClearFilters}>
+            {t("filters_clear")}
+          </button>
+        )}
       </EmptyState>
     );
   if (items.length === 0) return <EmptyState title={t("empty_items")} description={t("empty_items_description")} />;
@@ -475,7 +546,11 @@ function ItemList({ collection, query, q, onClearSearch, onSaved, onDeleting, on
     <>
       {query.error && <p role="alert">{t("items_reload_error")}</p>}
       {/* Visible, not live: the announcer speaks it once the search settles. */}
-      {q && <p className="item-count">{t("items_match", { count: items.length, q })}</p>}
+      {q ? (
+        <p className="item-count">{t("items_match", { count: items.length, q })}</p>
+      ) : (
+        filtered && <p className="item-count">{t("items_match_filtered", { count: items.length })}</p>
+      )}
       <ul className="item-list" aria-busy={query.isPlaceholderData || undefined}>
         {items.map((item, index) => (
           <ItemRow

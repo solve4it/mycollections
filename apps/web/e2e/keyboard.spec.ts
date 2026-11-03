@@ -240,6 +240,7 @@ test.describe("keyboard traversal of every screen", () => {
       'link "Edit collection"',
       'searchbox "Search items"',
       'combobox "Sort by"',
+      'button "Filters"',
       editStop("Kind of Blue"),
       deleteStop("Kind of Blue"),
       editStop("Blue Train"),
@@ -1133,5 +1134,40 @@ test.describe("searching a collection (#41)", () => {
 
     await expect(page.getByRole("listitem").last()).toContainText("Ziggurat");
     await expect(page.getByRole("button", { name: editName("Ziggurat") })).toBeFocused();
+  });
+});
+
+test.describe("filtering a collection (#41)", () => {
+  test("the open panel's stops, then applying and removing a filter by keyboard", async ({ page, api }) => {
+    await api.reset();
+    const collection = await api.createCollection({ name: "Vinyl records", fields: FIELDS });
+    await api.createItem(collection.id, { title: "Blue Train", year: 1958 });
+    await api.createItem(collection.id, { title: "Kind of Blue", year: 1959 });
+
+    await page.goto(`/collections/${collection.id}`);
+    const toggle = page.getByRole("button", { name: "Filters" });
+    await toggle.focus();
+    await page.keyboard.press("Enter");
+    await expect(toggle).toHaveAttribute("aria-expanded", "true");
+    await expect(toggle, "a disclosure keeps focus on its button").toBeFocused();
+
+    await page.keyboard.press("Tab");
+    await expect(page.getByRole("spinbutton", { name: "Minimum" })).toBeFocused();
+    await page.keyboard.type("1959");
+    await page.keyboard.press("Tab");
+    await expect(page.getByRole("spinbutton", { name: "Maximum" })).toBeFocused();
+    await page.keyboard.press("Tab");
+    await expect(page.getByRole("button", { name: "Apply filters" })).toBeFocused();
+    await page.keyboard.press("Enter");
+
+    await expect(page.getByRole("button", { name: editName("Blue Train") })).toHaveCount(0);
+    await expect(page.getByText("1 item matches")).toBeVisible();
+    await expect(page.getByRole("button", { name: "Apply filters" }), "Apply keeps focus").toBeFocused();
+
+    const chip = page.getByRole("button", { name: "Remove filter Year: from 1959" });
+    await chip.focus();
+    await page.keyboard.press("Enter");
+    await expect(page.getByRole("button", { name: editName("Blue Train") })).toBeVisible();
+    await expect(toggle, "with no chip left, focus goes to the Filters toggle").toBeFocused();
   });
 });

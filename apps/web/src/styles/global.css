@@ -1088,6 +1088,62 @@ p[role="alert"] {
   flex: 0 1 16rem;
 }
 
+/* The filter panel and the filters in force (#41). The facets reuse .form-row
+   and .checkbox-row; this only lays them out. */
+.filter-panel {
+  margin-bottom: var(--space-3);
+}
+
+.filter-form {
+  margin-top: var(--space-2);
+  padding: var(--space-3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--card);
+}
+
+.filter-match {
+  margin-top: var(--space-2);
+  border: 0;
+  padding: 0;
+}
+
+/* Minimum and maximum side by side where there is room for both. */
+@media (min-width: 25rem) {
+  .filter-range {
+    display: grid;
+    grid-template-columns: auto 1fr auto 1fr;
+    align-items: center;
+    gap: var(--space-2);
+  }
+
+  .filter-range > legend {
+    grid-column: 1 / -1;
+  }
+}
+
+.applied-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+}
+
+.applied-filters > ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.filter-chip {
+  border: 1px solid var(--line);
+  border-radius: 999px;
+}
+
 /* How many items a search matched (#41). Plain text, not a live region — the
    shell's announcer speaks it once the search settles. */
 .item-count {
