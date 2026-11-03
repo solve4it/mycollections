@@ -118,7 +118,9 @@ Tests passing is CI's evidence, not yours. Before "done" or "fixed":
   can never be auto-approved and costs a permission prompt every call. If a shell really is
   missing `pnpm`, fix that shell (invoke the fnm-managed binary by its full path), don't
   source a profile. If husky fails with `pnpm: command not found`, the fnm node version lacks
-  corepack shims — run `corepack enable` from that version's bin. Kill dev servers by port
+  corepack shims. Node 25+ does not bundle corepack, so run `npm install -g corepack@latest &&
+  corepack enable` with that version's npm (DEVELOPMENT.md, #388); never fall back to a plain
+  `npm i -g pnpm`, which skips the `packageManager` hash check. Kill dev servers by port
   (`lsof -ti tcp:3111 -sTCP:LISTEN | xargs kill`), not by job id — background shells don't
   share state, and a surviving server causes an address-already-in-use error that looks like
   your bug. `-sTCP:LISTEN` is not optional: `lsof -i tcp:<port>` matches _both_ ends of a
