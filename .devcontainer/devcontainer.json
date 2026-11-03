@@ -1,14 +1,15 @@
 {
   "$schema": "https://raw.githubusercontent.com/devcontainers/spec/main/schemas/devContainer.schema.json",
   "name": "MyCollections",
-  "image": "mcr.microsoft.com/devcontainers/typescript-node:24",
+  "image": "mcr.microsoft.com/devcontainers/typescript-node:26",
   "features": {
     "ghcr.io/devcontainers/features/github-cli:1": {},
     "ghcr.io/devcontainers/features/node:2": {
-      "version": "26.13.0"
+      "version": "26.13.0",
+      "pnpmVersion": "none"
     }
   },
-  "postCreateCommand": "find . -type d -name node_modules -prune -exec rm -rf {} + 2>/dev/null; sudo corepack enable && pnpm install",
+  "postCreateCommand": "find . -type d -name node_modules -prune -exec rm -rf {} + 2>/dev/null; npm install -g --force corepack@0.36.0 && corepack enable && pnpm -v && pnpm install",
   "forwardPorts": [3000, 4321, 5173],
   "portsAttributes": {
     "3000": { "label": "Fastify API" },
