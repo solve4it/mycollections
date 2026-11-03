@@ -65,6 +65,73 @@ describe("GET /api/collections/:id/items", () => {
   });
 });
 
+describe("GET /api/collections/:id/items — search and sort (#41)", () => {
+  const fields: FieldDefinition[] = [
+    { id: "title", type: "text", label: "Title", required: true },
+    { id: "pages", type: "number", label: "Pages", required: false },
+    { id: "tags", type: "tags", label: "Tags", required: false },
+  ];
+  let books: Collection;
+
+  beforeEach(async () => {
+    books = await handle.collections.create({ name: "Library", fields, isFiniteSet: false });
+    await handle.items.create({ collectionId: books.id, fields: { title: "Dune", pages: 412, tags: ["desert"] } });
+    await handle.items.create({ collectionId: books.id, fields: { title: "Emma", pages: 300 } });
+    await handle.items.create({
+      collectionId: books.id,
+      status: "wanted",
+      fields: { title: "Dune Messiah", pages: 256 },
+    });
+  });
+
+  async function list(query: string) {
+    const app = await makeApp();
+    return app.inject({ method: "GET", url: `/api/collections/${books.id}/items?${query}`, headers: auth });
+  }
+
+  const titlesOf = (res: { json: <T>() => T }) => res.json<Item[]>().map((item) => item.fields.title);
+
+  it("returns only the items matching q", async () => {
+    const res = await list("q=dun");
+    expect(res.statusCode).toBe(200);
+    expect(titlesOf(res)).toEqual(["Dune", "Dune Messiah"]);
+  });
+
+  it("combines q with the status filter", async () => {
+    expect(titlesOf(await list("q=dune&status=wanted"))).toEqual(["Dune Messiah"]);
+  });
+
+  it("sorts by a field, descending with a '-' prefix", async () => {
+    expect(titlesOf(await list("sort=-field:pages"))).toEqual(["Dune", "Emma", "Dune Messiah"]);
+    expect(titlesOf(await list("sort=name"))).toEqual(["Dune", "Dune Messiah", "Emma"]);
+  });
+
+  it("treats hostile search text as words, not a server error", async () => {
+    const res = await list(`q=${encodeURIComponent('"NEAR( title:\u0000 ^*')}`);
+    expect(res.statusCode).toBe(200);
+  });
+
+  it("rejects q longer than 200 characters", async () => {
+    expect((await list(`q=${"a".repeat(200)}`)).statusCode).toBe(200);
+    expect((await list(`q=${"a".repeat(201)}`)).statusCode).toBe(400);
+  });
+
+  it("rejects a repeated q rather than picking one", async () => {
+    expect((await list("q=dune&q=emma")).statusCode).toBe(400);
+  });
+
+  it.each([
+    ["sort=title", "a sort key that is not one"],
+    ["sort=field:missing", "an unknown field"],
+    ["sort=field:tags", "an unsortable field type"],
+  ])("rejects %s (%s) with a 400 that does not echo the query", async (query) => {
+    const res = await list(query);
+    expect(res.statusCode).toBe(400);
+    expect(res.body).not.toContain("missing");
+    expect(res.body).not.toContain("field:");
+  });
+});
+
 describe("POST /api/collections/:id/items", () => {
   it("creates an item with default status and returns 201", async () => {
     const app = await makeApp();
