@@ -19,6 +19,9 @@ This guide takes you from a fresh clone to a running MyCollections dev environme
 
   `pnpm -v` inside the repo should then print the pinned version. Corepack is the route that checks the
   hash: it refuses a pnpm download that does not match, where pnpm's own version switching runs it anyway.
+  CI installs pnpm the same way, through the composite action in `.github/actions/setup-pnpm`, and its
+  "Package manager integrity" job proves on every run that a tampered hash is refused. Corepack only checks
+  a download, never its cache, so that action must never cache `COREPACK_HOME`.
   Global npm packages live inside each Node installation, so after fnm installs a new Node version, run
   both commands again — otherwise `pnpm` is missing, and the pre-commit hook fails with `pnpm: command not found`.
   No `sudo`: fnm's Node installations belong to you. If the install stops with `EEXIST` on `pnpm`, `pnpx` or
@@ -261,7 +264,7 @@ The docs site at `apps/docs` is an [Astro Starlight](https://starlight.astro.bui
 - The not-found page is `apps/docs/src/pages/404.astro`, not a content file, and Starlight's own `/404` route is turned off (`disable404Route`). Starlight renders `src/content/docs/404.md` from an injected route, but its `[...slug]` catch-all does not exclude that same entry, so the documented file makes two routes claim `/404` and every build warns (verified against Starlight 0.42.0). Astro emits `src/pages/404.astro` as `dist/404.html`, which is the file GitHub Pages serves for an unknown URL; `check-built-pages.mjs` asserts it exists with a title, since nothing links to it and the link check never reaches it.
 - `apps/docs/src/content/i18n/en.json` is an empty, required file — see `src/content/i18n/_README.md`. Starlight warns on every build without the `i18n` collection, and the collection needs at least one entry.
 - The Starlight splash page lives at `apps/docs/src/content/docs/index.mdx` and is Starlight-specific (not shared with in-app Help).
-- Deployment to GitHub Pages happens automatically via `.github/workflows/deploy-docs.yml` on push to `main` when `apps/docs/**` or `docs/**` changes.
+- Deployment to GitHub Pages happens automatically via `.github/workflows/deploy-docs.yml` on push to `main` when `apps/docs/**`, `docs/**`, the lockfile, the workflow itself or the `setup-pnpm` action it installs pnpm with changes.
 
 ```bash
 pnpm --filter @mycollections/docs dev      # local dev server
