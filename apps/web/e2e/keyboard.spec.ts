@@ -21,10 +21,8 @@ import { expect, focusedControl, NOTHING_FOCUSED, tabOrder, test } from "./fixtu
  * the control holding it (#367). Those blocks assert a specific named control
  * rather than "not `<body>`", which would pass for a focus landing anywhere.
  *
- * Two states this file traverses are knowingly wrong in ways it does not assert:
- * a row's open editor collides DOM ids with the add-item form, so one form's
- * labels double up and the other's vanish (#369), and a collection card is
- * announced code-then-count-then-name (#370).
+ * One state this file traverses is knowingly wrong in a way it does not assert:
+ * a collection card is announced code-then-count-then-name (#370).
  */
 
 const FIELDS = [

@@ -78,6 +78,24 @@ describe("FieldSchemaBuilder", () => {
     for (const el of document.querySelectorAll("[id]")) expect(el.id).not.toMatch(/\s/);
   });
 
+  // One row's type select and another row's lock hint must not share an id when
+  // the keys are chosen so that part-plus-key spells the same string.
+  it("keeps ids unique when one key is another prefixed with a part name", () => {
+    render(
+      <FieldSchemaBuilder
+        fields={[draft("hint-foo", "First"), draft("foo", "Second")]}
+        onChange={() => {}}
+        lockedTypeKeys={new Set(["hint-foo", "foo"])}
+        lockedTypeHint="This field already has values."
+      />,
+    );
+    for (const type of screen.getAllByRole("combobox", { name: "Field type" })) {
+      expect(type).toHaveAccessibleDescription("This field already has values.");
+    }
+    const ids = Array.from(document.querySelectorAll("[id]"), (el) => el.id);
+    expect(new Set(ids).size).toBe(ids.length);
+  });
+
   // The Remove field handoff (#367) used to find its destination by positional
   // id; it now names the successor by key, and must land in the same places.
   it("hands focus to the next row's label when a middle row is removed", async () => {

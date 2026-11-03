@@ -2,7 +2,7 @@ import { type FieldDefinition, ITEM_STATUSES, type ItemStatus } from "@mycollect
 import { type FormEvent, useEffect, useId, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { ItemInput } from "../lib/api-client.js";
-import { domIdPart } from "../lib/dom-id.js";
+import { scopedId } from "../lib/dom-id.js";
 
 type DraftValue = string | boolean | string[];
 
@@ -92,7 +92,7 @@ export function DynamicItemForm({
   // and a `<label for>` resolves to the first element in the document with that
   // id, so shared ids named one form's controls twice and the other's not at all.
   const idPrefix = useId();
-  const statusId = `${idPrefix}-status`;
+  const statusId = scopedId(idPrefix, "status");
   const [status, setStatus] = useState<ItemStatus>(initialStatus ?? "owned");
   const [values, setValues] = useState<Record<string, DraftValue>>(() =>
     Object.fromEntries(fields.map((f) => [f.id, toDraft(f, initialValues[f.id])])),
@@ -151,7 +151,7 @@ export function DynamicItemForm({
         <FieldControl
           key={field.id}
           field={field}
-          inputId={`${idPrefix}-field-${domIdPart(field.id)}`}
+          inputId={scopedId(idPrefix, "field", field.id)}
           value={values[field.id] ?? ""}
           onChange={(v) => setValue(field.id, v)}
         />

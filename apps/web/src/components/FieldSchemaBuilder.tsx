@@ -1,7 +1,7 @@
 import { BUILT_IN_FIELD_TYPES, type BuiltInFieldType, type FieldDefinition } from "@mycollections/core";
 import { useId, useRef } from "react";
 import { useTranslation } from "react-i18next";
-import { domIdPart } from "../lib/dom-id.js";
+import { scopedId } from "../lib/dom-id.js";
 import { useFocusHandoff } from "../lib/focus-handoff.js";
 import { Icon } from "./Icon.js";
 
@@ -84,7 +84,7 @@ export function FieldSchemaBuilder({ fields, onChange, lockedTypeKeys, lockedTyp
   // Array positions renumbered the ids under every row that survived a removal,
   // and a literal prefix would collide with a second builder on the screen.
   const idPrefix = useId();
-  const rowId = (key: string, part: string) => `${idPrefix}-${part}-${domIdPart(key)}`;
+  const rowId = (key: string, part: string) => scopedId(idPrefix, part, key);
 
   function updateField(key: string, patch: Partial<FieldDraft>) {
     onChange(fields.map((f) => (f.key === key ? { ...f, ...patch } : f)));

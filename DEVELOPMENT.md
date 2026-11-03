@@ -377,9 +377,11 @@ instance twice and leave the second unnamed — the collection screen did exactl
 add-item form and a row's editor open at the same time. An index renumbers ids under rows that
 survive a removal; key the suffix by the same thing React keys the row by.
 
-When the suffix is a data key (a field id is any non-empty string), pass it through `domIdPart()`
-in `src/lib/dom-id.ts`: an id may not contain whitespace, and `aria-describedby` is a
-space-separated list, so a raw key with a space splits the reference. axe files duplicate ids
+Build the id with `scopedId(prefix, part, key?)` from `src/lib/dom-id.ts` rather than by
+concatenating. A data key (a field id is any non-empty string) can contain whitespace, which an id
+may not and which splits an `aria-describedby` list; it can contain a dash, so a dash-joined
+`part`-`key` pair can spell another row's id; and `encodeURIComponent` throws on an unpaired
+surrogate. `scopedId` escapes the key totally and joins it with a separator the escape never emits. axe files duplicate ids
 under `incomplete` rather than `violations`, which `expectNoAccessibilityViolations` fails on too,
 but only if a scan actually enters the state where both instances are on screen.
 
