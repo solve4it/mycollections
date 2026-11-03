@@ -21,6 +21,17 @@ export {
 } from "./field.js";
 export { type DeletedItem, type Item, ItemFieldValueSchema, ItemSchema } from "./item.js";
 export {
+  formatItemFilters,
+  ITEM_FILTER_MAX,
+  ITEM_FILTER_MAX_RAW_LENGTH,
+  ITEM_FILTER_MAX_VALUE_LENGTH,
+  ITEM_FILTER_MAX_VALUES,
+  type ItemFilter,
+  ItemFilterListSchema,
+  ItemFilterSchema,
+  parseItemFilters,
+} from "./item-filter.js";
+export {
   formatItemSort,
   ITEM_SEARCH_MAX_LENGTH,
   type ItemSort,

@@ -25,6 +25,7 @@ All routes require `Authorization: Bearer <token>` except `GET /api/health`.
 | `POST`   | `/api/collections/:id/restore`               | Restore a soft-deleted collection                                                                      |
 | `GET`    | `/api/collections/:id/items`                 | List items (`?status=owned\|wanted\|ordered`, `?q=` search, `?sort=` — see below)                      |
 | `POST`   | `/api/collections/:id/items`                 | Create an item                                                                                         |
+| `GET`    | `/api/collections/:id/tag-values`            | Tags in use in a tags field (`?field=`), for suggestions                                               |
 | `GET`    | `/api/collections/:id/items/:itemId`         | Get an item                                                                                            |
 | `PATCH`  | `/api/collections/:id/items/:itemId`         | Update an item                                                                                         |
 | `DELETE` | `/api/collections/:id/items/:itemId`         | Soft-delete an item                                                                                    |
@@ -44,9 +45,25 @@ All routes require `Authorization: Bearer <token>` except `GET /api/health`.
 | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `status` | `owned`, `wanted` or `ordered`                                                                                                                                                                                                                                                                          |
 | `q`      | Search text, at most 200 characters. Each word must prefix-match a text, select, multiselect, tags or number value (case- and accent-insensitive). Results are ranked by relevance unless `sort` is given.                                                                                              |
+| `filter` | Structured filters, a JSON array (at most 2048 characters and 10 filters), ANDed — see below.                                                                                                                                                                                                           |
 | `sort`   | One key, JSON:API style — `-` prefix for descending: `createdAt`, `updatedAt`, `name`, or `field:<fieldId>`. Empty values sort last. Without `sort`, items come in the order they were added, or by relevance when `q` has terms. Tags, multiselect and image fields cannot be sorted; that is a `400`. |
 
-A repeated `q` or `sort` is a `400`, never one value silently winning. Error messages are fixed text and never echo the query, and the request log records the path without its query string — search text is collection data, held to the same rule as request bodies. That includes the 404 for an unknown route, whose log line and response message name the path only.
+**Filters** follow the vocabulary in `packages/core/src/item-filter.ts`. Each one names a field of the collection's schema and an operator that suits its type:
+
+| `op`    | Field types                    | `value`                   | Matches                                  |
+| ------- | ------------------------------ | ------------------------- | ---------------------------------------- |
+| `in`    | select, multiselect, tags      | 1–20 strings              | any of them (tags ignore ASCII case)     |
+| `all`   | multiselect, tags              | 1–20 strings              | every one of them                        |
+| `gte`   | number, rating, currency, date | a number, or `YYYY-MM-DD` | at or above, inclusive (dates by day)    |
+| `lte`   | number, rating, currency, date | a number, or `YYYY-MM-DD` | at or below, inclusive                   |
+| `eq`    | boolean                        | `true` or `false`         | exactly that — not an item with no value |
+| `empty` | all of the above               | —                         | missing, `null`, `""` or `[]`            |
+
+Text, url, email and image fields take no filters; search covers text. Stored values are compared trimmed; tags ignore case for ASCII letters only (SQLite's `NOCASE`, so "É" and "é" differ); a date bound matches only stored text that starts `YYYY-MM-DD`. The 2048-character cap counts characters, not bytes: a filter full of non-ASCII text can exceed Node's 16 KB request-header limit first and be refused with a `431` before the API sees it, so the web client checks the encoded length itself. Each operator checks the stored type, so a number stored as text never passes a numeric bound. An invalid filter is a `400` "Invalid filter" (or "Unknown filter field" / "This filter does not suit this field"), never quoting the request.
+
+`GET /api/collections/:id/tag-values?field=<id>` lists the tags in use in one tags field — `{ values: [{ value, count }], truncated }`, live items only, most used first, at most 50.
+
+A repeated `q`, `sort` or `filter` is a `400`, never one value silently winning. Error messages are fixed text and never echo the query, and the request log records the path without its query string — search text is collection data, held to the same rule as request bodies. That includes the 404 for an unknown route, whose log line and response message name the path only.
 
 In dev mode, OpenAPI docs are available at `GET /api/docs`.
 
