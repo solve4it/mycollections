@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatItemSort, ITEM_SEARCH_MAX_LENGTH, parseItemSort } from "./item-query.js";
+import { formatItemSort, ITEM_SEARCH_MAX_LENGTH, isSortableFieldType, parseItemSort } from "./item-query.js";
 
 describe("parseItemSort", () => {
   it("reads the timestamp keys, ascending unless prefixed with '-'", () => {
@@ -32,5 +32,15 @@ describe("formatItemSort", () => {
 describe("ITEM_SEARCH_MAX_LENGTH", () => {
   it("is the cap the API and the search box share", () => {
     expect(ITEM_SEARCH_MAX_LENGTH).toBe(200);
+  });
+});
+
+describe("isSortableFieldType", () => {
+  it.each(["text", "number", "boolean", "date", "url", "email", "select", "rating", "currency"])("sorts %s", (type) => {
+    expect(isSortableFieldType(type)).toBe(true);
+  });
+
+  it.each(["tags", "multiselect", "image", "unknown"])("does not sort %s", (type) => {
+    expect(isSortableFieldType(type)).toBe(false);
   });
 });

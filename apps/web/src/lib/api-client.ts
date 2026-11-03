@@ -86,9 +86,25 @@ export async function getCollection(id: string): Promise<Collection> {
   return res.json() as Promise<Collection>;
 }
 
-export async function listItems(collectionId: string, status?: ItemStatus): Promise<Item[]> {
-  const query = status ? `?status=${encodeURIComponent(status)}` : "";
-  const res = await request(`/api/collections/${collectionId}/items${query}`);
+/** What a list of items is narrowed and ordered by (#41). Empty values are left out of the request. */
+export interface ItemListQuery {
+  status?: ItemStatus;
+  /** Search text; trimmed, and not sent when nothing is left. */
+  q?: string;
+  /** A sort key in core's `formatItemSort` form. */
+  sort?: string;
+}
+
+export async function listItems(collectionId: string, query: ItemListQuery = {}): Promise<Item[]> {
+  const params = new URLSearchParams();
+  if (query.status) params.set("status", query.status);
+  const q = query.q?.trim();
+  if (q) params.set("q", q);
+  if (query.sort) params.set("sort", query.sort);
+  // toString, not `params.size`, which Safari 16 and Chrome 111 lack.
+  const encoded = params.toString();
+  const search = encoded ? `?${encoded}` : "";
+  const res = await request(`/api/collections/${collectionId}/items${search}`);
   if (!res.ok) throw new ApiError(res.status);
   return res.json() as Promise<Item[]>;
 }

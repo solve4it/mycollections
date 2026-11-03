@@ -1071,6 +1071,14 @@ p[role="alert"] {
   color: var(--accent-text);
 }
 
+/* How many items a search matched (#41). Plain text, not a live region — the
+   shell's announcer speaks it once the search settles. */
+.item-count {
+  margin: 0 0 var(--space-2);
+  color: var(--ink-muted);
+  font-size: 0.875rem;
+}
+
 .item-list {
   list-style: none;
   margin: 0 0 var(--space-5);

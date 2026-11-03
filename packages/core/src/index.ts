@@ -25,6 +25,7 @@ export {
   ITEM_SEARCH_MAX_LENGTH,
   type ItemSort,
   type ItemSortDirection,
+  isSortableFieldType,
   parseItemSort,
 } from "./item-query.js";
 export {

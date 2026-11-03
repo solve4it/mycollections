@@ -243,6 +243,20 @@ That does not remove the paused state entirely (a hidden tab still pauses a retr
 - Keep "failed to load" and "loaded, and there is nothing" as separate outcomes. Falling back to `data ?? []` tells the user their collection is empty when the request actually failed.
 - Once data has loaded, keep it on screen if a later reload fails and show a warning alongside it, rather than replacing it with an error page.
 
+A screen's search state lives in the URL (#41), and three rules come with it:
+
+- **Search values are plain strings.** The router is built with `parseSearch`/`stringifySearch`
+  from `lib/search-params.ts`, not TanStack's JSON default, which turned `?q=1984` into a number
+  and wrote JSON-looking text back with quotes. A route checks only the shape in `validateSearch`
+  and drops what it cannot use; anything that depends on loaded data — whether a `sort` names a
+  field this collection can sort by — is decided once that data is there (`effectiveSort`).
+- **Typing navigates with `replace: true` and `resetScroll: false`**, or each keystroke adds a
+  history entry and scrolls the page to the top.
+- **Each search is its own cache entry** under the `["collections", id, "items"]` prefix
+  (`itemsQueryKey`), with `placeholderData: keepPreviousData` so the old list stays on screen while
+  the next one loads. Check `isPlaceholderData` before treating `data` as the answer to the current
+  search.
+
 Two consequences for how a failure is verified, both learned the hard way (#347):
 
 - **A failure surface arrives about seven seconds after the navigation, not with it.** Nothing overrides `retry`, so React Query's default three attempts run at 1s, 2s and 4s first. Any test or manual check that gives up sooner concludes the screen has no error state. It is also why those screens announce themselves with `role="alert"` rather than by taking focus — by the time they mount, focus has long since settled somewhere else.
@@ -450,6 +464,9 @@ its comment:
 | The toast's Dismiss                       | wherever the delete handed focus                                               | — same answer as the delete       |
 | Remove field                              | the next field's **label**, else Add field                                     | successor element                 |
 | A confirmed trash purge                   | the next row in the **same** list, else the one before, else the trash section | successor element                 |
+| Save, when a search no longer matches it  | the row that takes its place — as for a Delete (#41)                           | successor element                 |
+| Undo, when a search does not match it     | wherever the delete handed focus — as for Dismiss (#41)                        | successor element                 |
+| Clear search (in the no-match state)      | the search box                                                                 | return to where the input began   |
 
 Two things that look like details and are not. A destination has to be a control whose name says
 where the user now is, which is why Remove field goes to the next field's label rather than to its
@@ -459,6 +476,13 @@ destination is a container made focusable with `tabIndex={-1}` — the Items hea
 `<section>` with `aria-labelledby` pointing at its heading, which is the pattern `ErrorScreen.tsx`
 already uses. Focus arriving there is the only thing that tells a screen-reader user the list is
 now empty, because "The trash is empty." is a plain paragraph, not a live region.
+
+A search (#41) can take a row off the list as a side effect of an edit, which is why the Save
+handoff is chosen by the **page**, not the row: the row's own `useFocusHandoff` would unmount with
+it. The page asks whether the item is still listed once the list has been fetched again — a
+mutation's `mutate`-level `onSuccess` runs after its hook-level `onSuccess`, which awaits the
+invalidation's refetch — and the hidden cases also say why the item went, through the announcer.
+An add the search hides says so in the add form's own region.
 
 So: **a new control that disables itself, or an action that removes the control that triggered it,
 owes a spec in one of those two blocks.** The deletion case also owes a destination before it owes

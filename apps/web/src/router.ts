@@ -2,6 +2,7 @@ import { type AnyRoute, createRouter, type RouterHistory } from "@tanstack/react
 import { RouteError } from "./components/ErrorScreen.js";
 import { NotFoundScreen } from "./components/NotFoundScreen.js";
 import { onRouterCatch } from "./lib/error-reporter.js";
+import { parseSearch, stringifySearch } from "./lib/search-params.js";
 import { routeTree } from "./routeTree.js";
 
 interface AppRouterOverrides {
@@ -50,6 +51,9 @@ export function createAppRouter({ routeTree: tree = routeTree, history }: AppRou
     defaultOnCatch: onRouterCatch,
     defaultErrorComponent: RouteError,
     defaultNotFoundComponent: NotFoundScreen,
+    // Every search value a plain string (#41) — see lib/search-params.ts.
+    parseSearch,
+    stringifySearch,
     ...(history ? { history } : {}),
   });
 }

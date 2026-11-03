@@ -29,5 +29,16 @@
   "deleted_toast": "Deleted “{{name}}”",
   "undo": "Undo",
   "dismiss_undo": "Dismiss",
-  "restore_error": "Could not restore this item. It is still in the trash — check that the app's server is running, then try again."
+  "restore_error": "Could not restore this item. It is still in the trash — check that the app's server is running, then try again.",
+  "search_label": "Search items",
+  "items_match_one": "{{count}} item matches “{{q}}”",
+  "items_match_other": "{{count}} items match “{{q}}”",
+  "no_matches": "No items match “{{q}}”",
+  "no_matches_description": "Try fewer or shorter words. Search looks at text, choices, tags and numbers.",
+  "clear_search": "Clear search",
+  "showing_all_one": "Showing all {{count}} item",
+  "showing_all_other": "Showing all {{count}} items",
+  "added_status_hidden": "Added “{{name}}”. It doesn’t match the search, so it isn’t shown.",
+  "saved_hidden": "Saved “{{name}}”. It no longer matches the search, so it isn’t shown.",
+  "restored_hidden": "Restored “{{name}}”. It doesn’t match the search, so it isn’t shown."
 }
