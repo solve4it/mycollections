@@ -14,7 +14,9 @@ export type ItemSortDirection = "asc" | "desc";
  * an item in a message — and `field` orders by one schema field's value.
  */
 export type ItemSort =
-  | { key: "createdAt" | "updatedAt" | "name"; direction: ItemSortDirection }
+  | { key: "createdAt"; direction: ItemSortDirection }
+  | { key: "updatedAt"; direction: ItemSortDirection }
+  | { key: "name"; direction: ItemSortDirection }
   | { key: "field"; fieldId: string; direction: ItemSortDirection };
 
 const FIELD_PREFIX = "field:";
