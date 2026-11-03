@@ -879,7 +879,12 @@ test.describe("focus when the control holding it goes away", () => {
       page.getByRole("form", { name: "Editing “Kind of Blue”" }),
       "the editor must say which item it is editing",
     ).toBeVisible();
-    await expect(row.getByRole("combobox"), "focus must enter the editor that opened").toBeFocused();
+    // Named, not just found: with the add form on the same screen the two used
+    // to share ids, and this control was announced as "Status Status" (#369).
+    await expect(
+      row.getByRole("combobox", { name: "Status", exact: true }),
+      "focus must enter the editor that opened",
+    ).toBeFocused();
   });
 
   test("cancelling a row's editor hands focus back to the Edit that opened it", async ({ page, api }) => {
