@@ -106,6 +106,21 @@ describe("FilterPanel (#41)", () => {
   });
 });
 
+describe("FilterPanel limits (#41)", () => {
+  it("refuses filters whose encoded URL would be too long for the server to accept", async () => {
+    const long = Array.from({ length: 12 }, (_, i) => ({ value: `${"€".repeat(150)}${i}`, count: 1 }));
+    vi.mocked(getTagValues).mockResolvedValue({ values: long, truncated: false });
+    const onApply = vi.fn();
+    render(wrap(<FilterPanel collectionId="c1" fields={FIELDS} filters={[]} onApply={onApply} />));
+    fireEvent.click(toggle());
+    await screen.findByRole("checkbox", { name: long[0]?.value });
+    for (const { value } of long) fireEvent.click(screen.getByRole("checkbox", { name: value }));
+    fireEvent.click(screen.getByRole("button", { name: "Apply filters" }));
+    expect(onApply).not.toHaveBeenCalled();
+    await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent(/more than can be applied/));
+  });
+});
+
 describe("AppliedFilters (#41)", () => {
   it("names each filter on a button that removes it, and offers Clear filters", () => {
     const onRemove = vi.fn();

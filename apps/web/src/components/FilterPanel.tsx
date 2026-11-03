@@ -10,6 +10,12 @@ import { useTranslation } from "react-i18next";
 import { draftFromFilters, type FacetDraft, type FilterDraft, filtersFromDraft } from "../lib/filter-draft.js";
 import { useTagValues } from "../lib/queries.js";
 
+/**
+ * The longest URL-encoded filter the panel will send — well inside Node's 16 KB
+ * request-header limit, with room for the rest of the URL and the headers.
+ */
+export const FILTER_MAX_ENCODED_LENGTH = 6_000;
+
 interface FilterPanelProps {
   collectionId: string;
   fields: FieldDefinition[];
@@ -74,8 +80,14 @@ export function FilterPanel({ collectionId, fields, filters, onApply }: FilterPa
         onSubmit={(event) => {
           event.preventDefault();
           const next = filtersFromDraft(draft, fields);
-          // The API's caps, checked here so a query it would refuse is never sent.
-          if (next.length > 0 && parseItemFilters(formatItemFilters(next)) === null) {
+          // The API's caps, checked here so a query it would refuse is never sent —
+          // including the encoded length, which the API cannot check: past Node's
+          // 16 KB header limit a request is refused with a 431 before it arrives.
+          const encoded = formatItemFilters(next);
+          if (
+            next.length > 0 &&
+            (parseItemFilters(encoded) === null || encodeURIComponent(encoded).length > FILTER_MAX_ENCODED_LENGTH)
+          ) {
             setTooMany(true);
             return;
           }
