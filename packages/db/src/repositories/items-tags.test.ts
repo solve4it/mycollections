@@ -34,7 +34,7 @@ describe("ItemsRepository.renameTag (#41)", () => {
     const b = await add([" Signed "]);
     const c = await add(["mono"]);
 
-    expect(await handle.items.renameTag(records.id, "tags", "SIGNED", "autographed")).toEqual({ updated: 2 });
+    expect(await handle.items.renameTag(records.id, "tags", "SIGNED", "autographed")).toMatchObject({ updated: 2 });
     expect(await tagsOf(a)).toEqual(["first press", "autographed", "mono"]);
     expect(await tagsOf(b)).toEqual(["autographed"]);
     expect(await tagsOf(c)).toEqual(["mono"]);
@@ -42,7 +42,10 @@ describe("ItemsRepository.renameTag (#41)", () => {
 
   it("merges into an existing tag, leaving one spelling where the first match was", async () => {
     const both = await add(["Signed", "mono", "signed", "autographed"]);
-    expect(await handle.items.renameTag(records.id, "tags", "signed", "Autographed")).toEqual({ updated: 1 });
+    expect(await handle.items.renameTag(records.id, "tags", "signed", "Autographed")).toMatchObject({
+      updated: 1,
+      merged: true,
+    });
     expect(await tagsOf(both)).toEqual(["Autographed", "mono"]);
   });
 
@@ -50,7 +53,7 @@ describe("ItemsRepository.renameTag (#41)", () => {
     const lower = await add(["signed"]);
     const right = await add(["Signed"]);
     const before = (await handle.items.getById(right.id))?.updatedAt;
-    expect(await handle.items.renameTag(records.id, "tags", "signed", "Signed")).toEqual({ updated: 1 });
+    expect(await handle.items.renameTag(records.id, "tags", "signed", "Signed")).toMatchObject({ updated: 1 });
     expect(await tagsOf(lower)).toEqual(["Signed"]);
     expect((await handle.items.getById(right.id))?.updatedAt).toBe(before);
   });
@@ -59,7 +62,7 @@ describe("ItemsRepository.renameTag (#41)", () => {
     const accented = await add(["CAFÉ"]);
     const nbsp = await add(["café "]);
     const exact = await add(["café"]);
-    expect(await handle.items.renameTag(records.id, "tags", "café", "coffee")).toEqual({ updated: 1 });
+    expect(await handle.items.renameTag(records.id, "tags", "café", "coffee")).toMatchObject({ updated: 1 });
     expect(await tagsOf(accented)).toEqual(["CAFÉ"]);
     expect(await tagsOf(nbsp)).toEqual(["café "]);
     expect(await tagsOf(exact)).toEqual(["coffee"]);
@@ -71,7 +74,10 @@ describe("ItemsRepository.renameTag (#41)", () => {
     const other = await handle.collections.create({ name: "Other", fields, isFiniteSet: false });
     const elsewhere = await add(["signed"], other);
 
-    expect(await handle.items.renameTag(records.id, "tags", "signed", "autographed")).toEqual({ updated: 1 });
+    expect(await handle.items.renameTag(records.id, "tags", "signed", "autographed")).toMatchObject({
+      updated: 0,
+      trashed: 1,
+    });
     expect(await tagsOf(trashed)).toEqual(["autographed"]);
     expect(await tagsOf(elsewhere)).toEqual(["signed"]);
   });
@@ -87,7 +93,7 @@ describe("ItemsRepository.renameTag (#41)", () => {
       .run(id, records.id, JSON.stringify({ title: "mixed", tags: [1, "signed", null, ["signed"]] }), now, now);
     const scalar = await add("signed");
 
-    expect(await handle.items.renameTag(records.id, "tags", "signed", "autographed")).toEqual({ updated: 1 });
+    expect(await handle.items.renameTag(records.id, "tags", "signed", "autographed")).toMatchObject({ updated: 1 });
     const row = mixed.prepare("SELECT fields FROM items WHERE id = ?").get(id) as { fields: string };
     expect(JSON.parse(row.fields).tags).toEqual([1, "autographed", null, ["signed"]]);
     expect(await tagsOf(scalar)).toBe("signed");
@@ -95,9 +101,33 @@ describe("ItemsRepository.renameTag (#41)", () => {
     expect(found.map((item) => item.id)).toEqual([id]);
   });
 
-  it("does nothing for a rename to the very same spelling", async () => {
+  it("saving the spelling shown tidies the other spellings into it, and touches nothing already right", async () => {
+    const lower = await add(["signed"]);
+    const spaced = await add([" Signed "]);
+    const right = await add(["Signed"]);
+    const before = (await handle.items.getById(right.id))?.updatedAt;
+    expect(await handle.items.renameTag(records.id, "tags", "Signed", "Signed")).toEqual({
+      updated: 2,
+      trashed: 0,
+      merged: false,
+    });
+    expect(await tagsOf(lower)).toEqual(["Signed"]);
+    expect(await tagsOf(spaced)).toEqual(["Signed"]);
+    expect((await handle.items.getById(right.id))?.updatedAt).toBe(before);
+  });
+
+  it("says whether a rename merged into a tag already in use", async () => {
     await add(["signed"]);
-    expect(await handle.items.renameTag(records.id, "tags", "signed", "signed")).toEqual({ updated: 0 });
+    await add(["promo", "Autographed"]);
+    expect(await handle.items.renameTag(records.id, "tags", "promo", "autographed")).toMatchObject({ merged: true });
+    expect(await handle.items.renameTag(records.id, "tags", "signed", "rare")).toMatchObject({ merged: false });
+  });
+
+  it("counts live and trashed items apart, as the screen asks about live ones", async () => {
+    await add(["signed"]);
+    const trashed = await add(["signed"]);
+    await handle.items.softDelete(trashed.id);
+    expect(await handle.items.removeTag(records.id, "tags", "signed")).toEqual({ updated: 1, trashed: 1 });
   });
 
   it.each([
@@ -118,7 +148,7 @@ describe("ItemsRepository.removeTag (#41)", () => {
     await handle.items.softDelete(trashed.id);
     const untouched = await add(["mono"]);
 
-    expect(await handle.items.removeTag(records.id, "tags", "SIGNED")).toEqual({ updated: 2 });
+    expect(await handle.items.removeTag(records.id, "tags", "SIGNED")).toEqual({ updated: 1, trashed: 1 });
     expect(await tagsOf(a)).toEqual(["mono"]);
     expect(await tagsOf(trashed)).toEqual([]);
     expect(await tagsOf(untouched)).toEqual(["mono"]);

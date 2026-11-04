@@ -63,7 +63,7 @@ describe("TagManager (#41)", () => {
         { value: "mono", count: 2 },
         { value: "promo", count: 1 },
       ];
-      return { updated: 3 };
+      return { updated: 3, trashed: 0, merged: false };
     });
     renderManager();
     const rename = await screen.findByRole("button", { name: "Rename “signed”" });
@@ -89,7 +89,7 @@ describe("TagManager (#41)", () => {
         { value: "signed", count: 4 },
         { value: "mono", count: 2 },
       ];
-      return { updated: 1 };
+      return { updated: 1, trashed: 0, merged: true };
     });
     renderManager();
     fireEvent.click(await screen.findByRole("button", { name: "Rename “promo”" }));
@@ -118,7 +118,7 @@ describe("TagManager (#41)", () => {
   it("removes after confirming, hands focus to the tag in its place, and says how many items changed", async () => {
     vi.mocked(removeTag).mockImplementation(async () => {
       tags = tags.filter((t) => t.value !== "mono");
-      return { updated: 2 };
+      return { updated: 2, trashed: 0 };
     });
     renderManager();
     const remove = await screen.findByRole("button", { name: "Remove “mono”" });
@@ -157,5 +157,84 @@ describe("TagManager (#41)", () => {
       </QueryClientProvider>,
     );
     expect(container).toBeEmptyDOMElement();
+  });
+
+  it("hands focus to the search box when the renamed tag is no longer in the list it was found in", async () => {
+    vi.mocked(renameTag).mockImplementation(async () => {
+      tags = [
+        { value: "autographed", count: 3 },
+        { value: "mono", count: 2 },
+      ];
+      return { updated: 3, trashed: 0, merged: false };
+    });
+    renderManager();
+    await screen.findByRole("button", { name: "Rename “signed”" });
+    const search = screen.getByRole("searchbox", { name: "Find a tag in Tags" });
+    fireEvent.change(search, { target: { value: "sig" } });
+    await waitFor(() => expect(rowNames()).toEqual(["Rename “signed”"]));
+    fireEvent.click(screen.getByRole("button", { name: "Rename “signed”" }));
+    const input = screen.getByRole("textbox", { name: "New name for “signed”" });
+    fireEvent.change(input, { target: { value: "autographed" } });
+    fireEvent.submit(input);
+    await waitFor(() => expect(search).toHaveFocus());
+    expect(announce).toHaveBeenCalledWith("Renamed “signed” to “autographed” on 3 items");
+  });
+
+  it("takes the server's word for a merge, even when the tag joined is not in view", async () => {
+    vi.mocked(renameTag).mockResolvedValue({ updated: 1, trashed: 0, merged: true });
+    renderManager();
+    fireEvent.click(await screen.findByRole("button", { name: "Rename “promo”" }));
+    const input = screen.getByRole("textbox", { name: "New name for “promo”" });
+    fireEvent.change(input, { target: { value: "elsewhere" } });
+    fireEvent.submit(input);
+    await waitFor(() => expect(announce).toHaveBeenCalledWith("Merged “promo” into “elsewhere” on 1 item"));
+  });
+
+  it("saving the name unchanged tidies the other spellings, and says so", async () => {
+    vi.mocked(renameTag).mockResolvedValue({ updated: 2, trashed: 0, merged: false });
+    renderManager();
+    fireEvent.click(await screen.findByRole("button", { name: "Rename “signed”" }));
+    fireEvent.submit(screen.getByRole("textbox", { name: "New name for “signed”" }));
+    await waitFor(() =>
+      expect(vi.mocked(renameTag)).toHaveBeenCalledWith("c1", { field: "tags", from: "signed", to: "signed" }),
+    );
+    await waitFor(() => expect(announce).toHaveBeenCalledWith("Made “signed” the one spelling on 2 items"));
+  });
+
+  it("counts trashed items apart from the live ones the prompt asked about", async () => {
+    vi.mocked(removeTag).mockImplementation(async () => {
+      tags = tags.filter((t) => t.value !== "promo");
+      return { updated: 1, trashed: 2 };
+    });
+    renderManager();
+    fireEvent.click(await screen.findByRole("button", { name: "Remove “promo”" }));
+    fireEvent.click(screen.getByRole("button", { name: "Remove “promo”" }));
+    await waitFor(() =>
+      expect(announce).toHaveBeenCalledWith("Removed “promo” from 1 item, and from 2 items in the trash"),
+    );
+  });
+
+  it("holds other tag actions while one is in flight, so none loses its result", async () => {
+    let finish: () => void = () => {};
+    vi.mocked(renameTag).mockReturnValue(
+      new Promise((resolve) => {
+        finish = () => resolve({ updated: 3, trashed: 0, merged: false });
+      }),
+    );
+    renderManager();
+    fireEvent.click(await screen.findByRole("button", { name: "Rename “signed”" }));
+    const input = screen.getByRole("textbox", { name: "New name for “signed”" });
+    fireEvent.change(input, { target: { value: "x" } });
+    fireEvent.submit(input);
+    await waitFor(() => expect(vi.mocked(renameTag)).toHaveBeenCalled());
+
+    const other = screen.getByRole("button", { name: "Rename “mono”" });
+    expect(other).toHaveAttribute("aria-disabled", "true");
+    fireEvent.click(other);
+    expect(screen.queryByRole("textbox", { name: "New name for “mono”" })).not.toBeInTheDocument();
+    finish();
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Rename “mono”" })).not.toHaveAttribute("aria-disabled"),
+    );
   });
 });

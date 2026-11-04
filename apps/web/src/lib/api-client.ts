@@ -86,30 +86,33 @@ export async function getCollection(id: string): Promise<Collection> {
   return res.json() as Promise<Collection>;
 }
 
+/** What a tag change touched: live items, and trashed ones counted apart. */
+export interface TagChange {
+  updated: number;
+  trashed: number;
+}
+
 /** Renames a tag across a collection's items (#41); answers how many changed. */
 export async function renameTag(
   collectionId: string,
   input: { field: string; from: string; to: string },
-): Promise<{ updated: number }> {
+): Promise<TagChange & { merged: boolean }> {
   const res = await request(`/api/collections/${collectionId}/tags/rename`, {
     method: "POST",
     body: JSON.stringify(input),
   });
   if (!res.ok) throw new ApiError(res.status);
-  return res.json() as Promise<{ updated: number }>;
+  return res.json() as Promise<TagChange & { merged: boolean }>;
 }
 
 /** Removes a tag from a collection's items (#41); answers how many changed. */
-export async function removeTag(
-  collectionId: string,
-  input: { field: string; value: string },
-): Promise<{ updated: number }> {
+export async function removeTag(collectionId: string, input: { field: string; value: string }): Promise<TagChange> {
   const res = await request(`/api/collections/${collectionId}/tags/remove`, {
     method: "POST",
     body: JSON.stringify(input),
   });
   if (!res.ok) throw new ApiError(res.status);
-  return res.json() as Promise<{ updated: number }>;
+  return res.json() as Promise<TagChange>;
 }
 
 /** What a list of items is narrowed and ordered by (#41). Empty values are left out of the request. */

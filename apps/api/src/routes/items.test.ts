@@ -268,7 +268,7 @@ describe("tag management routes (#41)", () => {
     const item = await handle.items.create({ collectionId: records.id, fields: { title: "a", tags: ["signed"] } });
     const res = await post(records.id, "rename", { field: "tags", from: "Signed", to: "autographed" });
     expect(res.statusCode).toBe(200);
-    expect(res.json()).toEqual({ updated: 1 });
+    expect(res.json()).toMatchObject({ updated: 1, trashed: 0 });
     expect((await handle.items.getById(item.id))?.fields.tags).toEqual(["autographed"]);
   });
 
@@ -279,7 +279,7 @@ describe("tag management routes (#41)", () => {
       fields: { title: "a", tags: ["signed", "mono"] },
     });
     const res = await post(records.id, "remove", { field: "tags", value: "signed" });
-    expect(res.json()).toEqual({ updated: 1 });
+    expect(res.json()).toMatchObject({ updated: 1, trashed: 0 });
     expect((await handle.items.getById(item.id))?.fields.tags).toEqual(["mono"]);
   });
 

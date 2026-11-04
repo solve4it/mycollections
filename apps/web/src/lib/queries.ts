@@ -95,12 +95,16 @@ export function useItems(collectionId: string, query: ItemListQuery = {}, option
  */
 export function useTagValues(collectionId: string, fieldId: string, enabled: boolean, q = "") {
   return useQuery({
-    queryKey: ["collections", collectionId, "items", "tag-values", fieldId, q.trim()],
+    queryKey: tagValuesQueryKey(collectionId, fieldId, q),
     queryFn: () => getTagValues(collectionId, fieldId, q.trim() || undefined),
     enabled,
     staleTime: 30_000,
-    placeholderData: keepPreviousData,
   });
+}
+
+/** The cache key `useTagValues` uses, for reading what a change left on screen. */
+export function tagValuesQueryKey(collectionId: string, fieldId: string, q = "") {
+  return ["collections", collectionId, "items", "tag-values", fieldId, q.trim()] as const;
 }
 
 /**
@@ -108,7 +112,7 @@ export function useTagValues(collectionId: string, fieldId: string, enabled: boo
  * ones too, so lists, tag counts and the trash are all fetched again — and the
  * invalidation is awaited, so a caller's `onSuccess` sees the new tag list.
  */
-function useTagChange<Input>(collectionId: string, change: (input: Input) => Promise<{ updated: number }>) {
+function useTagChange<Input, Result>(collectionId: string, change: (input: Input) => Promise<Result>) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: change,

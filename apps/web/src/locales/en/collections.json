@@ -76,5 +76,11 @@
   "tags_merged_one": "Merged “{{from}}” into “{{to}}” on {{count}} item",
   "tags_merged_other": "Merged “{{from}}” into “{{to}}” on {{count}} items",
   "tags_removed_one": "Removed “{{tag}}” from {{count}} item",
-  "tags_removed_other": "Removed “{{tag}}” from {{count}} items"
+  "tags_removed_other": "Removed “{{tag}}” from {{count}} items",
+  "tags_tidied_one": "Made “{{tag}}” the one spelling on {{count}} item",
+  "tags_tidied_other": "Made “{{tag}}” the one spelling on {{count}} items",
+  "tags_trash_from_one": ", and from {{count}} item in the trash",
+  "tags_trash_from_other": ", and from {{count}} items in the trash",
+  "tags_trash_on_one": ", and on {{count}} item in the trash",
+  "tags_trash_on_other": ", and on {{count}} items in the trash"
 }

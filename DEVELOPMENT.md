@@ -471,6 +471,7 @@ its comment:
 | Clear filters                             | the Filters toggle                                                             | return to where the filters began |
 | A tag's Rename (opens its box)            | the rename box                                                                 | disclosure: enter what you opened |
 | A tag rename's Save, Cancel or Escape     | the renamed tag's Rename — or, after a merge, the Rename of the tag it joined  | dialog: return to the invoker     |
+| …when the new name is not in the list     | the tag search box — a search it no longer matches, or past the fifty shown    | where the tag can be found again  |
 | A confirmed tag removal                   | the next tag's Rename, else the one before, else the section heading           | successor element                 |
 
 Two things that look like details and are not. A destination has to be a control whose name says

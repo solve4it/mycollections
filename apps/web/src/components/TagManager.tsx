@@ -1,9 +1,11 @@
 import type { FieldDefinition } from "@mycollections/core";
+import { useQueryClient } from "@tanstack/react-query";
 import { useId, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useAnnounce } from "../lib/announcer.js";
+import type { TagValues } from "../lib/api-client.js";
 import { type FocusDestination, useFocusHandoff } from "../lib/focus-handoff.js";
-import { useRemoveTag, useRenameTag, useTagValues } from "../lib/queries.js";
+import { tagValuesQueryKey, useRemoveTag, useRenameTag, useTagValues } from "../lib/queries.js";
 import { ConfirmButton } from "./ConfirmButton.js";
 
 /**
@@ -53,6 +55,24 @@ function TagFieldSection({ collectionId, field }: { collectionId: string; field:
   const handOffFocus = useFocusHandoff();
   const headingRef = useRef<HTMLHeadingElement>(null);
   const sectionRef = useRef<HTMLElement>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
+  const queryClient = useQueryClient();
+  // One tag change at a time. Each mutation's own callbacks fire only for its
+  // latest call, so a second rename or removal sent while one is in flight
+  // would lose the first one's announcement and focus handoff.
+  const busy = rename.isPending || remove.isPending;
+
+  /** Whether the tag list on screen — this search's — holds a tag, after a change has been fetched again. */
+  function listed(value: string): boolean {
+    const data = queryClient.getQueryData<TagValues>(tagValuesQueryKey(collectionId, field.id, q));
+    return data?.values.some((entry) => foldTag(entry.value) === foldTag(value)) ?? false;
+  }
+
+  /** What a change also did in the trash, said after the live count the prompt asked about. */
+  function trashNote(trashed: number, preposition: "from" | "on"): string {
+    if (trashed === 0) return "";
+    return preposition === "from" ? t("tags_trash_from", { count: trashed }) : t("tags_trash_on", { count: trashed });
+  }
 
   /** A row's Rename button, found the way the server matches tags. */
   function renameButtonFor(value: string): FocusDestination {
@@ -80,7 +100,14 @@ function TagFieldSection({ collectionId, field }: { collectionId: string; field:
       </h2>
       <div className="form-row">
         <label htmlFor={searchId}>{t("tags_find_label", { field: field.label })}</label>
-        <input id={searchId} type="search" value={q} maxLength={200} onChange={(event) => setQ(event.target.value)} />
+        <input
+          id={searchId}
+          ref={searchRef}
+          type="search"
+          value={q}
+          maxLength={200}
+          onChange={(event) => setQ(event.target.value)}
+        />
       </div>
       {tags.isError && <p role="alert">{t("tags_load_error")}</p>}
       {tags.isSuccess && values.length === 0 && (
@@ -99,23 +126,25 @@ function TagFieldSection({ collectionId, field }: { collectionId: string; field:
                   setRenaming(null);
                 }}
                 onSubmit={(to) => {
-                  const merged = values.some(
-                    (other) => other.value !== tag.value && foldTag(other.value) === foldTag(to),
-                  );
+                  if (busy) return;
                   rename.mutate(
                     { field: field.id, from: tag.value, to },
                     {
-                      // Runs after the tag list has been fetched again, so the
-                      // destination — the renamed row, or the row it merged
-                      // into — is the one now on screen.
-                      onSuccess: ({ updated }) => {
-                        handOffFocus(renameButtonFor(to));
-                        setRenaming(null);
-                        announce(
-                          merged
-                            ? t("tags_merged", { from: tag.value, to, count: updated })
-                            : t("tags_renamed", { from: tag.value, to, count: updated }),
-                        );
+                      // Runs after the tag list has been fetched again. The
+                      // destination is the renamed row, or the row it merged
+                      // into — unless the new name is not in this list (a
+                      // search it no longer matches, or past the fifty shown),
+                      // and then the search box, where it can be found.
+                      onSuccess: ({ updated, trashed, merged }) => {
+                        handOffFocus(listed(to) ? renameButtonFor(to) : () => searchRef.current);
+                        setRenaming((current) => (current === tag.value ? null : current));
+                        const said =
+                          foldTag(to) === foldTag(tag.value)
+                            ? t("tags_tidied", { tag: to, count: updated })
+                            : merged
+                              ? t("tags_merged", { from: tag.value, to, count: updated })
+                              : t("tags_renamed", { from: tag.value, to, count: updated });
+                        announce(said + trashNote(trashed, "on"));
                       },
                     },
                   );
@@ -131,7 +160,11 @@ function TagFieldSection({ collectionId, field }: { collectionId: string; field:
                     className="touch-target button-quiet"
                     data-tag-rename={tag.value}
                     aria-label={t("tags_rename_named", { tag: tag.value })}
-                    onClick={() => setRenaming(tag.value)}
+                    aria-disabled={busy || undefined}
+                    onClick={() => {
+                      if (busy) return;
+                      setRenaming(tag.value);
+                    }}
                   >
                     {t("tags_rename")}
                   </button>
@@ -142,17 +175,20 @@ function TagFieldSection({ collectionId, field }: { collectionId: string; field:
                     confirmLabel={t("tags_remove_confirm")}
                     cancelLabel={t("tags_remove_cancel")}
                     pending={remove.isPending && remove.variables?.value === tag.value}
-                    onConfirm={() =>
+                    onConfirm={() => {
+                      if (busy) return;
                       remove.mutate(
                         { field: field.id, value: tag.value },
                         {
-                          onSuccess: ({ updated }) => {
+                          onSuccess: ({ updated, trashed }) => {
                             handOffFocus(successor(index));
-                            announce(t("tags_removed", { tag: tag.value, count: updated }));
+                            announce(
+                              t("tags_removed", { tag: tag.value, count: updated }) + trashNote(trashed, "from"),
+                            );
                           },
                         },
-                      )
-                    }
+                      );
+                    }}
                   />
                 </div>
               </>

@@ -91,6 +91,15 @@ export function foldTag(value: string): string {
   return value.replace(/^ +| +$/g, "").replace(/[A-Z]/g, (letter) => letter.toLowerCase());
 }
 
+/**
+ * What a tag rename or removal changed: live items, and trashed ones counted
+ * apart — the screen's prompt counts live items, so the confirmation must too.
+ */
+export interface TagChange {
+  updated: number;
+  trashed: number;
+}
+
 /** How many tags `tagValues` suggests at most. */
 export const TAG_VALUES_LIMIT = 50;
 
@@ -439,17 +448,27 @@ export class ItemsRepository {
    * first match. Items left unchanged are not written (no reindex, no new
    * `updatedAt`). Returns how many items changed.
    */
-  async renameTag(collectionId: string, fieldId: string, from: string, to: string): Promise<{ updated: number }> {
+  async renameTag(
+    collectionId: string,
+    fieldId: string,
+    from: string,
+    to: string,
+  ): Promise<TagChange & { merged: boolean }> {
     const path = this.#tagsPath(collectionId, fieldId);
     const oldName = this.#tagName(from);
     const newName = this.#tagName(to);
     // The item form splits tags on commas, so a name holding one would come
     // apart into two tags the next time the item is saved.
     if (newName.includes(",")) throw new InvalidItemQueryError("A tag cannot contain a comma");
-    if (oldName === newName) return { updated: 0 };
+    // No early return when the names are equal: saving the spelling the list
+    // shows is how a user makes it the one spelling, tidying " Signed " and
+    // "signed" into it. Items already right are skipped by the rewrite.
     const match = foldTag(oldName);
     const target = foldTag(newName);
-    return this.#rewriteTags(collectionId, fieldId, path, oldName, (tags) => {
+    // A merge: some item already held the new name as a tag of its own.
+    let merged = false;
+    const change = this.#rewriteTags(collectionId, fieldId, path, oldName, (tags) => {
+      if (match !== target && tags.some((tag) => typeof tag === "string" && foldTag(tag) === target)) merged = true;
       const next: unknown[] = [];
       let placed = false;
       for (const tag of tags) {
@@ -462,10 +481,11 @@ export class ItemsRepository {
       }
       return next;
     });
+    return { ...change, merged };
   }
 
   /** Takes a tag off every item of the collection, trashed ones included (#41). */
-  async removeTag(collectionId: string, fieldId: string, value: string): Promise<{ updated: number }> {
+  async removeTag(collectionId: string, fieldId: string, value: string): Promise<TagChange> {
     const path = this.#tagsPath(collectionId, fieldId);
     const name = this.#tagName(value);
     const match = foldTag(name);
@@ -487,17 +507,18 @@ export class ItemsRepository {
     path: string,
     needle: string,
     rewrite: (tags: unknown[]) => unknown[],
-  ): { updated: number } {
+  ): TagChange {
     const column = schema.items.fields;
     const held = sql`(json_type(${column}, ${path}) = 'array' AND EXISTS (SELECT 1 FROM json_each(${column}, ${path}) AS "held" WHERE "held"."type" = 'text' AND trim("held"."value") = ${needle} COLLATE NOCASE))`;
     return this.#db.transaction((tx) => {
       const rows = tx
-        .select({ id: schema.items.id, fields: schema.items.fields })
+        .select({ id: schema.items.id, fields: schema.items.fields, deletedAt: schema.items.deletedAt })
         .from(schema.items)
         .where(and(eq(schema.items.collectionId, collectionId), held))
         .all();
       const now = new Date().toISOString();
       let updated = 0;
+      let trashed = 0;
       for (const row of rows) {
         const fields = JSON.parse(row.fields) as Record<string, unknown>;
         const tags = fields[fieldId];
@@ -508,9 +529,10 @@ export class ItemsRepository {
           .set({ fields: JSON.stringify({ ...fields, [fieldId]: next }), updatedAt: now })
           .where(eq(schema.items.id, row.id))
           .run();
-        updated += 1;
+        if (row.deletedAt === null) updated += 1;
+        else trashed += 1;
       }
-      return { updated };
+      return { updated, trashed };
     });
   }
 
