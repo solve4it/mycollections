@@ -82,10 +82,16 @@ function TagFieldSection({ collectionId, field }: { collectionId: string; field:
       ) ?? null;
   }
 
-  /** Successor rule after a removal: the row now at this index, else the one before, else the heading. */
-  function successor(index: number): FocusDestination {
+  /**
+   * Successor rule after a removal: the row now at this index, else the one
+   * before, else the heading. It waits (null) while the removed tag is still on
+   * screen: the confirm prompt closes a commit before the fetched list arrives,
+   * and "the row at this index" would then be the very row about to vanish.
+   */
+  function successor(index: number, removed: string): FocusDestination {
     return () => {
       const buttons = Array.from(sectionRef.current?.querySelectorAll<HTMLElement>("[data-tag-rename]") ?? []);
+      if (buttons.some((button) => button.dataset.tagRename === removed)) return null;
       return buttons[index] ?? buttons[buttons.length - 1] ?? headingRef.current;
     };
   }
@@ -181,7 +187,7 @@ function TagFieldSection({ collectionId, field }: { collectionId: string; field:
                         { field: field.id, value: tag.value },
                         {
                           onSuccess: ({ updated, trashed }) => {
-                            handOffFocus(successor(index));
+                            handOffFocus(successor(index, tag.value));
                             announce(
                               t("tags_removed", { tag: tag.value, count: updated }) + trashNote(trashed, "from"),
                             );

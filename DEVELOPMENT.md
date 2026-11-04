@@ -492,6 +492,11 @@ mutation's `mutate`-level `onSuccess` runs after its hook-level `onSuccess`, whi
 invalidation's refetch — and the hidden cases also say why the item went, through the announcer.
 An add the search hides says so in the add form's own region.
 
+A handoff can be asked for after focus has already fallen: in a browser, a mutation's re-fetched
+data can commit before its `mutate`-level `onSuccess` runs, unmounting the control first. The hook
+never treats `<body>` as "the control still holding focus" — that read made it wait out its deadline
+and leave focus on `<body>` (#41, found by the tag manager's keyboard spec; jsdom's timing hid it).
+
 So: **a new control that disables itself, or an action that removes the control that triggered it,
 owes a spec in one of those two blocks.** The deletion case also owes a destination before it owes
 code — the issue it comes from should say which APG rule it follows.

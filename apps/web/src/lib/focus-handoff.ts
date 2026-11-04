@@ -72,7 +72,11 @@ export function useFocusHandoff(): (destination: FocusDestination) => void {
     if (handoff === null) return;
 
     const active = document.activeElement;
-    const stillThere = handoff.from !== null && document.contains(handoff.from);
+    // <body> is never "the control that still holds focus": when the handoff
+    // was asked for after focus had already fallen — a list fetched again can
+    // commit ahead of the mutation's onSuccess and unmount the control first
+    // (#41) — there is something to rescue at once, not something to wait for.
+    const stillThere = handoff.from !== null && handoff.from !== document.body && document.contains(handoff.from);
 
     // Someone else holds focus, and holds it deliberately — a later click, or a
     // control that was never going anywhere. Moving focus then would be the
