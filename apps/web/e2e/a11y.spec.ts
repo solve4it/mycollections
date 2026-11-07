@@ -422,6 +422,67 @@ test.describe("accessibility", () => {
     await expectNoAccessibilityViolations(page);
   });
 
+  /**
+   * Each status tab (#42), reached the way a user reaches it — by the tab, not
+   * by the URL — so the scan covers the selected state that clicking leaves.
+   * The panel's name follows the selected tab, which axe cannot judge.
+   */
+  test("a collection under each status tab", async ({ page, api }) => {
+    await api.reset();
+    const collection = await api.createCollection({ name: "Vinyl records", fields: FIELDS });
+    await api.createItem(collection.id, { title: "Kind of Blue", year: 1959 }, "owned");
+    await api.createItem(collection.id, { title: "Blue Train", year: 1958 }, "wanted");
+    await api.createItem(collection.id, { title: "Giant Steps", year: 1960 }, "ordered");
+
+    await page.goto(`/collections/${collection.id}`);
+    await expect(page.getByRole("tab", { name: "All", selected: true })).toBeVisible();
+    await expect(page.getByRole("tabpanel", { name: "All" }).getByRole("listitem")).toHaveCount(3);
+    await expectNoAccessibilityViolations(page);
+
+    await page.getByRole("tab", { name: "Collected" }).click();
+    await expect(page).toHaveURL(`/collections/${collection.id}?show=collected`);
+    const collected = page.getByRole("tabpanel", { name: "Collected" });
+    await expect(collected.getByRole("listitem")).toHaveCount(1);
+    await expect(collected.locator(".item-count")).toHaveText("1 item collected");
+    await expectNoAccessibilityViolations(page);
+
+    await page.getByRole("tab", { name: "Remaining" }).click();
+    await expect(page).toHaveURL(`/collections/${collection.id}?show=remaining`);
+    const remaining = page.getByRole("tabpanel", { name: "Remaining" });
+    await expect(remaining.getByRole("listitem")).toHaveCount(2);
+    await expect(remaining.locator(".item-count")).toHaveText("2 items remaining");
+    await expectNoAccessibilityViolations(page);
+  });
+
+  /**
+   * The Remaining tab with nothing in it, in each of its three voices (R7):
+   * nothing to measure against, short of the target, and complete. Never "No
+   * items yet", which would claim the collection is empty.
+   */
+  test("an empty Remaining tab: no target, short of the target, and complete", async ({ page, api }) => {
+    await api.reset();
+    const plain = await api.createCollection({ name: "Vinyl records", fields: FIELDS });
+    await api.createItem(plain.id, { title: "Kind of Blue" }, "owned");
+    const short = await api.createCollection({ name: "Coin set", fields: FIELDS, isFiniteSet: true, targetCount: 5 });
+    await api.createItem(short.id, { title: "Penny" }, "owned");
+    await api.createItem(short.id, { title: "Nickel" }, "owned");
+    const done = await api.createCollection({ name: "Stamp set", fields: FIELDS, isFiniteSet: true, targetCount: 1 });
+    await api.createItem(done.id, { title: "Penny Black" }, "owned");
+
+    for (const [collection, title] of [
+      [plain, "Nothing on your wanted list"],
+      [short, "3 more to find"],
+      [done, "All collected"],
+    ] as const) {
+      await page.goto(`/collections/${collection.id}?show=remaining`);
+      await expect(page.getByRole("heading", { level: 1, name: collection.name })).toBeVisible();
+      const panel = page.getByRole("tabpanel", { name: "Remaining" });
+      await expect(panel.locator(".empty-state-title")).toHaveText(title);
+      await expect(page.getByText("No items yet")).toHaveCount(0);
+      await expectNoAccessibilityViolations(page);
+    }
+  });
+
   test("a collection with no items", async ({ page, api }) => {
     await api.reset();
     const collection = await api.createCollection({ name: "Board games", fields: FIELDS });
