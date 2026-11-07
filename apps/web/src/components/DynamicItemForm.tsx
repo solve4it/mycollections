@@ -109,6 +109,15 @@ export function DynamicItemForm({
     setStatus(initialStatus ?? "owned");
     setValues(Object.fromEntries(fields.map((f) => [f.id, toDraft(f, initialValues[f.id])])));
   }
+  // The add-item form starts on Wanted under the Remaining tab and on Owned
+  // elsewhere (#42, R16), and the tab can change while the form is on screen.
+  // The status follows a *change* of the prop, the same way the reset above
+  // does, so a status the user picked stays theirs until the tab changes.
+  const [lastInitialStatus, setLastInitialStatus] = useState(initialStatus);
+  if (lastInitialStatus !== initialStatus) {
+    setLastInitialStatus(initialStatus);
+    setStatus(initialStatus ?? "owned");
+  }
 
   const statusRef = useRef<HTMLSelectElement>(null);
   useEffect(() => {

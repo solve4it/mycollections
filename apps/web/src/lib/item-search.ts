@@ -4,6 +4,7 @@ import {
   formatItemFilters,
   ITEM_SEARCH_MAX_LENGTH,
   type ItemFilter,
+  type ItemStatus,
   isSortableFieldType,
   parseItemFilters,
   parseItemSort,
@@ -15,6 +16,31 @@ export interface ItemSearch {
   sort?: string;
   /** A filter list in canonical form (core's `formatItemFilters`). */
   filter?: string;
+  /**
+   * The status tab (#42). Absent means All: `?show=all` is never written, so
+   * one view has one URL.
+   */
+  show?: "collected" | "remaining";
+}
+
+/**
+ * The status tabs, in the order they are shown (#42). Collected is the items
+ * whose status is Owned; Remaining is Wanted and Ordered — what is still to
+ * come, whether looked for or already on its way.
+ */
+export const STATUS_TABS = ["all", "collected", "remaining"] as const;
+export type StatusTab = (typeof STATUS_TABS)[number];
+
+/** The tab a collection screen's search selects. */
+export function statusTabOf(search: Pick<ItemSearch, "show">): StatusTab {
+  return search.show ?? "all";
+}
+
+/** Whether an item with this status is shown under this tab. */
+export function inStatusTab(status: ItemStatus, tab: StatusTab): boolean {
+  if (tab === "collected") return status === "owned";
+  if (tab === "remaining") return status !== "owned";
+  return true;
 }
 
 /**
@@ -22,9 +48,15 @@ export interface ItemSearch {
  * drops the rest, so a mangled URL shows the whole collection rather than an
  * error. A primitive is turned back into text in case a value was parsed on
  * the way in; anything structured is dropped.
+ *
+ * "Dropped" means named as `undefined`, never left out. TanStack Router lays
+ * the validated search over the raw URL's, so a key missing from the result
+ * lets the raw value show through — `?show=owned` reached the screen as a tab
+ * that is none of the three (#42). `stringifySearch` writes an undefined value
+ * as nothing, so the URL is the same.
  */
 export function validateItemSearch(raw: Record<string, unknown>): ItemSearch {
-  const search: ItemSearch = {};
+  const search: ItemSearch = { q: undefined, sort: undefined, filter: undefined, show: undefined };
   const q = typeof raw.q === "string" || typeof raw.q === "number" ? String(raw.q) : "";
   if (q) search.q = q.slice(0, ITEM_SEARCH_MAX_LENGTH);
   if (typeof raw.sort === "string" && parseItemSort(raw.sort)) search.sort = raw.sort;
@@ -32,6 +64,9 @@ export function validateItemSearch(raw: Record<string, unknown>): ItemSearch {
   // cache entry. An empty list is no filter at all.
   const filters = typeof raw.filter === "string" ? parseItemFilters(raw.filter) : null;
   if (filters && filters.length > 0) search.filter = formatItemFilters(filters);
+  // "all" is the default, so it is dropped rather than kept as a second
+  // spelling of the bare URL (R17); anything unknown is dropped with it.
+  if (raw.show === "collected" || raw.show === "remaining") search.show = raw.show;
   return search;
 }
 

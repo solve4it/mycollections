@@ -1,4 +1,10 @@
-import { type Collection, formatItemFilters, type Item, type ItemFilter } from "@mycollections/core";
+import {
+  type Collection,
+  collectionProgress,
+  formatItemFilters,
+  type Item,
+  type ItemFilter,
+} from "@mycollections/core";
 import { type UseQueryResult, useQueryClient } from "@tanstack/react-query";
 import { createRoute, Link, redirect, useNavigate } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
@@ -12,11 +18,20 @@ import { Icon } from "../../components/Icon.js";
 import { ItemSearchBox } from "../../components/ItemSearchBox.js";
 import { ItemSortSelect } from "../../components/ItemSortSelect.js";
 import { CollectionDetailSkeleton, ItemListSkeleton } from "../../components/Skeleton.js";
+import { StatusTabs } from "../../components/StatusTabs.js";
 import { UndoToast } from "../../components/UndoToast.js";
 import { useAnnounce } from "../../lib/announcer.js";
 import { getToken } from "../../lib/api-client.js";
 import { type FocusDestination, useFocusHandoff } from "../../lib/focus-handoff.js";
-import { effectiveFilters, effectiveSort, type ItemSearch, validateItemSearch } from "../../lib/item-search.js";
+import {
+  effectiveFilters,
+  effectiveSort,
+  type ItemSearch,
+  inStatusTab,
+  type StatusTab,
+  statusTabOf,
+  validateItemSearch,
+} from "../../lib/item-search.js";
 import { CONTENT_LINK_ACTIVE_OPTIONS } from "../../lib/links.js";
 import { type PageName, usePageTitle } from "../../lib/page-title.js";
 import {
@@ -145,16 +160,32 @@ function CollectionDetailPage() {
   });
   const searchInputRef = useRef<HTMLInputElement>(null);
 
-  // The search on screen *now*. A mutation's callbacks close over the render in
-  // which it started, and the user may have searched again since: only the
-  // search on screen was fetched again, so only it can say what is shown.
+  // The status tab (#42). Not part of the query: the tabs narrow the one list
+  // already fetched, on the client (R4), so switching is instant — which is
+  // what lets the tabs activate as the arrow keys move.
+  const tab = statusTabOf(search);
+
+  // The search and tab on screen *now*. A mutation's callbacks close over the
+  // render in which it started, and the user may have searched or switched tab
+  // since: only the search on screen was fetched again, so only it can say
+  // what is shown.
   const currentItemQuery = useRef(itemQuery);
   currentItemQuery.current = itemQuery;
+  const currentTab = useRef(tab);
+  currentTab.current = tab;
 
-  /** Whether the list as last fetched for the search on screen holds this item. */
+  /**
+   * Whether the list on screen holds this item: the list as last fetched for
+   * the search on screen, narrowed by the tab on screen. The tab counts as much
+   * as the search does — an owned item saved as wanted under Collected has left
+   * the list just as surely as one a search no longer matches.
+   */
   function isListed(itemId: string): boolean {
     const listed = queryClient.getQueryData<Item[]>(itemsQueryKey(id, currentItemQuery.current));
-    return listed?.some((listedItem) => listedItem.id === itemId) ?? false;
+    return (
+      listed?.some((listedItem) => listedItem.id === itemId && inStatusTab(listedItem.status, currentTab.current)) ??
+      false
+    );
   }
   const createItem = useCreateItem(id);
   const restoreItem = useRestoreItem(id);
@@ -187,11 +218,39 @@ function CollectionDetailPage() {
   const measurable = collection?.isFiniteSet === true && collection.targetCount !== null;
   const countsQuery = useCollectionCounts(id, measurable);
 
+  // What the tab on screen shows: the list fetched for the search, narrowed by
+  // status. Placeholder data (the previous search, kept while the next loads)
+  // is narrowed the same way, so a tab never flashes rows from another.
+  const visibleItems = itemsQuery.data?.filter((listed) => inStatusTab(listed.status, tab));
+
+  // What an empty tab says (#42, R7). Remaining has three answers, and only a
+  // finite set with a target can give the two that measure: "All collected"
+  // once owned reaches the target — wanted items or not, as the header's
+  // Complete badge counts it — and otherwise how many are still to find. The
+  // owned count is the header's, from the counts query, and until that lands
+  // the list's own: an empty tab is never shown under a search or filter, so
+  // the list in hand is then the whole collection.
+  let tabEmpty: { title: string; description: string } | null = null;
+  if (tab === "collected") {
+    tabEmpty = { title: t("empty_collected"), description: t("empty_collected_description") };
+  } else if (tab === "remaining") {
+    const owned = countsQuery.data?.owned ?? itemsQuery.data?.filter((listed) => listed.status === "owned").length;
+    const progress = collection && owned !== undefined ? collectionProgress(collection, owned) : null;
+    tabEmpty = !progress
+      ? { title: t("empty_remaining"), description: t("empty_remaining_description") }
+      : progress.complete
+        ? { title: t("empty_remaining_complete"), description: t("empty_remaining_complete_description") }
+        : {
+            title: t("empty_remaining_to_find", { count: progress.target - progress.owned }),
+            description: t("empty_remaining_to_find_description"),
+          };
+  }
+
   // A row's Delete removes the row, and the toast's Undo and Dismiss remove the
   // toast, so all three orphaned focus to <body> (#367). The handoff is held
   // here, at the page, because the page is what survives all three.
   const handOffFocus = useFocusHandoff();
-  const itemsHeadingRef = useRef<HTMLHeadingElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
 
   function setSearch(next: string) {
     // `replace` so keystrokes do not fill the history; `resetScroll: false` or
@@ -207,6 +266,17 @@ function CollectionDetailPage() {
     // A sort needs no announcement of its own: the select speaks the option
     // chosen, and the list below is what changed.
     void navigate({ search: (prev: ItemSearch) => ({ ...prev, sort: next }), replace: true, resetScroll: false });
+  }
+
+  function setTab(next: StatusTab) {
+    // Replaced like a search keystroke, not pushed like applied filters: the
+    // arrow keys select as they move, so a push per tab would make Back step
+    // through every tab passed over. All is the bare URL.
+    void navigate({
+      search: (prev: ItemSearch) => ({ ...prev, show: next === "all" ? undefined : next }),
+      replace: true,
+      resetScroll: false,
+    });
   }
 
   function setFilters(next: ItemFilter[]) {
@@ -232,28 +302,34 @@ function CollectionDetailPage() {
   // Not gated on `isFetching`: a refetch of the same search (after an edit,
   // delete or undo) keeps its data, and toggling here would restart the
   // countdown and speak the count right on top of that action's own message.
-  const settled = itemsQuery.data !== undefined && !itemsQuery.isPlaceholderData;
-  // What the list is narrowed by, as one key: the search text and the filters.
-  // Keyed on the URL's filter, not the effective one: that is only known once
-  // the collection loads, and the change from "none yet" would read as the user
-  // filtering — announcing the count of the view the page opened on.
-  const narrowing = JSON.stringify([q, search.filter ?? ""]);
+  const settled = visibleItems !== undefined && !itemsQuery.isPlaceholderData;
+  // What the list is narrowed by, as one key: the search text, the filters and
+  // the tab. Keyed on the URL's filter, not the effective one: that is only
+  // known once the collection loads, and the change from "none yet" would read
+  // as the user filtering — announcing the count of the view the page opened on.
+  const narrowing = JSON.stringify([q, search.filter ?? "", tab]);
   const settledQ = settled ? narrowing : null;
-  const settledCount = settled ? (itemsQuery.data?.length ?? 0) : null;
+  const settledCount = settled ? (visibleItems?.length ?? 0) : null;
+  // An empty tab speaks its empty state's title — "All collected", "3 more to
+  // find" — which is the news; "0 items remaining" would only be half of it.
+  const tabEmptyTitle = tabEmpty?.title ?? "";
   const announcedSearch = useRef(narrowing);
   useEffect(() => {
     if (settledQ === null || settledCount === null || settledQ === announcedSearch.current) return;
     const timer = setTimeout(() => {
       announcedSearch.current = settledQ;
-      const [settledText, settledFilter] = JSON.parse(settledQ) as [string, string];
-      if (!settledText && !settledFilter) announce(t("showing_all", { count: settledCount }));
-      else if (settledCount === 0)
+      const [settledText, settledFilter, settledTab] = JSON.parse(settledQ) as [string, string, StatusTab];
+      if (!settledText && !settledFilter) {
+        if (settledTab === "all") announce(t("showing_all", { count: settledCount }));
+        else if (settledCount === 0) announce(tabEmptyTitle);
+        else announce(t(settledTab === "collected" ? "items_collected" : "items_remaining", { count: settledCount }));
+      } else if (settledCount === 0)
         announce(settledText ? t("no_matches", { q: settledText }) : t("no_matches_filtered"));
       else if (settledText) announce(t("items_match", { count: settledCount, q: settledText }));
       else announce(t("items_match_filtered", { count: settledCount }));
     }, RESULT_ANNOUNCE_DELAY_MS);
     return () => clearTimeout(timer);
-  }, [settledQ, settledCount, announce, t]);
+  }, [settledQ, settledCount, tabEmptyTitle, announce, t]);
 
   /**
    * Where focus goes when the row at `index` is removed.
@@ -266,14 +342,17 @@ function CollectionDetailPage() {
    * fought over. It would also tax every delete to save two keystrokes on the
    * rare one that is regretted.
    *
-   * With no row left, the heading of the list they were in. Not the add-item
-   * form: dropping a user into "add an item" because they deleted their last
-   * one is a worse surprise than landing on a heading.
+   * With no row left, the tab panel the list was in, which now holds the
+   * empty state that replaced it — "Nothing on your wanted list", "All
+   * collected" — so arriving there is what tells a screen-reader user the list
+   * emptied, and what it emptied into (#42). Not the add-item form: dropping a
+   * user into "add an item" because they deleted their last one is a worse
+   * surprise than landing where the list was.
    */
   function rowDestination(index: number): FocusDestination {
     return () => {
       const edits = Array.from(document.querySelectorAll<HTMLElement>("[data-row-edit]"));
-      return edits[index] ?? edits[edits.length - 1] ?? itemsHeadingRef.current;
+      return edits[index] ?? edits[edits.length - 1] ?? panelRef.current;
     };
   }
 
@@ -331,12 +410,7 @@ function CollectionDetailPage() {
       )}
       {collection.description && <p>{collection.description}</p>}
 
-      {/* tabIndex={-1} so a delete that empties the list has somewhere named to
-          go (#367). Not in the tab order — a negative index is reachable only
-          programmatically, which is the whole point of it. */}
-      <h2 ref={itemsHeadingRef} tabIndex={-1}>
-        {t("items_heading")}
-      </h2>
+      <h2>{t("items_heading")}</h2>
       <div className="item-list-controls">
         <ItemSearchBox value={search.q ?? ""} onSearch={setSearch} inputRef={searchInputRef} />
         <ItemSortSelect value={sort} searching={q !== ""} fields={collection.fields} onSort={setSort} />
@@ -363,47 +437,56 @@ function CollectionDetailPage() {
           setFilters([]);
         }}
       />
-      <ItemList
-        collection={collection}
-        query={itemsQuery}
-        q={q}
-        filtered={filters.length > 0}
-        onClearFilters={() => {
-          handOffFocus(filtersToggle);
-          setFilters([]);
-        }}
-        onClearSearch={() => {
-          // The button goes with the empty state it sits in, so focus goes to
-          // the box whose text was cleared — where the next search starts.
-          handOffFocus(() => searchInputRef.current);
-          setSearch("");
-        }}
-        onSaved={(saved, index) => {
-          // The row's own Edit if the saved item is still listed (return to
-          // invoker); if the search no longer matches it, the row that took its
-          // place (successor, as for a delete). Decided here, at the page,
-          // because the row may be the thing that disappears (#41).
-          if (isListed(saved.id)) {
-            handOffFocus(
-              () => document.querySelector<HTMLElement>(`[data-item-id="${saved.id}"] [data-row-edit]`) ?? null,
-            );
-          } else {
-            handOffFocus(rowDestination(index));
-            announce(t("saved_hidden", { name: itemLabel(collection, saved, t("untitled")) }));
-          }
-        }}
-        // Names the Delete being removed: the row goes only once the server
-        // answers, and a Delete pressed without taking focus (a Safari click,
-        // an iOS tap) leaves focus on <body> meanwhile, which alone would read
-        // as "already gone" and send focus to the row being deleted (#42).
-        onDeleting={(index, trigger) => handOffFocus(rowDestination(index), { removing: trigger })}
-        onDeleted={(item, index) => {
-          // Drop any failure from a previous undo: the new toast is about a new
-          // deletion, and must not open carrying the last one's error.
-          restoreItem.reset();
-          setUndo({ itemId: item.id, name: itemLabel(collection, item, t("untitled")), index });
-        }}
-      />
+      {/* On every collection, finite or not (owner's call, #42): any
+          collection can hold wanted and ordered items. The panel wraps the
+          whole list area — the count, the rows, and every empty and failure
+          state — so whichever is showing is what the selected tab names. */}
+      <StatusTabs value={tab} onSelect={setTab} panelRef={panelRef}>
+        <ItemList
+          collection={collection}
+          query={itemsQuery}
+          items={visibleItems}
+          tab={tab}
+          tabEmpty={tabEmpty}
+          q={q}
+          filtered={filters.length > 0}
+          onClearFilters={() => {
+            handOffFocus(filtersToggle);
+            setFilters([]);
+          }}
+          onClearSearch={() => {
+            // The button goes with the empty state it sits in, so focus goes to
+            // the box whose text was cleared — where the next search starts.
+            handOffFocus(() => searchInputRef.current);
+            setSearch("");
+          }}
+          onSaved={(saved, index) => {
+            // The row's own Edit if the saved item is still listed (return to
+            // invoker); if the search no longer matches it, the row that took its
+            // place (successor, as for a delete). Decided here, at the page,
+            // because the row may be the thing that disappears (#41).
+            if (isListed(saved.id)) {
+              handOffFocus(
+                () => document.querySelector<HTMLElement>(`[data-item-id="${saved.id}"] [data-row-edit]`) ?? null,
+              );
+            } else {
+              handOffFocus(rowDestination(index));
+              announce(t("saved_hidden", { name: itemLabel(collection, saved, t("untitled")) }));
+            }
+          }}
+          // Names the Delete being removed: the row goes only once the server
+          // answers, and a Delete pressed without taking focus (a Safari click,
+          // an iOS tap) leaves focus on <body> meanwhile, which alone would read
+          // as "already gone" and send focus to the row being deleted (#42).
+          onDeleting={(index, trigger) => handOffFocus(rowDestination(index), { removing: trigger })}
+          onDeleted={(item, index) => {
+            // Drop any failure from a previous undo: the new toast is about a new
+            // deletion, and must not open carrying the last one's error.
+            restoreItem.reset();
+            setUndo({ itemId: item.id, name: itemLabel(collection, item, t("untitled")), index });
+          }}
+        />
+      </StatusTabs>
 
       {/* Always rendered, never conditional (#308). The toast used to appear as
           a `role="status"` region with its message already inside it, and a live
@@ -474,6 +557,9 @@ function CollectionDetailPage() {
         <h2>{t("add_item")}</h2>
         <DynamicItemForm
           fields={collection.fields}
+          // Under Remaining, a new item starts as Wanted, so what is added
+          // there lands in the tab the user is looking at (R16).
+          initialStatus={tab === "remaining" ? "wanted" : undefined}
           pending={createItem.isPending}
           resetSignal={addedCount}
           onSubmit={(payload) =>
@@ -511,7 +597,13 @@ function CollectionDetailPage() {
 
 interface ItemListProps {
   collection: Collection;
+  /** The fetch, for its loading, error and placeholder states. */
   query: UseQueryResult<Item[]>;
+  /** What the selected tab shows of the fetched list; undefined until it loads (#42). */
+  items: Item[] | undefined;
+  tab: StatusTab;
+  /** What the tab says when nothing is in it; null for All, whose emptiness is the collection's own. */
+  tabEmpty: { title: string; description: string } | null;
   /** The search in force, trimmed; empty when none (#41). */
   q: string;
   onClearSearch: () => void;
@@ -533,6 +625,9 @@ interface ItemListProps {
 function ItemList({
   collection,
   query,
+  items,
+  tab,
+  tabEmpty,
   q,
   filtered,
   onClearSearch,
@@ -542,7 +637,6 @@ function ItemList({
   onDeleted,
 }: ItemListProps) {
   const { t } = useTranslation("items");
-  const items = query.data;
 
   if (items === undefined) {
     if (query.error)
@@ -581,19 +675,24 @@ function ItemList({
         )}
       </EmptyState>
     );
+  // A tab with nothing in it says what the tab is for, never "No items yet":
+  // the collection may be full of items the tab does not show (R7).
+  if (items.length === 0 && tabEmpty) return <EmptyState title={tabEmpty.title} description={tabEmpty.description} />;
   if (items.length === 0) return <EmptyState title={t("empty_items")} description={t("empty_items_description")} />;
 
   return (
     <>
       {query.error && <p role="alert">{t("items_reload_error")}</p>}
       {/* Visible, not live: the announcer speaks it once the search settles. */}
-      {(q || filtered) && (
+      {(q || filtered || tab !== "all") && (
         <p className="item-count">
           {q && filtered
             ? t("items_match_search_filtered", { count: items.length, q })
             : q
               ? t("items_match", { count: items.length, q })
-              : t("items_match_filtered", { count: items.length })}
+              : filtered
+                ? t("items_match_filtered", { count: items.length })
+                : t(tab === "collected" ? "items_collected" : "items_remaining", { count: items.length })}
         </p>
       )}
       <ul className="item-list" aria-busy={query.isPlaceholderData || undefined}>

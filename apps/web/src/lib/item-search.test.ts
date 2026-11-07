@@ -93,6 +93,25 @@ describe("the status tab in the URL (#42)", () => {
     expect(validateItemSearch({ show: ["collected"] })).toEqual({});
   });
 
+  /**
+   * TanStack Router lays a route's validated search over the raw URL's, so a
+   * key left out of the result is not dropped at all: the raw value shows
+   * through, and `?show=owned` reached the screen as a tab that is none of the
+   * three. Found driving the tabs (#42); `?sort=sideways` and `?filter=[]`
+   * leaked the same way and were only saved by being parsed again downstream.
+   * Each key is therefore always named, `undefined` when dropped, which is
+   * what overrides the raw value — and what `stringifySearch` writes as nothing.
+   */
+  it("names every key it drops, so the raw URL's value cannot show through", () => {
+    const dropped = validateItemSearch({ q: "", sort: "sideways", filter: "[]", show: "all" });
+    expect(Object.entries(dropped).sort()).toEqual([
+      ["filter", undefined],
+      ["q", undefined],
+      ["show", undefined],
+      ["sort", undefined],
+    ]);
+  });
+
   it("reads no param as the All tab", () => {
     expect(statusTabOf({})).toBe("all");
     expect(statusTabOf({ show: "collected" })).toBe("collected");
