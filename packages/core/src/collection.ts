@@ -36,5 +36,9 @@ export const CollectionSchema = z
 
 export type Collection = z.infer<typeof CollectionSchema>;
 
-/** A collection augmented with the number of non-deleted items it contains. */
-export type CollectionWithItemCount = Collection & { itemCount: number };
+/**
+ * A collection as the dashboard lists it: with the number of non-deleted items
+ * it contains, and how many of those are owned (#42) — the numerator of a
+ * finite set's progress.
+ */
+export type CollectionWithItemCount = Collection & { itemCount: number; ownedCount: number };
