@@ -1,4 +1,11 @@
-import type { Collection, CollectionWithItemCount, FieldDefinition, ItemCounts } from "@mycollections/core";
+import {
+  COLLECTION_DESCRIPTION_MAX,
+  COLLECTION_NAME_MAX,
+  type Collection,
+  type CollectionWithItemCount,
+  type FieldDefinition,
+  type ItemCounts,
+} from "@mycollections/core";
 import type { DatabaseHandle, UpdateCollectionInput } from "@mycollections/db";
 import type { FastifyInstance } from "fastify";
 
@@ -16,8 +23,8 @@ const createBodySchema = {
   required: ["name", "fields", "isFiniteSet"],
   additionalProperties: false,
   properties: {
-    name: { type: "string", minLength: 1, maxLength: 120 },
-    description: { type: "string", maxLength: 2000 },
+    name: { type: "string", minLength: 1, maxLength: COLLECTION_NAME_MAX },
+    description: { type: "string", maxLength: COLLECTION_DESCRIPTION_MAX },
     fields: { type: "array", minItems: 1, items: {} },
     isFiniteSet: { type: "boolean" },
     targetCount: targetCountSchema,
@@ -28,8 +35,8 @@ const updateBodySchema = {
   type: "object",
   additionalProperties: false,
   properties: {
-    name: { type: "string", minLength: 1, maxLength: 120 },
-    description: { type: "string", maxLength: 2000 },
+    name: { type: "string", minLength: 1, maxLength: COLLECTION_NAME_MAX },
+    description: { type: "string", maxLength: COLLECTION_DESCRIPTION_MAX },
     isFiniteSet: { type: "boolean" },
     targetCount: targetCountSchema,
     fields: { type: "array", minItems: 1, items: {} },

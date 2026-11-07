@@ -14,9 +14,21 @@ A **collection** is a bucket for related items, backed by a plugin that knows th
 
 _Walkthrough for creating a collection and picking a plugin type._
 
+### What a collection needs
+
+A name of up to 120 characters (a description, if you give one, can run to 2,000), and at least one field, each with a label. A single- or multiple-choice field also needs at least one option in its **Options** box, separated by commas. The form will not submit without them, and it says which box needs attention: a name or label left empty or made only of spaces, or an Options box with no option in it, is marked where it is. If you have removed every field, a message appears beside **Add field** and the cursor moves there. An empty field row is not skipped — give it a label or remove it. The same rules apply in **Edit collection**.
+
+### Finite sets and their size
+
+Some collections have a known end: a trading-card set of 102 cards, a series of 24 figures, every album an artist released. Tick **Finite set (a fixed, known number of items)** when you create the collection, and a second box appears beneath it: **Number of items in the set**. Enter how many items the complete set has — a whole number from 1 to 100,000.
+
+The number is optional. If you do not know it yet, leave the box empty and add it later from **Edit collection**. A number outside that range, or one with a fraction, is refused when you submit, and the box says why.
+
+If you clear the **Finite set** tick, the box disappears, and the collection is saved without a size. Ticking it again before you submit brings back what you had typed.
+
 ## Editing and deleting
 
-Open a collection and choose **Edit collection** to change its name, description, whether it is a finite set, and — the part that matters most — its fields. A collection's shape is not fixed at creation: add a field you wish you had, rename one that reads badly, drop one you never fill in, or drag the order around.
+Open a collection and choose **Edit collection** to change its name, description, whether it is a finite set and how many items the set has, and — the part that matters most — its fields. Emptying the **Number of items in the set** box, or clearing the **Finite set** tick, removes the stored size when you save. A collection's shape is not fixed at creation: add a field you wish you had, rename one that reads badly, drop one you never fill in, or drag the order around.
 
 ### What each change costs your items
 

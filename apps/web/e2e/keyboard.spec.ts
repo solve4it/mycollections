@@ -190,6 +190,38 @@ test.describe("keyboard traversal of every screen", () => {
   });
 
   /**
+   * The same form once Space has made it a finite set (#42): the target box
+   * appears directly after the checkbox that asked for it, so the next Tab
+   * reaches it, and the box carries what was typed. Walked from the checkbox
+   * because that is where the keyboard user is — the stops before it are
+   * asserted, unchanged, by the test above.
+   */
+  test("the new collection form as a finite set", async ({ page, api }) => {
+    await api.reset();
+    await page.goto("/collections/new");
+    await expect(page.getByRole("heading", { level: 1, name: "New collection" })).toBeVisible();
+
+    const finite = page.getByRole("checkbox", { name: "Finite set (a fixed, known number of items)" });
+    await finite.focus();
+    await page.keyboard.press(" ");
+    await expect(finite, "Space on the finite checkbox must check it").toBeChecked();
+    await page.getByRole("spinbutton", { name: "Number of items in the set" }).fill("102");
+    await finite.focus();
+
+    expect(await tabOrder(page), "the tab order of the new collection form as a finite set").toEqual(
+      restOfSequence([
+        'spinbutton "Number of items in the set": "102"',
+        'textbox "Field label"',
+        'combobox "Field type"',
+        'checkbox "Required"',
+        'button "Remove field"',
+        'button "Add field"',
+        'button "Create collection"',
+      ]),
+    );
+  });
+
+  /**
    * The editor, whose every control arrives carrying a stored value — so the
    * stops assert what the form was filled with, not merely that it has fields.
    * Two field rows, the first required and the second not, so a checkbox reading
@@ -207,6 +239,38 @@ test.describe("keyboard traversal of every screen", () => {
       'textbox "Collection name": Vinyl records',
       'textbox "Description": Jazz',
       'checkbox "Finite set (a fixed, known number of items)"',
+      'textbox "Field label": Title',
+      'combobox "Field type"',
+      'checkbox "Required" [checked]',
+      'button "Remove field"',
+      'textbox "Field label": Year',
+      'combobox "Field type"',
+      'checkbox "Required"',
+      'button "Remove field"',
+      'button "Add field"',
+      'button "Save changes"',
+    ]);
+  });
+
+  /** The editor of a finite set with a target (#42): the box follows the checkbox, filled with the stored target. */
+  test("the collection editor of a finite set", async ({ page, api }) => {
+    await api.reset();
+    const collection = await api.createCollection({
+      name: "Pokémon Base Set",
+      fields: FIELDS,
+      isFiniteSet: true,
+      targetCount: 102,
+    });
+
+    await page.goto(`/collections/${collection.id}/edit`);
+    await expect(page.getByRole("heading", { level: 1, name: "Edit collection" })).toBeVisible();
+
+    await expectTabOrder(page, "the collection editor of a finite set", [
+      'link "Back to collection"',
+      'textbox "Collection name": Pokémon Base Set',
+      'textbox "Description"',
+      'checkbox "Finite set (a fixed, known number of items)" [checked]',
+      'spinbutton "Number of items in the set": "102"',
       'textbox "Field label": Title',
       'combobox "Field type"',
       'checkbox "Required" [checked]',
@@ -1010,6 +1074,34 @@ test.describe("focus when the control holding it goes away", () => {
       page.getByRole("button", { name: "Add field" }),
       "removing the last field must hand focus to Add field",
     ).toBeFocused();
+  });
+
+  /**
+   * A submit with no field left (#42). It used to do nothing at all; there is
+   * no field box for the browser to stop at, so the form names the control that
+   * fixes it — Add field, which the alert describes — and moves focus there.
+   */
+  test("creating a collection with no field hands focus to Add field, saying why", async ({ page, api }) => {
+    await api.reset();
+    await page.goto("/collections/new");
+    await expect(page.getByRole("heading", { level: 1, name: "New collection" })).toBeVisible();
+
+    await page.getByRole("textbox", { name: "Collection name" }).fill("Vinyl records");
+    await page.getByRole("button", { name: "Remove field" }).click();
+    const create = page.getByRole("button", { name: "Create collection" });
+    await create.focus();
+    await page.keyboard.press("Enter");
+
+    const addField = page.getByRole("button", { name: "Add field" });
+    await expect(page.getByRole("alert")).toHaveText("A collection needs at least one field. Add one to continue.");
+    await expect(addField, "a refused submit must hand focus to the control that fixes it").toBeFocused();
+    await expect(addField).toHaveAccessibleDescription("A collection needs at least one field. Add one to continue.");
+    await expect(page).toHaveURL(/\/collections\/new$/);
+
+    // Adding the field it asked for takes the alert away.
+    await page.keyboard.press("Enter");
+    await expect(page.getByRole("textbox", { name: "Field label" })).toHaveCount(1);
+    await expect(page.getByRole("alert")).toHaveCount(0);
   });
 
   test("purging a trash row hands focus to the next row in the same list", async ({ page, api }) => {

@@ -18,14 +18,15 @@ The `Shell` component provides the full-height application frame:
 
 Code-based routing via TanStack Router. Routes are defined in `src/routes/`:
 
-| Route              | File                           | Description                                                                                     |
-| ------------------ | ------------------------------ | ----------------------------------------------------------------------------------------------- |
-| `/`                | `routes/index.tsx`             | Redirects to `/collections`                                                                     |
-| `/setup`           | `routes/setup/index.tsx`       | First-run onboarding: API token entry. Redirects to `/collections` if a token is already stored |
-| `/collections`     | `routes/collections/index.tsx` | Dashboard: collection cards, loading/error/empty states. Redirects to `/setup` if no token      |
-| `/collections/new` | `routes/collections/new.tsx`   | Create a collection with the field schema builder                                               |
-| `/collections/$id` | `routes/collections/$id.tsx`   | Collection detail: item list + add/edit/delete with a dynamically generated form                |
-| `/settings`        | `routes/settings/index.tsx`    | Settings + language selector                                                                    |
+| Route                   | File                           | Description                                                                                     |
+| ----------------------- | ------------------------------ | ----------------------------------------------------------------------------------------------- |
+| `/`                     | `routes/index.tsx`             | Redirects to `/collections`                                                                     |
+| `/setup`                | `routes/setup/index.tsx`       | First-run onboarding: API token entry. Redirects to `/collections` if a token is already stored |
+| `/collections`          | `routes/collections/index.tsx` | Dashboard: collection cards, loading/error/empty states. Redirects to `/setup` if no token      |
+| `/collections/new`      | `routes/collections/new.tsx`   | Create a collection with the field schema builder                                               |
+| `/collections/$id`      | `routes/collections/$id.tsx`   | Collection detail: item list + add/edit/delete with a dynamically generated form                |
+| `/collections/$id/edit` | `routes/collections/edit.tsx`  | Edit a collection's name, description, finite set and target count, and fields; manage its tags |
+| `/settings`             | `routes/settings/index.tsx`    | Settings + language selector                                                                    |
 
 The root layout (`routes/__root.tsx`) wraps all routes with the `Shell` component. Routes that need a connected API guard against a missing token in `beforeLoad` and redirect to `/setup`.
 
@@ -42,6 +43,10 @@ The API token is the random UUID the server prints to stdout on startup; the use
 ## Collection creation
 
 `/collections/new` builds a `Collection` payload including a **field schema builder**. Each field row captures a label, a type (from `BUILT_IN_FIELD_TYPES` in `@mycollections/core`), and a required flag; `select`/`multiselect` types reveal a comma-separated options input. On submit the drafts are converted to validated `FieldDefinition` objects and posted via `createCollection`.
+
+Both collection forms refuse only what the server refuses, and never silently. The name and description boxes carry `maxLength` from core's `COLLECTION_NAME_MAX` / `COLLECTION_DESCRIPTION_MAX`. The name and every field label are `required`, and a value of only spaces sets a custom validity message, so the browser stops the submit at that box and says why. An empty row is refused rather than dropped, because the server needs a label on every field. A `select`/`multiselect` row's options box is `required` too, and is marked invalid whenever it parses to no option, so a box of only commas and spaces is refused as well. A submit refused for having no field also resets the mutation, so an earlier failure's alert does not stay up beside the new one. A submit with no field row left has no box to mark: the form passes `noFieldsError` to `FieldSchemaBuilder`, which renders a `role="alert"` after **Add field** that the button's `aria-describedby` points at, and focus moves to Add field.
+
+`FiniteSetFields` (`src/components/FiniteSetFields.tsx`) is the finite-set checkbox, shared by the new-collection form and the editor at `/collections/$id/edit`. Checking it reveals a **target count** box — `<input type="number" inputMode="numeric">` with `min=1`, `max=TARGET_COUNT_MAX` (100,000, from `@mycollections/core`) and `step=1`, labelled "Number of items in the set" and described by a hint stating that rule. The box holds the text as typed, so unchecking finite only hides it and checking it again brings the draft back. Both forms always send `targetCount` — the number for a finite set with a filled box, `null` for an empty box or a collection that is not a finite set — so an edit that empties the box or unchecks finite clears the stored target. Out-of-range or fractional input is refused by the browser's constraint validation before submit, as the required name already is; a refusal from the server shows the form's usual alert. Ids come from `useId()`.
 
 ## Items & dynamic forms
 

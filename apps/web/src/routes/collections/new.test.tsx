@@ -115,4 +115,230 @@ describe("NewCollectionPage", () => {
     fireEvent.click(screen.getByRole("button", { name: /create collection/i }));
     expect(createCollection).not.toHaveBeenCalled();
   });
+
+  // Found driving #42: `required` accepts a name of spaces, and the handler then
+  // refused it without a word — Create did nothing at all.
+  it("refuses a name of only spaces at the name box, saying why", async () => {
+    renderNew();
+    const nameBox = (await screen.findByLabelText(/collection name/i)) as HTMLInputElement;
+    fireEvent.change(nameBox, { target: { value: "   " } });
+    fireEvent.change(screen.getByLabelText(/field label/i), { target: { value: "Title" } });
+    fireEvent.click(screen.getByRole("button", { name: /create collection/i }));
+    expect(nameBox).toBeInvalid();
+    expect(nameBox.validationMessage).toBe("Enter a name for the collection.");
+    expect(createCollection).not.toHaveBeenCalled();
+
+    fireEvent.change(nameBox, { target: { value: "  Books " } });
+    expect(nameBox).toBeValid();
+  });
+
+  it("caps the name and description at the server's limits", async () => {
+    renderNew();
+    expect(await screen.findByLabelText(/collection name/i)).toHaveAttribute("maxlength", "120");
+    expect(screen.getByLabelText(/description/i)).toHaveAttribute("maxlength", "2000");
+  });
+
+  // Found driving #42: a blank or space-only label was silently dropped, and with
+  // no labelled row left the submit did nothing at all. The server needs every
+  // field labelled, so each row's label is required.
+  it("refuses an empty field row at its label instead of dropping it", async () => {
+    renderNew();
+    fireEvent.change(await screen.findByLabelText(/collection name/i), { target: { value: "Books" } });
+    fireEvent.change(screen.getByLabelText(/field label/i), { target: { value: "Title" } });
+    fireEvent.click(screen.getByRole("button", { name: /add field/i }));
+    fireEvent.click(screen.getByRole("button", { name: /create collection/i }));
+    const [, blank] = screen.getAllByLabelText(/field label/i) as [HTMLInputElement, HTMLInputElement];
+    expect(blank).toBeInvalid();
+    expect(createCollection).not.toHaveBeenCalled();
+  });
+
+  it("refuses a field label of only spaces, saying why", async () => {
+    renderNew();
+    fireEvent.change(await screen.findByLabelText(/collection name/i), { target: { value: "Books" } });
+    const label = screen.getByLabelText(/field label/i) as HTMLInputElement;
+    fireEvent.change(label, { target: { value: "   " } });
+    fireEvent.click(screen.getByRole("button", { name: /create collection/i }));
+    expect(label.validationMessage).toBe("Enter a label for this field.");
+    expect(createCollection).not.toHaveBeenCalled();
+  });
+
+  it("says why at Add field when every field has been removed, and moves focus there", async () => {
+    renderNew();
+    fireEvent.change(await screen.findByLabelText(/collection name/i), { target: { value: "Books" } });
+    fireEvent.click(screen.getByRole("button", { name: /remove field/i }));
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /create collection/i }));
+
+    const addField = screen.getByRole("button", { name: /add field/i });
+    expect(screen.getByRole("alert")).toHaveTextContent("A collection needs at least one field. Add one to continue.");
+    expect(addField).toHaveAccessibleDescription("A collection needs at least one field. Add one to continue.");
+    expect(addField).toHaveFocus();
+    expect(createCollection).not.toHaveBeenCalled();
+
+    fireEvent.click(addField);
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText(/field label/i), { target: { value: "Title" } });
+    fireEvent.click(screen.getByRole("button", { name: /create collection/i }));
+    await waitFor(() => expect(createCollection).toHaveBeenCalledTimes(1));
+  });
+
+  // The server refuses a choice field with no options (core: `options` is
+  // `.min(1)`), which used to reach the user only as the generic alert.
+  it.each([
+    ["an empty options box", ""],
+    ["commas and spaces with no option between them", " , ,"],
+  ])("refuses a single-choice field with %s, saying why", async (_label, optionsText) => {
+    renderNew();
+    fireEvent.change(await screen.findByLabelText(/collection name/i), { target: { value: "Games" } });
+    fireEvent.change(screen.getByLabelText(/field label/i), { target: { value: "Platform" } });
+    fireEvent.change(screen.getByLabelText(/field type/i), { target: { value: "select" } });
+    const options = screen.getByLabelText(/options/i) as HTMLInputElement;
+    expect(options).toBeRequired();
+    fireEvent.change(options, { target: { value: optionsText } });
+    fireEvent.click(screen.getByRole("button", { name: /create collection/i }));
+    expect(options).toBeInvalid();
+    expect(options.validationMessage).toBe("Add at least one option, separated by commas.");
+    expect(createCollection).not.toHaveBeenCalled();
+
+    fireEvent.change(options, { target: { value: "PC" } });
+    expect(options).toBeValid();
+  });
+
+  it("shows only the no-fields alert after an earlier create failed", async () => {
+    vi.mocked(createCollection).mockRejectedValueOnce(new Error("API error 500"));
+    renderNew();
+    fireEvent.change(await screen.findByLabelText(/collection name/i), { target: { value: "Books" } });
+    fireEvent.change(screen.getByLabelText(/field label/i), { target: { value: "Title" } });
+    fireEvent.click(screen.getByRole("button", { name: /create collection/i }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Could not create the collection.");
+
+    fireEvent.click(screen.getByRole("button", { name: /remove field/i }));
+    fireEvent.click(screen.getByRole("button", { name: /create collection/i }));
+
+    await waitFor(() =>
+      expect(screen.getAllByRole("alert").map((alert) => alert.textContent)).toEqual([
+        "A collection needs at least one field. Add one to continue.",
+      ]),
+    );
+    expect(createCollection).toHaveBeenCalledTimes(1);
+  });
+
+  describe("a finite set's target count (#42)", () => {
+    const FINITE = "Finite set (a fixed, known number of items)";
+    const TARGET = "Number of items in the set";
+
+    /** What goes over the wire: the input as `JSON.stringify` sends it. */
+    function sentBody(): unknown {
+      const [input] = vi.mocked(createCollection).mock.calls[0] as [unknown];
+      return JSON.parse(JSON.stringify(input));
+    }
+
+    async function fillRequired() {
+      fireEvent.change(await screen.findByLabelText(/collection name/i), { target: { value: "Pokémon Base Set" } });
+      fireEvent.change(screen.getByLabelText(/field label/i), { target: { value: "Card" } });
+    }
+
+    const submit = () => fireEvent.click(screen.getByRole("button", { name: /create collection/i }));
+    const CARD_FIELD = [{ id: expect.any(String), label: "Card", type: "text", required: false }];
+
+    it("sends an explicit null target for a collection that is not a finite set", async () => {
+      renderNew();
+      await fillRequired();
+      expect(screen.queryByRole("spinbutton", { name: TARGET })).not.toBeInTheDocument();
+      submit();
+      await waitFor(() => expect(createCollection).toHaveBeenCalledTimes(1));
+      expect(sentBody()).toEqual({
+        name: "Pokémon Base Set",
+        fields: CARD_FIELD,
+        isFiniteSet: false,
+        targetCount: null,
+      });
+    });
+
+    it("sends the typed target for a finite set", async () => {
+      renderNew();
+      await fillRequired();
+      fireEvent.click(screen.getByRole("checkbox", { name: FINITE }));
+      fireEvent.change(screen.getByRole("spinbutton", { name: TARGET }), { target: { value: "102" } });
+      submit();
+      await waitFor(() => expect(createCollection).toHaveBeenCalledTimes(1));
+      expect(sentBody()).toEqual({ name: "Pokémon Base Set", fields: CARD_FIELD, isFiniteSet: true, targetCount: 102 });
+    });
+
+    it("sends a null target for a finite set whose box was left empty", async () => {
+      renderNew();
+      await fillRequired();
+      fireEvent.click(screen.getByRole("checkbox", { name: FINITE }));
+      submit();
+      await waitFor(() => expect(createCollection).toHaveBeenCalledTimes(1));
+      expect(sentBody()).toEqual({
+        name: "Pokémon Base Set",
+        fields: CARD_FIELD,
+        isFiniteSet: true,
+        targetCount: null,
+      });
+    });
+
+    it("drops a drafted target when finite is unchecked before creating", async () => {
+      renderNew();
+      await fillRequired();
+      fireEvent.click(screen.getByRole("checkbox", { name: FINITE }));
+      fireEvent.change(screen.getByRole("spinbutton", { name: TARGET }), { target: { value: "102" } });
+      fireEvent.click(screen.getByRole("checkbox", { name: FINITE }));
+      submit();
+      await waitFor(() => expect(createCollection).toHaveBeenCalledTimes(1));
+      expect(sentBody()).toEqual({
+        name: "Pokémon Base Set",
+        fields: CARD_FIELD,
+        isFiniteSet: false,
+        targetCount: null,
+      });
+    });
+
+    it("keeps the drafted target when finite is unchecked and checked again", async () => {
+      renderNew();
+      await fillRequired();
+      fireEvent.click(screen.getByRole("checkbox", { name: FINITE }));
+      fireEvent.change(screen.getByRole("spinbutton", { name: TARGET }), { target: { value: "102" } });
+      fireEvent.click(screen.getByRole("checkbox", { name: FINITE }));
+      fireEvent.click(screen.getByRole("checkbox", { name: FINITE }));
+      expect(screen.getByRole("spinbutton", { name: TARGET })).toHaveValue(102);
+      submit();
+      await waitFor(() => expect(createCollection).toHaveBeenCalledTimes(1));
+      expect(sentBody()).toEqual({ name: "Pokémon Base Set", fields: CARD_FIELD, isFiniteSet: true, targetCount: 102 });
+    });
+
+    // The form's own idiom: constraint validation stops the submit, as it does
+    // for the required name, and the browser says why at the control.
+    it.each([
+      ["zero", "0"],
+      ["a negative number", "-3"],
+      ["a fraction", "2.5"],
+      ["one past the maximum", "100001"],
+    ])("does not create a finite set whose target is %s", async (_label, value) => {
+      renderNew();
+      await fillRequired();
+      fireEvent.click(screen.getByRole("checkbox", { name: FINITE }));
+      const target = screen.getByRole("spinbutton", { name: TARGET });
+      fireEvent.change(target, { target: { value } });
+      submit();
+      expect(target).toBeInvalid();
+      expect(createCollection).not.toHaveBeenCalled();
+    });
+
+    it("shows the server's refusal the way the form shows any failed create", async () => {
+      vi.mocked(createCollection).mockRejectedValue(new Error("API error 400"));
+      const { router } = renderNew();
+      await fillRequired();
+      fireEvent.click(screen.getByRole("checkbox", { name: FINITE }));
+      fireEvent.change(screen.getByRole("spinbutton", { name: TARGET }), { target: { value: "102" } });
+      submit();
+      expect(await screen.findByRole("alert")).toHaveTextContent(
+        "Could not create the collection. Check your input and try again.",
+      );
+      expect(router.state.location.pathname).toBe("/collections/new");
+      expect(screen.getByRole("spinbutton", { name: TARGET })).toHaveValue(102);
+    });
+  });
 });

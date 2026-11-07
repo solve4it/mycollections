@@ -1,6 +1,6 @@
 import type { Collection } from "@mycollections/core";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { createMemoryHistory, createRouter, RouterProvider } from "@tanstack/react-router";
+import { createMemoryHistory, createRoute, createRouter, RouterProvider } from "@tanstack/react-router";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { rootRoute } from "../__root.js";
@@ -47,7 +47,19 @@ function item(id: string, deletedAt: string | null = null) {
   };
 }
 
-const testRouteTree = rootRoute.addChildren([editCollectionRoute, collectionsRoute]);
+/**
+ * Where a successful save navigates. A stand-in rather than the real detail
+ * screen, which would need every item query mocked: without any route here the
+ * navigation hit TanStack Router's not-found warning whenever it finished before
+ * the test's cleanup — which it did only under the load of a full run.
+ */
+const detailStubRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/collections/$id",
+  component: () => <p>Collection detail</p>,
+});
+
+const testRouteTree = rootRoute.addChildren([editCollectionRoute, collectionsRoute, detailStubRoute]);
 
 function renderEdit() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
@@ -222,5 +234,209 @@ describe("EditCollectionPage", () => {
       "Could not load collections",
     );
     expect(screen.queryByRole("button", { name: /save changes/i })).not.toBeInTheDocument();
+  });
+
+  // Found driving #42: `required` accepts a name of spaces, and the handler then
+  // refused it without a word — Save changes did nothing at all.
+  it("refuses a name of only spaces at the name box, saying why", async () => {
+    renderEdit();
+    const nameBox = (await screen.findByLabelText(/collection name/i)) as HTMLInputElement;
+    fireEvent.change(nameBox, { target: { value: "   " } });
+    fireEvent.click(screen.getByRole("button", { name: /save changes/i }));
+    expect(nameBox).toBeInvalid();
+    expect(nameBox.validationMessage).toBe("Enter a name for the collection.");
+    expect(updateCollection).not.toHaveBeenCalled();
+
+    fireEvent.change(nameBox, { target: { value: "Books" } });
+    expect(nameBox).toBeValid();
+  });
+
+  it("caps the name and description at the server's limits", async () => {
+    renderEdit();
+    expect(await screen.findByLabelText(/collection name/i)).toHaveAttribute("maxlength", "120");
+    expect(screen.getByLabelText(/description/i)).toHaveAttribute("maxlength", "2000");
+  });
+
+  it("refuses a field label emptied to only spaces, saying why", async () => {
+    renderEdit();
+    const [title] = (await screen.findAllByLabelText(/field label/i)) as [HTMLInputElement];
+    fireEvent.change(title, { target: { value: "   " } });
+    fireEvent.click(screen.getByRole("button", { name: /save changes/i }));
+    expect(title).toBeInvalid();
+    expect(title.validationMessage).toBe("Enter a label for this field.");
+    expect(updateCollection).not.toHaveBeenCalled();
+  });
+
+  it("says why at Add field when every field has been removed, instead of doing nothing", async () => {
+    renderEdit();
+    await screen.findAllByLabelText(/field label/i);
+    for (const remove of screen.getAllByRole("button", { name: /remove field/i })) fireEvent.click(remove);
+    expect(screen.queryAllByLabelText(/field label/i)).toHaveLength(0);
+
+    fireEvent.click(screen.getByRole("button", { name: /save changes/i }));
+
+    const addField = screen.getByRole("button", { name: /add field/i });
+    expect(screen.getByRole("alert")).toHaveTextContent("A collection needs at least one field. Add one to continue.");
+    expect(addField).toHaveFocus();
+    expect(updateCollection).not.toHaveBeenCalled();
+  });
+
+  it("refuses a choice field whose options are cleared, saying why", async () => {
+    vi.mocked(getCollection).mockResolvedValue({
+      ...collection,
+      fields: [
+        { id: "title", type: "text", label: "Title", required: true },
+        { id: "format", type: "multiselect", label: "Format", required: false, options: ["Hardback", "Paperback"] },
+      ],
+    });
+    renderEdit();
+    const options = (await screen.findByLabelText(/options/i)) as HTMLInputElement;
+    expect(options).toHaveValue("Hardback, Paperback");
+    expect(options).toBeRequired();
+    fireEvent.change(options, { target: { value: " , " } });
+    fireEvent.click(screen.getByRole("button", { name: /save changes/i }));
+    expect(options).toBeInvalid();
+    expect(options.validationMessage).toBe("Add at least one option, separated by commas.");
+    expect(updateCollection).not.toHaveBeenCalled();
+  });
+
+  it("shows only the no-fields alert after an earlier save failed", async () => {
+    vi.mocked(updateCollection).mockRejectedValueOnce(new Error("API error 500"));
+    renderEdit();
+    await screen.findAllByLabelText(/field label/i);
+    fireEvent.click(screen.getByRole("button", { name: /save changes/i }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Could not save the collection.");
+
+    for (const remove of screen.getAllByRole("button", { name: /remove field/i })) fireEvent.click(remove);
+    fireEvent.click(screen.getByRole("button", { name: /save changes/i }));
+
+    await waitFor(() =>
+      expect(screen.getAllByRole("alert").map((alert) => alert.textContent)).toEqual([
+        "A collection needs at least one field. Add one to continue.",
+      ]),
+    );
+    expect(updateCollection).toHaveBeenCalledTimes(1);
+  });
+
+  describe("a finite set's target count (#42)", () => {
+    const FINITE = "Finite set (a fixed, known number of items)";
+    const TARGET = "Number of items in the set";
+    const finiteWithTarget: Collection = { ...collection, isFiniteSet: true, targetCount: 151 };
+    const STORED_FIELDS = [
+      { id: "title", type: "text", label: "Title", required: true },
+      { id: "pages", type: "number", label: "Pages", required: false },
+    ];
+
+    /** What goes over the wire: the patch as `JSON.stringify` sends it. */
+    function sentBody(): unknown {
+      const [, input] = vi.mocked(updateCollection).mock.calls[0] as [string, unknown];
+      return JSON.parse(JSON.stringify(input));
+    }
+
+    async function save() {
+      fireEvent.click(screen.getByRole("button", { name: /save changes/i }));
+      await waitFor(() => expect(updateCollection).toHaveBeenCalledTimes(1));
+    }
+
+    it("fills the target box with the stored target", async () => {
+      vi.mocked(getCollection).mockResolvedValue(finiteWithTarget);
+      renderEdit();
+      expect(await screen.findByRole("spinbutton", { name: TARGET })).toHaveValue(151);
+      expect(screen.getByRole("checkbox", { name: FINITE })).toBeChecked();
+    });
+
+    it("saves the stored target back unchanged, then returns to the collection", async () => {
+      vi.mocked(getCollection).mockResolvedValue(finiteWithTarget);
+      const { router } = renderEdit();
+      await screen.findByRole("spinbutton", { name: TARGET });
+      await save();
+      expect(sentBody()).toEqual({
+        name: "Books",
+        description: "Shelf",
+        fields: STORED_FIELDS,
+        isFiniteSet: true,
+        targetCount: 151,
+      });
+      expect(await screen.findByText("Collection detail")).toBeInTheDocument();
+      expect(router.state.location.pathname).toBe(`/collections/${COLLECTION_ID}`);
+    });
+
+    it("saves a changed target", async () => {
+      vi.mocked(getCollection).mockResolvedValue(finiteWithTarget);
+      renderEdit();
+      fireEvent.change(await screen.findByRole("spinbutton", { name: TARGET }), { target: { value: "165" } });
+      await save();
+      expect(sentBody()).toMatchObject({ isFiniteSet: true, targetCount: 165 });
+    });
+
+    it("clears the stored target when the box is emptied", async () => {
+      vi.mocked(getCollection).mockResolvedValue(finiteWithTarget);
+      renderEdit();
+      fireEvent.change(await screen.findByRole("spinbutton", { name: TARGET }), { target: { value: "" } });
+      await save();
+      expect(sentBody()).toMatchObject({ isFiniteSet: true, targetCount: null });
+    });
+
+    it("clears the stored target when the collection stops being a finite set", async () => {
+      vi.mocked(getCollection).mockResolvedValue(finiteWithTarget);
+      renderEdit();
+      await screen.findByRole("spinbutton", { name: TARGET });
+      fireEvent.click(screen.getByRole("checkbox", { name: FINITE }));
+      expect(screen.queryByRole("spinbutton", { name: TARGET })).not.toBeInTheDocument();
+      await save();
+      expect(sentBody()).toEqual({
+        name: "Books",
+        description: "Shelf",
+        fields: STORED_FIELDS,
+        isFiniteSet: false,
+        targetCount: null,
+      });
+    });
+
+    it("keeps a drafted target when finite is unchecked and checked again before saving", async () => {
+      vi.mocked(getCollection).mockResolvedValue(finiteWithTarget);
+      renderEdit();
+      fireEvent.change(await screen.findByRole("spinbutton", { name: TARGET }), { target: { value: "165" } });
+      fireEvent.click(screen.getByRole("checkbox", { name: FINITE }));
+      fireEvent.click(screen.getByRole("checkbox", { name: FINITE }));
+      expect(screen.getByRole("spinbutton", { name: TARGET })).toHaveValue(165);
+      await save();
+      expect(sentBody()).toMatchObject({ isFiniteSet: true, targetCount: 165 });
+    });
+
+    it("sends a null target for a collection that stays not a finite set", async () => {
+      renderEdit();
+      await screen.findAllByLabelText(/field label/i);
+      expect(screen.queryByRole("spinbutton", { name: TARGET })).not.toBeInTheDocument();
+      await save();
+      expect(sentBody()).toEqual({
+        name: "Books",
+        description: "Shelf",
+        fields: STORED_FIELDS,
+        isFiniteSet: false,
+        targetCount: null,
+      });
+    });
+
+    it("makes a collection a finite set with a target, starting from an empty box", async () => {
+      renderEdit();
+      await screen.findAllByLabelText(/field label/i);
+      fireEvent.click(screen.getByRole("checkbox", { name: FINITE }));
+      const target = screen.getByRole("spinbutton", { name: TARGET });
+      expect(target).toHaveValue(null);
+      fireEvent.change(target, { target: { value: "102" } });
+      await save();
+      expect(sentBody()).toMatchObject({ isFiniteSet: true, targetCount: 102 });
+    });
+
+    it("does not save a target out of range", async () => {
+      vi.mocked(getCollection).mockResolvedValue(finiteWithTarget);
+      renderEdit();
+      const target = await screen.findByRole("spinbutton", { name: TARGET });
+      fireEvent.change(target, { target: { value: "100001" } });
+      fireEvent.click(screen.getByRole("button", { name: /save changes/i }));
+      expect(target).toBeInvalid();
+      expect(updateCollection).not.toHaveBeenCalled();
+    });
   });
 });

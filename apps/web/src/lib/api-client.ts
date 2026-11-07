@@ -13,6 +13,14 @@ export interface CreateCollectionInput {
   description?: string;
   fields: FieldDefinition[];
   isFiniteSet: boolean;
+  /**
+   * How many items a finite set has (#42), 1–`TARGET_COUNT_MAX`, or `null` for
+   * none. Only a finite set may carry one: the server refuses a number here
+   * alongside `isFiniteSet: false`. In an edit, `null` clears the stored target
+   * and an omitted key leaves it alone — except that turning finite off clears it
+   * either way.
+   */
+  targetCount?: number | null;
 }
 
 export interface ItemInput {

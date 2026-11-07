@@ -8,11 +8,20 @@ import { FieldDefinitionSchema } from "./field.js";
  */
 export const TARGET_COUNT_MAX = 100_000;
 
+/**
+ * The longest name and description a collection may have. Shared rather than
+ * written out in each place so the API's body schema and the web forms' boxes
+ * cap at the same length the model does — a box that let a longer name through
+ * only met a generic "check your input" on save.
+ */
+export const COLLECTION_NAME_MAX = 120;
+export const COLLECTION_DESCRIPTION_MAX = 2000;
+
 export const CollectionSchema = z
   .object({
     id: z.uuid(),
-    name: z.string().min(1).max(120),
-    description: z.string().max(2000).optional(),
+    name: z.string().min(1).max(COLLECTION_NAME_MAX),
+    description: z.string().max(COLLECTION_DESCRIPTION_MAX).optional(),
     fields: z.array(FieldDefinitionSchema).min(1),
     isFiniteSet: z.boolean(),
     /**
