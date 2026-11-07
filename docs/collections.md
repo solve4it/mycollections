@@ -16,7 +16,7 @@ _Walkthrough for creating a collection and picking a plugin type._
 
 ### What a collection needs
 
-A name of up to 120 characters (a description, if you give one, can run to 2,000), and at least one field, each with a label. The form will not submit without them, and it says which box needs attention: a name or label left empty or made only of spaces is marked where it is. If you have removed every field, a message appears beside **Add field** and the cursor moves there. An empty field row is not skipped — give it a label or remove it. The same rules apply in **Edit collection**.
+A name of up to 120 characters (a description, if you give one, can run to 2,000), and at least one field, each with a label. A single- or multiple-choice field also needs at least one option in its **Options** box, separated by commas. The form will not submit without them, and it says which box needs attention: a name or label left empty or made only of spaces, or an Options box with no option in it, is marked where it is. If you have removed every field, a message appears beside **Add field** and the cursor moves there. An empty field row is not skipped — give it a label or remove it. The same rules apply in **Edit collection**.
 
 ### Finite sets and their size
 
