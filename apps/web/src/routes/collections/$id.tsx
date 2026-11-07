@@ -3,6 +3,7 @@ import { type UseQueryResult, useQueryClient } from "@tanstack/react-query";
 import { createRoute, Link, redirect, useNavigate } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { CollectionProgress } from "../../components/CollectionProgress.js";
 import { DynamicItemForm } from "../../components/DynamicItemForm.js";
 import { EmptyState } from "../../components/EmptyState.js";
 import { FailureSurface } from "../../components/ErrorScreen.js";
@@ -21,6 +22,7 @@ import { type PageName, usePageTitle } from "../../lib/page-title.js";
 import {
   itemsQueryKey,
   useCollection,
+  useCollectionCounts,
   useCreateItem,
   useDeleteItem,
   useItems,
@@ -99,6 +101,14 @@ function itemLabel(collection: Collection, item: Item, untitled: string): string
 }
 
 /**
+ * The rejection handler for a row-owned `mutateAsync` (#42, R1). The failure is
+ * already reported — the mutation's error state drives the row's alert, and the
+ * query client's mutation cache sends it to the error reporter — so the promise
+ * only needs its rejection handled, not handled again.
+ */
+function ignoreRejection(): void {}
+
+/**
  * What this page calls itself (#309). A collection that failed to load is as
  * named as it is ever going to be — reporting that is what keeps the shell from
  * holding the route-change announcement for a name that is not coming.
@@ -171,6 +181,11 @@ function CollectionDetailPage() {
   }, [added]);
 
   const collection = collectionQuery.data;
+  // A finite set's progress (#42). Asked for only when there is a target to
+  // measure against; until the counts arrive, and if they never do, there is no
+  // bar, because a zero would claim the set is empty.
+  const measurable = collection?.isFiniteSet === true && collection.targetCount !== null;
+  const countsQuery = useCollectionCounts(id, measurable);
 
   // A row's Delete removes the row, and the toast's Undo and Dismiss remove the
   // toast, so all three orphaned focus to <body> (#367). The handoff is held
@@ -305,6 +320,15 @@ function CollectionDetailPage() {
           {tCollections("edit_collection")}
         </Link>
       </div>
+      {measurable && countsQuery.data && (
+        <CollectionProgress collection={collection} ownedCount={countsQuery.data.owned} />
+      )}
+      {/* Finite, but the size is not known yet: say how to get a bar. A plain
+          paragraph, not a live region: it is decided once, with the
+          collection, so it is in the first commit that has one or in none. */}
+      {collection.isFiniteSet && collection.targetCount === null && (
+        <p className="form-hint">{tCollections("progress_no_target")}</p>
+      )}
       {collection.description && <p>{collection.description}</p>}
 
       {/* tabIndex={-1} so a delete that empties the list has somewhere named to
@@ -635,18 +659,20 @@ function ItemRow({ collection, item, onDeleting, onDeleted, onSaved }: ItemRowPr
               setEditing(false);
             }}
             onSubmit={(payload) =>
-              updateItem.mutate(
-                { itemId: item.id, input: payload },
-                {
-                  // The page picks the destination: a search may have taken
-                  // this row off the list, and this row's handoff would die
-                  // with it (#41).
-                  onSuccess: (saved) => {
-                    onSaved(saved);
-                    setEditing(false);
-                  },
-                },
-              )
+              // The page picks the destination: a search may have taken this
+              // row off the list, and this row's handoff would die with it
+              // (#41). Chained on the promise rather than passed as a
+              // `mutate`-level onSuccess, which belongs to this row's observer
+              // and is silently dropped if the list fetched again has already
+              // unmounted the row when the mutation settles (#42, R1). The
+              // promise resolves after the hook-level onSuccess, so the list
+              // has been fetched again either way. A failure is shown by the
+              // alert below; the empty handler only keeps it from surfacing
+              // as an unhandled rejection.
+              updateItem.mutateAsync({ itemId: item.id, input: payload }).then((saved) => {
+                onSaved(saved);
+                setEditing(false);
+              }, ignoreRejection)
             }
           />
         </div>
@@ -700,7 +726,10 @@ function ItemRow({ collection, item, onDeleting, onDeleted, onSaved }: ItemRowPr
               // Asked for before the mutation, while the row is still on screen
               // and this button still holds focus.
               onDeleting();
-              deleteItem.mutate(item.id, { onSuccess: onDeleted });
+              // The toast is the page's, and this row is exactly what the
+              // delete removes, so the follow-up rides the promise, not this
+              // row's observer (#42, R1; see the editor's Save above).
+              deleteItem.mutateAsync(item.id).then(onDeleted, ignoreRejection);
             }}
           >
             <Icon name="delete" />

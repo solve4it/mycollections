@@ -14,10 +14,19 @@ vi.mock("../../lib/api-client.js", () => ({
   updateItem: vi.fn(),
   deleteItem: vi.fn(),
   restoreItem: vi.fn(),
+  getCollectionCounts: vi.fn(),
   getToken: vi.fn(() => "test-token"),
 }));
 
-import { createItem, deleteItem, getCollection, listItems, restoreItem, updateItem } from "../../lib/api-client.js";
+import {
+  createItem,
+  deleteItem,
+  getCollection,
+  getCollectionCounts,
+  listItems,
+  restoreItem,
+  updateItem,
+} from "../../lib/api-client.js";
 
 const testRouteTree = rootRoute.addChildren([collectionDetailRoute, editCollectionRoute]);
 
@@ -593,6 +602,116 @@ describe("CollectionDetailPage", () => {
       );
       const row = screen.getAllByRole("listitem")[0] as HTMLElement;
       expect(within(row).getByRole("textbox", { name: "Title" })).toHaveValue("Zelda");
+    });
+  });
+
+  // #42: the header measures a finite set with a target against its live
+  // counts; a finite set without one is told how to get a bar, in a plain hint.
+  describe("a finite set's progress in the header (#42)", () => {
+    const FINITE: Collection = { ...COLLECTION, isFiniteSet: true, targetCount: 5 };
+
+    function progress(): HTMLElement | null {
+      return document.querySelector<HTMLElement>(".collection-detail p.collection-progress");
+    }
+
+    it("shows owned against the target from the collection's counts, under the title", async () => {
+      vi.mocked(getCollection).mockResolvedValue(FINITE);
+      vi.mocked(getCollectionCounts).mockResolvedValue({ total: 4, owned: 3, wanted: 1, ordered: 0 });
+      renderDetail();
+
+      await waitFor(() => expect(progress()).toHaveTextContent(/^3 of 5 collected$/));
+      expect(getCollectionCounts).toHaveBeenCalledWith(COLLECTION.id);
+      // Directly after the title row, before anything about the items.
+      expect(document.querySelector(".collection-detail-header")?.nextElementSibling).toBe(progress());
+      expect(screen.queryByText("Complete")).not.toBeInTheDocument();
+    });
+
+    it("says Complete once owned reaches the target", async () => {
+      vi.mocked(getCollection).mockResolvedValue(FINITE);
+      vi.mocked(getCollectionCounts).mockResolvedValue({ total: 7, owned: 6, wanted: 1, ordered: 0 });
+      renderDetail();
+
+      await waitFor(() => expect(progress()).toHaveTextContent(/^6 of 5 collected\s*Complete$/));
+    });
+
+    it("follows an item change, since the counts ride under the items prefix", async () => {
+      vi.mocked(getCollection).mockResolvedValue(FINITE);
+      vi.mocked(listItems).mockResolvedValueOnce([ITEM]).mockResolvedValue([]);
+      vi.mocked(getCollectionCounts)
+        .mockResolvedValueOnce({ total: 1, owned: 1, wanted: 0, ordered: 0 })
+        .mockResolvedValue({ total: 0, owned: 0, wanted: 0, ordered: 0 });
+      renderDetail();
+      await waitFor(() => expect(progress()).toHaveTextContent(/^1 of 5 collected$/));
+
+      fireEvent.click(await screen.findByRole("button", { name: "Delete “Zelda”" }));
+
+      await waitFor(() => expect(progress()).toHaveTextContent(/^0 of 5 collected$/));
+    });
+
+    it("shows no bar, never a zero, while the counts load or when they fail", async () => {
+      vi.mocked(getCollection).mockResolvedValue(FINITE);
+      let fail: (error: Error) => void = () => {};
+      vi.mocked(getCollectionCounts).mockReturnValue(
+        new Promise((_resolve, reject) => {
+          fail = reject;
+        }),
+      );
+      renderDetail();
+      await screen.findByRole("heading", { level: 1, name: "Games" });
+      await waitFor(() => expect(getCollectionCounts).toHaveBeenCalled());
+      expect(progress()).toBeNull();
+
+      fail(new Error("API error 500"));
+
+      await screen.findByText(/no items yet/i);
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      expect(progress()).toBeNull();
+      expect(screen.queryByText(/of 5 collected/)).not.toBeInTheDocument();
+      // A missing bar is not a failure worth an alert over the page's real content.
+      expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    });
+
+    it("asks a finite set with no target for one in a plain hint, and fetches no counts", async () => {
+      vi.mocked(getCollection).mockResolvedValue({ ...FINITE, targetCount: null });
+      renderDetail();
+      await screen.findByRole("heading", { level: 1, name: "Games" });
+
+      const hint = screen.getByText("Add how many items the set has in Edit collection to see your progress.");
+      expect(hint.tagName).toBe("P");
+      expect(hint).toHaveClass("form-hint");
+      // Decided once, with the collection: not a live region (DEVELOPMENT.md).
+      expect(hint).not.toHaveAttribute("role");
+      expect(hint).not.toHaveAttribute("aria-live");
+      expect(hint.closest("[aria-live]")).toBeNull();
+      expect(progress()).toBeNull();
+      expect(getCollectionCounts).not.toHaveBeenCalled();
+    });
+
+    it("shows neither bar nor hint on a collection that is not a finite set", async () => {
+      renderDetail();
+      await screen.findByRole("heading", { level: 1, name: "Games" });
+      await screen.findByText(/no items yet/i);
+
+      expect(progress()).toBeNull();
+      expect(screen.queryByText(/see your progress/)).not.toBeInTheDocument();
+      expect(getCollectionCounts).not.toHaveBeenCalled();
+    });
+
+    // R1: the counts query is a second refetch under the items prefix, which
+    // gives React time to commit the list fetched again (unmounting the row) before
+    // the mutation settles. A mutate-level callback on the row's own observer is
+    // dropped once that observer is gone.
+    it("still offers Undo after a delete on a finite set with a target", async () => {
+      vi.mocked(getCollection).mockResolvedValue(FINITE);
+      vi.mocked(getCollectionCounts).mockResolvedValue({ total: 1, owned: 1, wanted: 0, ordered: 0 });
+      vi.mocked(listItems).mockResolvedValueOnce([ITEM]).mockResolvedValue([]);
+      renderDetail();
+      fireEvent.click(await screen.findByRole("button", { name: "Delete “Zelda”" }));
+
+      await waitFor(() => expect(screen.queryByText("Zelda")).not.toBeInTheDocument());
+      const toast = await findToast();
+      expect(toast).toHaveTextContent("Deleted “Zelda”");
+      expect(within(toast).getByRole("button", { name: "Undo" })).toBeInTheDocument();
     });
   });
 });
