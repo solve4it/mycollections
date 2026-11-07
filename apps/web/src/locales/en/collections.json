@@ -19,6 +19,8 @@
   "name_placeholder": "e.g. Books, Vinyl Records, Board Games",
   "description_label": "Description",
   "finite_label": "Finite set (a fixed, known number of items)",
+  "target_label": "Number of items in the set",
+  "target_hint": "Optional. A whole number from 1 to {{max}} — leave it empty if you do not know it yet.",
   "fields_legend": "Fields",
   "field_label_label": "Field label",
   "field_type_label": "Field type",

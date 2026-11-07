@@ -2,6 +2,7 @@ import { createRoute, redirect, useNavigate } from "@tanstack/react-router";
 import { type FormEvent, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { buildField, emptyField, type FieldDraft, FieldSchemaBuilder } from "../../components/FieldSchemaBuilder.js";
+import { FiniteSetFields, targetCountFromDraft } from "../../components/FiniteSetFields.js";
 import { getToken } from "../../lib/api-client.js";
 import { useCreateCollection } from "../../lib/queries.js";
 import { rootRoute } from "../__root.js";
@@ -24,6 +25,7 @@ function NewCollectionPage() {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [isFiniteSet, setIsFiniteSet] = useState(false);
+  const [targetCount, setTargetCount] = useState("");
   const [fields, setFields] = useState<FieldDraft[]>([emptyField()]);
 
   function handleSubmit(e: FormEvent) {
@@ -39,6 +41,9 @@ function NewCollectionPage() {
         description: description.trim() || undefined,
         fields: labeled.map(buildField),
         isFiniteSet,
+        // Always sent, `null` when there is none: one rule for both forms, and
+        // the server's default would land on the same value anyway (#42).
+        targetCount: targetCountFromDraft(isFiniteSet, targetCount),
       },
       { onSuccess: () => navigate({ to: "/collections" }) },
     );
@@ -65,17 +70,12 @@ function NewCollectionPage() {
           <textarea id="collection-description" value={description} onChange={(e) => setDescription(e.target.value)} />
         </div>
 
-        <div className="form-row">
-          <label htmlFor="collection-finite" className="checkbox-row">
-            <input
-              id="collection-finite"
-              type="checkbox"
-              checked={isFiniteSet}
-              onChange={(e) => setIsFiniteSet(e.target.checked)}
-            />
-            {t("finite_label")}
-          </label>
-        </div>
+        <FiniteSetFields
+          isFiniteSet={isFiniteSet}
+          targetCount={targetCount}
+          onFiniteSetChange={setIsFiniteSet}
+          onTargetCountChange={setTargetCount}
+        />
 
         <FieldSchemaBuilder fields={fields} onChange={setFields} />
 

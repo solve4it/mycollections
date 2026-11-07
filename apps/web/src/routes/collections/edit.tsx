@@ -3,6 +3,7 @@ import { type FormEvent, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { FailureSurface } from "../../components/ErrorScreen.js";
 import { buildField, type FieldDraft, FieldSchemaBuilder, fieldToDraft } from "../../components/FieldSchemaBuilder.js";
+import { FiniteSetFields, targetCountFromDraft, targetCountToDraft } from "../../components/FiniteSetFields.js";
 import { Icon } from "../../components/Icon.js";
 import { CollectionDetailSkeleton } from "../../components/Skeleton.js";
 import { TagManager } from "../../components/TagManager.js";
@@ -39,6 +40,8 @@ function EditCollectionPage() {
     name: string;
     description: string;
     isFiniteSet: boolean;
+    /** As typed in the box, so it survives finite being unchecked and checked again. */
+    targetCount: string;
     fields: FieldDraft[];
   } | null>(null);
 
@@ -48,6 +51,7 @@ function EditCollectionPage() {
       name: collection.name,
       description: collection.description ?? "",
       isFiniteSet: collection.isFiniteSet,
+      targetCount: targetCountToDraft(collection.targetCount),
       fields: collection.fields.map(fieldToDraft),
     });
   }
@@ -106,6 +110,9 @@ function EditCollectionPage() {
         description: draft.description.trim(),
         fields: labeled.map(buildField),
         isFiniteSet: draft.isFiniteSet,
+        // Sent even when there is none, like the description: an emptied box or
+        // an unchecked finite set has to clear the stored target (#42).
+        targetCount: targetCountFromDraft(draft.isFiniteSet, draft.targetCount),
       },
       { onSuccess: () => navigate({ to: "/collections/$id", params: { id } }) },
     );
@@ -139,17 +146,12 @@ function EditCollectionPage() {
           />
         </div>
 
-        <div className="form-row">
-          <label htmlFor="collection-finite" className="checkbox-row">
-            <input
-              id="collection-finite"
-              type="checkbox"
-              checked={draft.isFiniteSet}
-              onChange={(e) => setDraft({ ...draft, isFiniteSet: e.target.checked })}
-            />
-            {t("finite_label")}
-          </label>
-        </div>
+        <FiniteSetFields
+          isFiniteSet={draft.isFiniteSet}
+          targetCount={draft.targetCount}
+          onFiniteSetChange={(isFiniteSet) => setDraft({ ...draft, isFiniteSet })}
+          onTargetCountChange={(targetCount) => setDraft({ ...draft, targetCount })}
+        />
 
         <FieldSchemaBuilder
           fields={draft.fields}
