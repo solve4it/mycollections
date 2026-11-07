@@ -48,7 +48,7 @@ Only owned items count toward the target ("collected"); wanted and ordered ones 
 | `status`          | Collected first: owned, ordered, wanted                                      | Still to get first: wanted, ordered, owned |
 | `field:<fieldId>` | One schema field's value (`isSortableFieldType()` says which types can sort) | Reversed                                   |
 
-A descending key is the exact reverse of its ascending one, tie-break included: items that compare equal keep insertion order in the sort's own direction. So `-status` lists wanted items newest first, not merely wanted before owned.
+Items that compare equal keep insertion order in the sort's own direction, so a descending key reverses ties too. Empty values sort last in both directions, which makes a descending `name` or field sort the exact reverse of its ascending one only when no value is empty; `status`, `createdAt` and `updatedAt` are never empty. So `-status` lists wanted items newest first, not merely wanted before owned.
 
 ### Provider contracts
 

@@ -346,7 +346,7 @@ describe("sorting a collection (#41)", () => {
     const { router } = renderAt(BASE);
     await waitFor(() => expect(rowTitles()).toEqual(["Zelda", "Zelda II", "Mario"]));
 
-    const option = within(sortSelect()).getByRole("option", { name: "Status, still to get first" });
+    const option = within(sortSelect()).getByRole("option", { name: "Status, remaining first" });
     fireEvent.change(sortSelect(), { target: { value: (option as HTMLOptionElement).value } });
 
     await waitFor(() => expect(rowTitles()).toEqual(["Zelda", "Mario", "Zelda II"]));

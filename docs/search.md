@@ -6,7 +6,7 @@ description: Finding items across your collections — full-text search, filters
 
 # Search
 
-> **Placeholder.** This page will be filled in when the search feature lands.
+> **Being written.** Sorting is documented below; searching and filtering are next.
 
 ## Searching everything
 
@@ -27,10 +27,12 @@ The **Sort by** list on a collection's page orders its items. The order is kept 
 | Recently updated                             | The item you changed last comes first                                              |
 | Name, A to Z / Z to A                        | By the item's name, which is the first field that holds a value                    |
 | Status, collected first                      | Items you own, then items on order, then items you want                            |
-| Status, still to get first                   | Items you want, then items on order, then items you own                            |
+| Status, remaining first                      | Items you want, then items on order, then items you own                            |
 | _Field_, A to Z, low to high, oldest first … | By one field. The words depend on the field's type. Empty values always come last. |
 
-Items that tie, such as two wanted items under a status sort, stay in the order you added them. Under "Status, still to get first" the whole list is reversed, so the item you added last comes first among those ties.
+Items that tie, such as two wanted items under a status sort, stay in the order you added them. Every descending option — newest first, Z to A, high to low, remaining first — reverses that too, so the item you added last comes first among its ties. Items with an empty value come last whichever way you sort.
+
+"Collected" means the items whose status is **Owned**; "remaining" means **Wanted** and **Ordered** ones.
 
 ## Saved searches
 

@@ -34,7 +34,7 @@ describe("ItemSortSelect (#41)", () => {
       "Name, A to Z",
       "Name, Z to A",
       "Status, collected first",
-      "Status, still to get first",
+      "Status, remaining first",
       "Title, A to Z",
       "Title, Z to A",
       "Year, low to high",
@@ -70,7 +70,7 @@ describe("ItemSortSelect (#41)", () => {
     const onSort = vi.fn();
     render(<ItemSortSelect value="-status" searching={false} fields={[]} onSort={onSort} />);
     expect(select()).toHaveValue("-status");
-    expect(within(select()).getByRole("option", { name: "Status, still to get first" })).toHaveValue("-status");
+    expect(within(select()).getByRole("option", { name: "Status, remaining first" })).toHaveValue("-status");
     expect(within(select()).getByRole("option", { name: "Status, collected first" })).toHaveValue("status");
 
     fireEvent.change(select(), { target: { value: "status" } });
@@ -82,7 +82,7 @@ describe("ItemSortSelect (#41)", () => {
   it("offers the status orders while searching too (#42)", () => {
     render(<ItemSortSelect value="status" searching fields={FIELDS} onSort={vi.fn()} />);
     expect(select()).toHaveValue("status");
-    expect(optionLabels()).toContain("Status, still to get first");
+    expect(optionLabels()).toContain("Status, remaining first");
   });
 
   it("takes its id from useId, so two on a screen do not share a label", () => {

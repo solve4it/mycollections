@@ -106,7 +106,7 @@ describe("GET /api/collections/:id/items — search and sort (#41)", () => {
     expect(titlesOf(await list("sort=name"))).toEqual(["Dune", "Dune Messiah", "Emma"]);
   });
 
-  it("sorts by status: collected first, or still to get first (#42)", async () => {
+  it("sorts by status: collected first, or remaining first (#42)", async () => {
     // Insertion (Dune, Emma, Dune Messiah), name and status orders all disagree.
     await handle.items.create({ collectionId: books.id, status: "ordered", fields: { title: "Atlas", pages: 900 } });
     await handle.items.create({ collectionId: books.id, status: "wanted", fields: { title: "Beloved", pages: 320 } });
