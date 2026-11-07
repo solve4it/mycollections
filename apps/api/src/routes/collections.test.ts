@@ -1,4 +1,4 @@
-import type { Collection, FieldDefinition } from "@mycollections/core";
+import { type Collection, type FieldDefinition, ItemCountsSchema } from "@mycollections/core";
 import { type DatabaseHandle, openDatabase } from "@mycollections/db";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { buildApp } from "../app.js";
@@ -52,6 +52,111 @@ describe("GET /api/collections", () => {
     const byId = Object.fromEntries(res.json().map((c: { id: string; itemCount: number }) => [c.id, c.itemCount]));
     expect(byId[books.id]).toBe(1);
     expect(byId[empty.id]).toBe(0);
+  });
+
+  it("includes each collection's live owned count beside its item count (#42)", async () => {
+    const quarters = await handle.collections.create({
+      name: "State quarters",
+      fields: baseFields,
+      isFiniteSet: true,
+      targetCount: 50,
+    });
+    const records = await handle.collections.create({ name: "Records", fields: baseFields, isFiniteSet: false });
+    const empty = await handle.collections.create({ name: "Coins", fields: baseFields, isFiniteSet: true });
+    const allTrashed = await handle.collections.create({ name: "Stamps", fields: baseFields, isFiniteSet: false });
+    // Quarters: 3 owned, 2 wanted, 1 ordered live; a trashed owned item must not count.
+    for (const status of ["owned", "owned", "owned", "wanted", "wanted", "ordered"] as const) {
+      await handle.items.create({ collectionId: quarters.id, status, fields: { title: status } });
+    }
+    const trashedOwned = await handle.items.create({ collectionId: quarters.id, status: "owned", fields: {} });
+    await handle.items.softDelete(trashedOwned.id);
+    // Records: a different split, so counts leaking between collections would show.
+    for (const status of ["owned", "wanted", "wanted", "wanted"] as const) {
+      await handle.items.create({ collectionId: records.id, status, fields: { title: status } });
+    }
+    const gone = await handle.items.create({ collectionId: allTrashed.id, status: "owned", fields: {} });
+    await handle.items.softDelete(gone.id);
+
+    const app = await makeApp();
+    const res = await app.inject({ method: "GET", url: "/api/collections", headers: auth });
+    expect(res.statusCode).toBe(200);
+    const byId = new Map(res.json().map((c: Collection & { itemCount: number }) => [c.id, c]));
+    // The whole entry is pinned: the collection as stored plus exactly these two numbers.
+    expect(byId.get(quarters.id)).toEqual({ ...quarters, itemCount: 6, ownedCount: 3 });
+    expect(byId.get(records.id)).toEqual({ ...records, itemCount: 4, ownedCount: 1 });
+    expect(byId.get(empty.id)).toEqual({ ...empty, itemCount: 0, ownedCount: 0 });
+    expect(byId.get(allTrashed.id)).toEqual({ ...allTrashed, itemCount: 0, ownedCount: 0 });
+  });
+});
+
+describe("GET /api/collections/:id/counts (#42)", () => {
+  it("counts a collection's live items per status, ignoring trashed items and other collections", async () => {
+    const quarters = await handle.collections.create({
+      name: "State quarters",
+      fields: baseFields,
+      isFiniteSet: true,
+      targetCount: 50,
+    });
+    const records = await handle.collections.create({ name: "Records", fields: baseFields, isFiniteSet: false });
+    for (const status of ["owned", "owned", "owned", "wanted", "wanted", "ordered"] as const) {
+      await handle.items.create({ collectionId: quarters.id, status, fields: { title: status } });
+    }
+    for (const status of ["owned", "ordered"] as const) {
+      const trashed = await handle.items.create({ collectionId: quarters.id, status, fields: {} });
+      await handle.items.softDelete(trashed.id);
+    }
+    for (const status of ["owned", "wanted", "wanted", "wanted", "ordered"] as const) {
+      await handle.items.create({ collectionId: records.id, status, fields: { title: status } });
+    }
+
+    const app = await makeApp();
+    const res = await app.inject({ method: "GET", url: `/api/collections/${quarters.id}/counts`, headers: auth });
+    expect(res.statusCode).toBe(200);
+    // Exactly these four keys — the response shape is pinned.
+    expect(res.json()).toEqual({ total: 6, owned: 3, wanted: 2, ordered: 1 });
+    expect(ItemCountsSchema.strict().parse(res.json())).toEqual({ total: 6, owned: 3, wanted: 2, ordered: 1 });
+
+    // Not a finite set: counted all the same — progress is the client's call.
+    const other = await app.inject({ method: "GET", url: `/api/collections/${records.id}/counts`, headers: auth });
+    expect(other.statusCode).toBe(200);
+    expect(other.json()).toEqual({ total: 5, owned: 1, wanted: 3, ordered: 1 });
+  });
+
+  it("answers zeros for a live collection whose items are all trashed", async () => {
+    const col = await handle.collections.create({ name: "Stamps", fields: baseFields, isFiniteSet: true });
+    const trashed = await handle.items.create({ collectionId: col.id, status: "owned", fields: {} });
+    await handle.items.softDelete(trashed.id);
+    const app = await makeApp();
+    const res = await app.inject({ method: "GET", url: `/api/collections/${col.id}/counts`, headers: auth });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ total: 0, owned: 0, wanted: 0, ordered: 0 });
+  });
+
+  it.each([
+    ["an unknown id", "00000000-0000-4000-8000-000000000000"],
+    ["an id that is not a uuid", "not-a-collection"],
+  ])("answers 404 for %s", async (_label, id) => {
+    const app = await makeApp();
+    const res = await app.inject({ method: "GET", url: `/api/collections/${id}/counts`, headers: auth });
+    expect(res.statusCode).toBe(404);
+    expect(res.json().message).toBe("Collection not found");
+  });
+
+  it("answers 404 for a trashed collection, though its items are still stored", async () => {
+    const col = await handle.collections.create({ name: "Books", fields: baseFields, isFiniteSet: true });
+    await handle.items.create({ collectionId: col.id, status: "owned", fields: { title: "Dune" } });
+    await handle.collections.softDelete(col.id);
+    const app = await makeApp();
+    const res = await app.inject({ method: "GET", url: `/api/collections/${col.id}/counts`, headers: auth });
+    expect(res.statusCode).toBe(404);
+    expect(res.json().message).toBe("Collection not found");
+  });
+
+  it("requires the bearer token", async () => {
+    const col = await handle.collections.create({ name: "Books", fields: baseFields, isFiniteSet: true });
+    const app = await makeApp();
+    const res = await app.inject({ method: "GET", url: `/api/collections/${col.id}/counts` });
+    expect(res.statusCode).toBe(401);
   });
 });
 

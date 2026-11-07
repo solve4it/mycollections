@@ -14,30 +14,31 @@ Local Fastify API server for MyCollections. Runs on `localhost` only and is inte
 
 All routes require `Authorization: Bearer <token>` except `GET /api/health`.
 
-| Method   | Path                                         | Description                                                                                                   |
-| -------- | -------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
-| `GET`    | `/api/health`                                | Health check (no auth required)                                                                               |
-| `GET`    | `/api/collections`                           | List all collections (each includes `itemCount`, the number of non-deleted items)                             |
-| `POST`   | `/api/collections`                           | Create a collection — a finite set may carry a target (see [A finite set's target](#a-finite-sets-target-42)) |
-| `GET`    | `/api/collections/:id`                       | Get a collection                                                                                              |
-| `PATCH`  | `/api/collections/:id`                       | Update a collection, its field schema included (see [Editing a field schema](#editing-a-field-schema))        |
-| `DELETE` | `/api/collections/:id`                       | Soft-delete a collection                                                                                      |
-| `POST`   | `/api/collections/:id/restore`               | Restore a soft-deleted collection                                                                             |
-| `GET`    | `/api/collections/:id/items`                 | List items (`?status=owned\|wanted\|ordered`, `?q=` search, `?sort=` — see below)                             |
-| `POST`   | `/api/collections/:id/items`                 | Create an item                                                                                                |
-| `POST`   | `/api/collections/:id/tags/rename`           | Rename or merge a tag across the collection's items (see below)                                               |
-| `POST`   | `/api/collections/:id/tags/remove`           | Remove a tag from the collection's items                                                                      |
-| `GET`    | `/api/collections/:id/tag-values`            | Tags in use in a tags field (`?field=`), for suggestions                                                      |
-| `GET`    | `/api/collections/:id/items/:itemId`         | Get an item                                                                                                   |
-| `PATCH`  | `/api/collections/:id/items/:itemId`         | Update an item                                                                                                |
-| `DELETE` | `/api/collections/:id/items/:itemId`         | Soft-delete an item                                                                                           |
-| `POST`   | `/api/collections/:id/items/:itemId/restore` | Restore a soft-deleted item                                                                                   |
-| `GET`    | `/api/trash`                                 | List what soft delete has hidden: `{ collections, items }`                                                    |
-| `DELETE` | `/api/trash`                                 | Empty the trash — permanently delete everything in it; returns `{ items, collections }` counts                |
-| `DELETE` | `/api/trash/items/:itemId`                   | Permanently delete a trashed item                                                                             |
-| `DELETE` | `/api/trash/collections/:id`                 | Permanently delete a trashed collection and its items                                                         |
-| `GET`    | `/api/export`                                | Download a JSON backup of all collections and items                                                           |
-| `POST`   | `/api/import`                                | Restore a backup document (`?mode=skip`)                                                                      |
+| Method   | Path                                         | Description                                                                                                       |
+| -------- | -------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| `GET`    | `/api/health`                                | Health check (no auth required)                                                                                   |
+| `GET`    | `/api/collections`                           | List all collections, each with `itemCount` and `ownedCount` (see [Counts and progress](#counts-and-progress-42)) |
+| `POST`   | `/api/collections`                           | Create a collection — a finite set may carry a target (see [A finite set's target](#a-finite-sets-target-42))     |
+| `GET`    | `/api/collections/:id`                       | Get a collection                                                                                                  |
+| `GET`    | `/api/collections/:id/counts`                | A collection's live items per status: `{ total, owned, wanted, ordered }`                                         |
+| `PATCH`  | `/api/collections/:id`                       | Update a collection, its field schema included (see [Editing a field schema](#editing-a-field-schema))            |
+| `DELETE` | `/api/collections/:id`                       | Soft-delete a collection                                                                                          |
+| `POST`   | `/api/collections/:id/restore`               | Restore a soft-deleted collection                                                                                 |
+| `GET`    | `/api/collections/:id/items`                 | List items (`?status=owned\|wanted\|ordered`, `?q=` search, `?sort=` — see below)                                 |
+| `POST`   | `/api/collections/:id/items`                 | Create an item                                                                                                    |
+| `POST`   | `/api/collections/:id/tags/rename`           | Rename or merge a tag across the collection's items (see below)                                                   |
+| `POST`   | `/api/collections/:id/tags/remove`           | Remove a tag from the collection's items                                                                          |
+| `GET`    | `/api/collections/:id/tag-values`            | Tags in use in a tags field (`?field=`), for suggestions                                                          |
+| `GET`    | `/api/collections/:id/items/:itemId`         | Get an item                                                                                                       |
+| `PATCH`  | `/api/collections/:id/items/:itemId`         | Update an item                                                                                                    |
+| `DELETE` | `/api/collections/:id/items/:itemId`         | Soft-delete an item                                                                                               |
+| `POST`   | `/api/collections/:id/items/:itemId/restore` | Restore a soft-deleted item                                                                                       |
+| `GET`    | `/api/trash`                                 | List what soft delete has hidden: `{ collections, items }`                                                        |
+| `DELETE` | `/api/trash`                                 | Empty the trash — permanently delete everything in it; returns `{ items, collections }` counts                    |
+| `DELETE` | `/api/trash/items/:itemId`                   | Permanently delete a trashed item                                                                                 |
+| `DELETE` | `/api/trash/collections/:id`                 | Permanently delete a trashed collection and its items                                                             |
+| `GET`    | `/api/export`                                | Download a JSON backup of all collections and items                                                               |
+| `POST`   | `/api/import`                                | Restore a backup document (`?mode=skip`)                                                                          |
 
 ### Searching and sorting items (#41)
 
@@ -123,6 +124,39 @@ Every collection in a response has the key; it is `null` unless set.
 The body schema declares `targetCount` with an empty schema on purpose: Fastify's Ajv
 coerces types, so `{ "type": "integer" }` would quietly turn `"5"` into 5 and `""` into
 0. Zod decides it instead, in the repository, before any write.
+
+### Counts and progress (#42)
+
+Counts cover live items only: a trashed item counts toward nothing, and neither does any item of a trashed collection.
+
+`GET /api/collections` gives every collection two numbers beside its fields, both from one `GROUP BY` over all collections:
+
+```json
+{
+  "id": "…",
+  "name": "State quarters",
+  "isFiniteSet": true,
+  "targetCount": 50,
+  "itemCount": 6,
+  "ownedCount": 3,
+  "…": "…"
+}
+```
+
+| Key          | Meaning                                                               |
+| ------------ | --------------------------------------------------------------------- |
+| `itemCount`  | Live items, whatever their status                                     |
+| `ownedCount` | Live items with `status: "owned"` — a finite set's progress numerator |
+
+`GET /api/collections/:id/counts` answers one collection's live items per status — exactly these four keys, `total` always `owned + wanted + ordered`:
+
+```json
+{ "total": 6, "owned": 3, "wanted": 2, "ordered": 1 }
+```
+
+It answers for every live collection, finite set or not, and with zeros when nothing is live. An unknown id and a trashed collection are both a `404` "Collection not found" — the collection is looked up before anything is counted.
+
+The API sends counts, not progress. Core's `collectionProgress(collection, ownedCount)` turns them into `{ owned, target, fraction, complete }` for a finite set with a target, and `null` otherwise: owned items are collected, wanted and ordered ones remain, `owned` is never capped ("6 of 5") and only `fraction` stops at 1.
 
 ### Trash and soft delete
 
