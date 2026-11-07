@@ -58,8 +58,8 @@ function retypedFieldIds(existing: FieldDefinition[], incoming: readonly unknown
 
 export async function registerCollectionRoutes(app: FastifyInstance, db: DatabaseHandle) {
   app.get("/api/collections", async () => {
-    const [collections, counts] = await Promise.all([db.collections.list(), db.items.countByCollection()]);
-    return collections.map((collection) => ({ ...collection, itemCount: counts[collection.id] ?? 0 }));
+    const [collections, counts] = await Promise.all([db.collections.list(), db.items.countsByCollection()]);
+    return collections.map((collection) => ({ ...collection, itemCount: counts[collection.id]?.total ?? 0 }));
   });
 
   app.post("/api/collections", { schema: { body: createBodySchema } }, async (request, reply) => {
