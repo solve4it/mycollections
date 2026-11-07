@@ -46,6 +46,7 @@ const SAMPLE_COLLECTION = {
   description: "My book collection",
   fields: [{ id: "f1", label: "Title", type: "text" as const, required: true }],
   isFiniteSet: false,
+  targetCount: null,
   itemCount: 3,
   createdAt: "2024-01-01T00:00:00.000Z",
   updatedAt: "2024-01-01T00:00:00.000Z",
