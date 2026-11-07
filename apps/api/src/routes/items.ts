@@ -53,7 +53,26 @@ const tagValuesQuerySchema = {
   required: ["field"],
   properties: {
     field: { type: "string", minLength: 1, maxLength: 300 },
+    q: { type: "string", maxLength: 200 },
   },
+} as const;
+
+// Tag management (#41). The tag rides in the body, not the path: tags run to
+// 200 characters and Fastify's default maxParamLength is 100. Shape is checked
+// here; the value rules (trim, length, control characters, no comma in a new
+// name) are the repository's, answered with fixed text.
+const tagName = { type: "string", minLength: 1, maxLength: 400 } as const;
+const renameTagBodySchema = {
+  type: "object",
+  required: ["field", "from", "to"],
+  additionalProperties: false,
+  properties: { field: { type: "string", minLength: 1, maxLength: 300 }, from: tagName, to: tagName },
+} as const;
+const removeTagBodySchema = {
+  type: "object",
+  required: ["field", "value"],
+  additionalProperties: false,
+  properties: { field: { type: "string", minLength: 1, maxLength: 300 }, value: tagName },
 } as const;
 
 export async function registerItemRoutes(app: FastifyInstance, db: DatabaseHandle) {
@@ -92,18 +111,50 @@ export async function registerItemRoutes(app: FastifyInstance, db: DatabaseHandl
     { schema: { querystring: tagValuesQuerySchema } },
     async (request, _reply) => {
       const { id } = request.params as { id: string };
-      const { field } = request.query as { field: string };
+      const { field, q } = request.query as { field: string; q?: string };
       // getById hides a trashed collection, so its tags are not reachable here.
       const collection = await db.collections.getById(id);
       if (!collection) throw app.httpErrors.notFound("Collection not found");
       try {
-        return await db.items.tagValues(id, field);
+        return await db.items.tagValues(id, field, { q });
       } catch (err) {
         if (err instanceof InvalidItemQueryError) throw app.httpErrors.badRequest(err.message);
         throw err;
       }
     },
   );
+
+  /**
+   * Custom-method endpoints (Google AIP-136): a tag is a value inside items,
+   * not a resource with an id, so neither a PATCH on a tag nor JSON Patch fits.
+   * Both answer `{ updated }` and nothing that echoes the tag.
+   */
+  async function changeTags(
+    collectionId: string,
+    change: () => Promise<{ updated: number }>,
+  ): Promise<{ updated: number }> {
+    // getById hides a trashed collection: its tags are not changed through here.
+    const collection = await db.collections.getById(collectionId);
+    if (!collection) throw app.httpErrors.notFound("Collection not found");
+    try {
+      return await change();
+    } catch (err) {
+      if (err instanceof InvalidItemQueryError) throw app.httpErrors.badRequest(err.message);
+      throw err;
+    }
+  }
+
+  app.post("/api/collections/:id/tags/rename", { schema: { body: renameTagBodySchema } }, async (request) => {
+    const { id } = request.params as { id: string };
+    const { field, from, to } = request.body as { field: string; from: string; to: string };
+    return changeTags(id, () => db.items.renameTag(id, field, from, to));
+  });
+
+  app.post("/api/collections/:id/tags/remove", { schema: { body: removeTagBodySchema } }, async (request) => {
+    const { id } = request.params as { id: string };
+    const { field, value } = request.body as { field: string; value: string };
+    return changeTags(id, () => db.items.removeTag(id, field, value));
+  });
 
   app.post("/api/collections/:id/items", { schema: { body: createBodySchema } }, async (request, reply) => {
     const { id } = request.params as { id: string };

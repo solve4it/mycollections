@@ -6,6 +6,7 @@ import {
   ITEM_FILTER_MAX_VALUE_LENGTH,
   type Item,
   type ItemFilter,
+  ItemFilterValueSchema,
   ItemSchema,
   type ItemSort,
   type ItemStatus,
@@ -77,6 +78,27 @@ export interface TagValue {
 
 /** Any control character, as a GLOB pattern (NUL cannot occur in one, nor in a bound value). */
 const CONTROL_CHARACTER_GLOB = "*[\u0001-\u001f\u007f]*";
+
+/**
+ * A tag as SQLite compares it in filters and suggestions — spaces trimmed (only
+ * U+0020, as `trim()` does) and ASCII letters folded (as `COLLATE NOCASE`
+ * does). Tag management rewrites in JavaScript, and must match exactly the tags
+ * the SQL matched: JavaScript's own `trim` and `toLowerCase` reach further, and
+ * would rewrite "CAFÉ" when asked for "café" — a tag the suggestions list
+ * separately (#41).
+ */
+export function foldTag(value: string): string {
+  return value.replace(/^ +| +$/g, "").replace(/[A-Z]/g, (letter) => letter.toLowerCase());
+}
+
+/**
+ * What a tag rename or removal changed: live items, and trashed ones counted
+ * apart — the screen's prompt counts live items, so the confirmation must too.
+ */
+export interface TagChange {
+  updated: number;
+  trashed: number;
+}
 
 /** How many tags `tagValues` suggests at most. */
 export const TAG_VALUES_LIMIT = 50;
@@ -391,11 +413,16 @@ export class ItemsRepository {
    * characters, the rules core's filter schema applies — so every suggestion
    * finds its items.
    */
-  async tagValues(collectionId: string, fieldId: string): Promise<{ values: TagValue[]; truncated: boolean }> {
-    const field = this.#schemaOf(collectionId).find((candidate) => candidate.id === fieldId);
-    const path = field?.type === "tags" ? fieldPath(field.id) : null;
-    if (path === null) throw new InvalidItemQueryError("Not a tags field");
+  async tagValues(
+    collectionId: string,
+    fieldId: string,
+    options: { q?: string } = {},
+  ): Promise<{ values: TagValue[]; truncated: boolean }> {
+    const path = this.#tagsPath(collectionId, fieldId);
     const column = schema.items.fields;
+    // A part of the name, for reaching tags beyond the most used fifty.
+    const q = options.q?.trim();
+    const matching = q ? sql`AND instr(lower(trim("held"."value")), lower(${q})) > 0` : sql``;
     const rows = this.#db.all<{ value: string; count: number }>(sql`
       SELECT MIN(trim("held"."value")) AS "value", count(DISTINCT ${schema.items.id}) AS "count"
       FROM ${schema.items}, json_each(${column}, ${path}) AS "held"
@@ -405,11 +432,123 @@ export class ItemsRepository {
         AND "held"."type" = 'text'
         AND length(trim("held"."value")) BETWEEN 1 AND ${ITEM_FILTER_MAX_VALUE_LENGTH}
         AND "held"."value" NOT GLOB ${CONTROL_CHARACTER_GLOB}
+        ${matching}
       GROUP BY trim("held"."value") COLLATE NOCASE
       ORDER BY "count" DESC, "value" COLLATE NOCASE ASC
       LIMIT ${TAG_VALUES_LIMIT + 1}
     `);
     return { values: rows.slice(0, TAG_VALUES_LIMIT), truncated: rows.length > TAG_VALUES_LIMIT };
+  }
+
+  /**
+   * Renames a tag on every item of the collection that carries it — trashed
+   * ones too, so a restore brings back tags consistent with the rest (#41).
+   * Matching is the filter's: spaces trimmed, ASCII case ignored. Where an item
+   * already holds the new name, the two merge into one, at the position of the
+   * first match. Items left unchanged are not written (no reindex, no new
+   * `updatedAt`). Returns how many items changed.
+   */
+  async renameTag(
+    collectionId: string,
+    fieldId: string,
+    from: string,
+    to: string,
+  ): Promise<TagChange & { merged: boolean }> {
+    const path = this.#tagsPath(collectionId, fieldId);
+    const oldName = this.#tagName(from);
+    const newName = this.#tagName(to);
+    // The item form splits tags on commas, so a name holding one would come
+    // apart into two tags the next time the item is saved.
+    if (newName.includes(",")) throw new InvalidItemQueryError("A tag cannot contain a comma");
+    // No early return when the names are equal: saving the spelling the list
+    // shows is how a user makes it the one spelling, tidying " Signed " and
+    // "signed" into it. Items already right are skipped by the rewrite.
+    const match = foldTag(oldName);
+    const target = foldTag(newName);
+    // A merge: some item already held the new name as a tag of its own.
+    let merged = false;
+    const change = this.#rewriteTags(collectionId, fieldId, path, oldName, (tags) => {
+      if (match !== target && tags.some((tag) => typeof tag === "string" && foldTag(tag) === target)) merged = true;
+      const next: unknown[] = [];
+      let placed = false;
+      for (const tag of tags) {
+        if (typeof tag === "string" && (foldTag(tag) === match || foldTag(tag) === target)) {
+          if (!placed) next.push(newName);
+          placed = true;
+        } else {
+          next.push(tag);
+        }
+      }
+      return next;
+    });
+    return { ...change, merged };
+  }
+
+  /** Takes a tag off every item of the collection, trashed ones included (#41). */
+  async removeTag(collectionId: string, fieldId: string, value: string): Promise<TagChange> {
+    const path = this.#tagsPath(collectionId, fieldId);
+    const name = this.#tagName(value);
+    const match = foldTag(name);
+    return this.#rewriteTags(collectionId, fieldId, path, name, (tags) =>
+      tags.filter((tag) => !(typeof tag === "string" && foldTag(tag) === match)),
+    );
+  }
+
+  /**
+   * One transaction: find the items whose tags hold `needle` with the filter's
+   * own SQL test, rewrite each list in JavaScript, and write back only those
+   * that changed. Non-text elements stay as they are, and a value that is not
+   * a list is skipped — the API does not check item fields against the schema.
+   * The update trigger reindexes each written row for search.
+   */
+  #rewriteTags(
+    collectionId: string,
+    fieldId: string,
+    path: string,
+    needle: string,
+    rewrite: (tags: unknown[]) => unknown[],
+  ): TagChange {
+    const column = schema.items.fields;
+    const held = sql`(json_type(${column}, ${path}) = 'array' AND EXISTS (SELECT 1 FROM json_each(${column}, ${path}) AS "held" WHERE "held"."type" = 'text' AND trim("held"."value") = ${needle} COLLATE NOCASE))`;
+    return this.#db.transaction((tx) => {
+      const rows = tx
+        .select({ id: schema.items.id, fields: schema.items.fields, deletedAt: schema.items.deletedAt })
+        .from(schema.items)
+        .where(and(eq(schema.items.collectionId, collectionId), held))
+        .all();
+      const now = new Date().toISOString();
+      let updated = 0;
+      let trashed = 0;
+      for (const row of rows) {
+        const fields = JSON.parse(row.fields) as Record<string, unknown>;
+        const tags = fields[fieldId];
+        if (!Array.isArray(tags)) continue;
+        const next = rewrite(tags);
+        if (JSON.stringify(next) === JSON.stringify(tags)) continue;
+        tx.update(schema.items)
+          .set({ fields: JSON.stringify({ ...fields, [fieldId]: next }), updatedAt: now })
+          .where(eq(schema.items.id, row.id))
+          .run();
+        if (row.deletedAt === null) updated += 1;
+        else trashed += 1;
+      }
+      return { updated, trashed };
+    });
+  }
+
+  /** The JSON path of a tags field of this collection, or a fixed-text refusal. */
+  #tagsPath(collectionId: string, fieldId: string): string {
+    const field = this.#schemaOf(collectionId).find((candidate) => candidate.id === fieldId);
+    const path = field?.type === "tags" ? fieldPath(field.id) : null;
+    if (path === null) throw new InvalidItemQueryError("Not a tags field");
+    return path;
+  }
+
+  /** A tag name as filters accept it — trimmed, 1–200 characters, no control characters. */
+  #tagName(value: string): string {
+    const parsed = ItemFilterValueSchema.safeParse(value);
+    if (!parsed.success) throw new InvalidItemQueryError("Invalid tag");
+    return parsed.data;
   }
 
   /**

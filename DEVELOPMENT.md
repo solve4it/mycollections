@@ -469,6 +469,10 @@ its comment:
 | Clear search (in the no-match state)      | the search box                                                                 | return to where the input began   |
 | Remove a filter chip                      | the chip now in its place, else the one before, else the Filters toggle        | successor element                 |
 | Clear filters                             | the Filters toggle                                                             | return to where the filters began |
+| A tag's Rename (opens its box)            | the rename box                                                                 | disclosure: enter what you opened |
+| A tag rename's Save, Cancel or Escape     | the renamed tag's Rename — or, after a merge, the Rename of the tag it joined  | dialog: return to the invoker     |
+| …when the new name is not in the list     | the tag search box — a search it no longer matches, or past the fifty shown    | where the tag can be found again  |
+| A confirmed tag removal                   | the next tag's Rename, else the one before, else the section heading           | successor element                 |
 
 Two things that look like details and are not. A destination has to be a control whose name says
 where the user now is, which is why Remove field goes to the next field's label rather than to its
@@ -487,6 +491,11 @@ it. The page asks whether the item is still listed once the list has been fetche
 mutation's `mutate`-level `onSuccess` runs after its hook-level `onSuccess`, which awaits the
 invalidation's refetch — and the hidden cases also say why the item went, through the announcer.
 An add the search hides says so in the add form's own region.
+
+A handoff can be asked for after focus has already fallen: in a browser, a mutation's re-fetched
+data can commit before its `mutate`-level `onSuccess` runs, unmounting the control first. The hook
+never treats `<body>` as "the control still holding focus" — that read made it wait out its deadline
+and leave focus on `<body>` (#41, found by the tag manager's keyboard spec; jsdom's timing hid it).
 
 So: **a new control that disables itself, or an action that removes the control that triggered it,
 owes a spec in one of those two blocks.** The deletion case also owes a destination before it owes

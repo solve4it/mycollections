@@ -18,6 +18,7 @@ export {
   ItemsRepository,
   type ListItemsOptions,
   TAG_VALUES_LIMIT,
+  type TagChange,
   type TagValue,
   type UpdateItemInput,
 } from "./repositories/items.js";

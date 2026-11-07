@@ -44,6 +44,12 @@ const NO_CONTROL_CHARACTERS = /^[^\u0000-\u001f\u007f]*$/;
 
 const fieldId = z.string().min(1).max(300).regex(NO_CONTROL_CHARACTERS);
 const listValue = z.string().trim().min(1).max(ITEM_FILTER_MAX_VALUE_LENGTH).regex(NO_CONTROL_CHARACTERS);
+
+/**
+ * One tag or choice value as filters, suggestions and tag management accept it:
+ * trimmed, 1–200 characters, no control characters.
+ */
+export const ItemFilterValueSchema = listValue;
 const valueList = z
   .array(listValue)
   .min(1)

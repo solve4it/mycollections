@@ -30,6 +30,7 @@ export {
   type ItemFilter,
   ItemFilterListSchema,
   ItemFilterSchema,
+  ItemFilterValueSchema,
   isFilterableFieldType,
   parseItemFilters,
 } from "./item-filter.js";

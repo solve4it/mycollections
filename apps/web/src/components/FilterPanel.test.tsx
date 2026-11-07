@@ -54,7 +54,7 @@ describe("FilterPanel (#41)", () => {
     expect(within(form).queryByRole("group", { name: "Title" })).not.toBeInTheDocument();
     // Tag choices come from the collection's tags in use.
     expect(await within(form).findByRole("checkbox", { name: "signed" })).toBeInTheDocument();
-    expect(vi.mocked(getTagValues)).toHaveBeenCalledWith("c1", "tags");
+    expect(vi.mocked(getTagValues)).toHaveBeenCalledWith("c1", "tags", undefined);
   });
 
   it("applies what was ticked and typed only when Apply is pressed", async () => {

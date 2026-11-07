@@ -14,6 +14,8 @@ import {
   listTrash,
   purgeCollection,
   purgeItem,
+  removeTag,
+  renameTag,
   restoreCollection,
   restoreItem,
   type UpdateCollectionInput,
@@ -91,13 +93,45 @@ export function useItems(collectionId: string, query: ItemListQuery = {}, option
  * items prefix, so an edit that adds or drops a tag refreshes it; fetched only
  * while the panel is open.
  */
-export function useTagValues(collectionId: string, fieldId: string, enabled: boolean) {
+export function useTagValues(collectionId: string, fieldId: string, enabled: boolean, q = "") {
   return useQuery({
-    queryKey: ["collections", collectionId, "items", "tag-values", fieldId],
-    queryFn: () => getTagValues(collectionId, fieldId),
+    queryKey: tagValuesQueryKey(collectionId, fieldId, q),
+    queryFn: () => getTagValues(collectionId, fieldId, q.trim() || undefined),
     enabled,
     staleTime: 30_000,
   });
+}
+
+/** The cache key `useTagValues` uses, for reading what a change left on screen. */
+export function tagValuesQueryKey(collectionId: string, fieldId: string, q = "") {
+  return ["collections", collectionId, "items", "tag-values", fieldId, q.trim()] as const;
+}
+
+/**
+ * Rename or remove a tag across a collection (#41). Both rewrite items, trashed
+ * ones too, so lists, tag counts and the trash are all fetched again — and the
+ * invalidation is awaited, so a caller's `onSuccess` sees the new tag list.
+ */
+function useTagChange<Input, Result>(collectionId: string, change: (input: Input) => Promise<Result>) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: change,
+    onSuccess: () =>
+      Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["collections", collectionId, "items"] }),
+        queryClient.invalidateQueries({ queryKey: ["trash"] }),
+      ]),
+  });
+}
+
+export function useRenameTag(collectionId: string) {
+  return useTagChange(collectionId, (input: { field: string; from: string; to: string }) =>
+    renameTag(collectionId, input),
+  );
+}
+
+export function useRemoveTag(collectionId: string) {
+  return useTagChange(collectionId, (input: { field: string; value: string }) => removeTag(collectionId, input));
 }
 
 export function useCreateItem(collectionId: string) {
