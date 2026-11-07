@@ -2,6 +2,7 @@ import type { CollectionWithItemCount } from "@mycollections/core";
 import { Link } from "@tanstack/react-router";
 import { useTranslation } from "react-i18next";
 import { catalogCode } from "../lib/cover.js";
+import { CollectionProgress } from "./CollectionProgress.js";
 import { GeneratedCover } from "./GeneratedCover.js";
 
 interface CollectionCardProps {
@@ -26,6 +27,11 @@ export function CollectionCard({ collection }: CollectionCardProps) {
         </p>
         <h2 className="collection-card-name">{collection.name}</h2>
         {collection.description && <p className="collection-card-description">{collection.description}</p>}
+        {/* Last, so it reads after the name (#42) — and pushed to the card's
+            foot in CSS so bars line up across a row. Renders nothing for a set
+            with no target: the hint asking for one belongs on the collection's
+            own page, not repeated on every dashboard visit. */}
+        <CollectionProgress collection={collection} ownedCount={collection.ownedCount} />
       </div>
     </Link>
   );
