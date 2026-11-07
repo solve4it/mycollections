@@ -306,10 +306,11 @@ so `getByText("3 items")` — the guard that the card shows item counts rather t
 of pattern on a wide screen.
 
 The finite-set progress bar named in the original #223 scope was **moved to #42**, which owns
-that widget verbatim. There is no target total in the model — `isFiniteSet` is a boolean and
-nothing records how many items the set should have — and `status` defaults to `owned` on create,
-so "owned of entered" would read 100% for essentially every collection. #42 adds the target
-count first.
+that widget verbatim. The model then had no target total — `isFiniteSet` was a boolean and
+nothing recorded how many items the set should have — and `status` defaults to `owned` on create,
+so "owned of entered" would have read 100% for essentially every collection. #42 therefore added
+the target count first: `targetCount`, a nullable integer (1–100,000) that only a finite set may
+hold. Progress is owned items against that target; a finite set with no target shows no bar.
 
 ## Waiting and emptiness (#225)
 
