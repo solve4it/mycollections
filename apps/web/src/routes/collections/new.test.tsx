@@ -115,4 +115,122 @@ describe("NewCollectionPage", () => {
     fireEvent.click(screen.getByRole("button", { name: /create collection/i }));
     expect(createCollection).not.toHaveBeenCalled();
   });
+
+  describe("a finite set's target count (#42)", () => {
+    const FINITE = "Finite set (a fixed, known number of items)";
+    const TARGET = "Number of items in the set";
+
+    /** What goes over the wire: the input as `JSON.stringify` sends it. */
+    function sentBody(): unknown {
+      const [input] = vi.mocked(createCollection).mock.calls[0] as [unknown];
+      return JSON.parse(JSON.stringify(input));
+    }
+
+    async function fillRequired() {
+      fireEvent.change(await screen.findByLabelText(/collection name/i), { target: { value: "Pokémon Base Set" } });
+      fireEvent.change(screen.getByLabelText(/field label/i), { target: { value: "Card" } });
+    }
+
+    const submit = () => fireEvent.click(screen.getByRole("button", { name: /create collection/i }));
+    const CARD_FIELD = [{ id: expect.any(String), label: "Card", type: "text", required: false }];
+
+    it("sends an explicit null target for a collection that is not a finite set", async () => {
+      renderNew();
+      await fillRequired();
+      expect(screen.queryByRole("spinbutton", { name: TARGET })).not.toBeInTheDocument();
+      submit();
+      await waitFor(() => expect(createCollection).toHaveBeenCalledTimes(1));
+      expect(sentBody()).toEqual({
+        name: "Pokémon Base Set",
+        fields: CARD_FIELD,
+        isFiniteSet: false,
+        targetCount: null,
+      });
+    });
+
+    it("sends the typed target for a finite set", async () => {
+      renderNew();
+      await fillRequired();
+      fireEvent.click(screen.getByRole("checkbox", { name: FINITE }));
+      fireEvent.change(screen.getByRole("spinbutton", { name: TARGET }), { target: { value: "102" } });
+      submit();
+      await waitFor(() => expect(createCollection).toHaveBeenCalledTimes(1));
+      expect(sentBody()).toEqual({ name: "Pokémon Base Set", fields: CARD_FIELD, isFiniteSet: true, targetCount: 102 });
+    });
+
+    it("sends a null target for a finite set whose box was left empty", async () => {
+      renderNew();
+      await fillRequired();
+      fireEvent.click(screen.getByRole("checkbox", { name: FINITE }));
+      submit();
+      await waitFor(() => expect(createCollection).toHaveBeenCalledTimes(1));
+      expect(sentBody()).toEqual({
+        name: "Pokémon Base Set",
+        fields: CARD_FIELD,
+        isFiniteSet: true,
+        targetCount: null,
+      });
+    });
+
+    it("drops a drafted target when finite is unchecked before creating", async () => {
+      renderNew();
+      await fillRequired();
+      fireEvent.click(screen.getByRole("checkbox", { name: FINITE }));
+      fireEvent.change(screen.getByRole("spinbutton", { name: TARGET }), { target: { value: "102" } });
+      fireEvent.click(screen.getByRole("checkbox", { name: FINITE }));
+      submit();
+      await waitFor(() => expect(createCollection).toHaveBeenCalledTimes(1));
+      expect(sentBody()).toEqual({
+        name: "Pokémon Base Set",
+        fields: CARD_FIELD,
+        isFiniteSet: false,
+        targetCount: null,
+      });
+    });
+
+    it("keeps the drafted target when finite is unchecked and checked again", async () => {
+      renderNew();
+      await fillRequired();
+      fireEvent.click(screen.getByRole("checkbox", { name: FINITE }));
+      fireEvent.change(screen.getByRole("spinbutton", { name: TARGET }), { target: { value: "102" } });
+      fireEvent.click(screen.getByRole("checkbox", { name: FINITE }));
+      fireEvent.click(screen.getByRole("checkbox", { name: FINITE }));
+      expect(screen.getByRole("spinbutton", { name: TARGET })).toHaveValue(102);
+      submit();
+      await waitFor(() => expect(createCollection).toHaveBeenCalledTimes(1));
+      expect(sentBody()).toEqual({ name: "Pokémon Base Set", fields: CARD_FIELD, isFiniteSet: true, targetCount: 102 });
+    });
+
+    // The form's own idiom: constraint validation stops the submit, as it does
+    // for the required name, and the browser says why at the control.
+    it.each([
+      ["zero", "0"],
+      ["a negative number", "-3"],
+      ["a fraction", "2.5"],
+      ["one past the maximum", "100001"],
+    ])("does not create a finite set whose target is %s", async (_label, value) => {
+      renderNew();
+      await fillRequired();
+      fireEvent.click(screen.getByRole("checkbox", { name: FINITE }));
+      const target = screen.getByRole("spinbutton", { name: TARGET });
+      fireEvent.change(target, { target: { value } });
+      submit();
+      expect(target).toBeInvalid();
+      expect(createCollection).not.toHaveBeenCalled();
+    });
+
+    it("shows the server's refusal the way the form shows any failed create", async () => {
+      vi.mocked(createCollection).mockRejectedValue(new Error("API error 400"));
+      const { router } = renderNew();
+      await fillRequired();
+      fireEvent.click(screen.getByRole("checkbox", { name: FINITE }));
+      fireEvent.change(screen.getByRole("spinbutton", { name: TARGET }), { target: { value: "102" } });
+      submit();
+      expect(await screen.findByRole("alert")).toHaveTextContent(
+        "Could not create the collection. Check your input and try again.",
+      );
+      expect(router.state.location.pathname).toBe("/collections/new");
+      expect(screen.getByRole("spinbutton", { name: TARGET })).toHaveValue(102);
+    });
+  });
 });

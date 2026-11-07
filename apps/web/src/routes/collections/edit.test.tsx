@@ -223,4 +223,124 @@ describe("EditCollectionPage", () => {
     );
     expect(screen.queryByRole("button", { name: /save changes/i })).not.toBeInTheDocument();
   });
+
+  describe("a finite set's target count (#42)", () => {
+    const FINITE = "Finite set (a fixed, known number of items)";
+    const TARGET = "Number of items in the set";
+    const finiteWithTarget: Collection = { ...collection, isFiniteSet: true, targetCount: 151 };
+    const STORED_FIELDS = [
+      { id: "title", type: "text", label: "Title", required: true },
+      { id: "pages", type: "number", label: "Pages", required: false },
+    ];
+
+    /** What goes over the wire: the patch as `JSON.stringify` sends it. */
+    function sentBody(): unknown {
+      const [, input] = vi.mocked(updateCollection).mock.calls[0] as [string, unknown];
+      return JSON.parse(JSON.stringify(input));
+    }
+
+    async function save() {
+      fireEvent.click(screen.getByRole("button", { name: /save changes/i }));
+      await waitFor(() => expect(updateCollection).toHaveBeenCalledTimes(1));
+    }
+
+    it("fills the target box with the stored target", async () => {
+      vi.mocked(getCollection).mockResolvedValue(finiteWithTarget);
+      renderEdit();
+      expect(await screen.findByRole("spinbutton", { name: TARGET })).toHaveValue(151);
+      expect(screen.getByRole("checkbox", { name: FINITE })).toBeChecked();
+    });
+
+    it("saves the stored target back unchanged", async () => {
+      vi.mocked(getCollection).mockResolvedValue(finiteWithTarget);
+      renderEdit();
+      await screen.findByRole("spinbutton", { name: TARGET });
+      await save();
+      expect(sentBody()).toEqual({
+        name: "Books",
+        description: "Shelf",
+        fields: STORED_FIELDS,
+        isFiniteSet: true,
+        targetCount: 151,
+      });
+    });
+
+    it("saves a changed target", async () => {
+      vi.mocked(getCollection).mockResolvedValue(finiteWithTarget);
+      renderEdit();
+      fireEvent.change(await screen.findByRole("spinbutton", { name: TARGET }), { target: { value: "165" } });
+      await save();
+      expect(sentBody()).toMatchObject({ isFiniteSet: true, targetCount: 165 });
+    });
+
+    it("clears the stored target when the box is emptied", async () => {
+      vi.mocked(getCollection).mockResolvedValue(finiteWithTarget);
+      renderEdit();
+      fireEvent.change(await screen.findByRole("spinbutton", { name: TARGET }), { target: { value: "" } });
+      await save();
+      expect(sentBody()).toMatchObject({ isFiniteSet: true, targetCount: null });
+    });
+
+    it("clears the stored target when the collection stops being a finite set", async () => {
+      vi.mocked(getCollection).mockResolvedValue(finiteWithTarget);
+      renderEdit();
+      await screen.findByRole("spinbutton", { name: TARGET });
+      fireEvent.click(screen.getByRole("checkbox", { name: FINITE }));
+      expect(screen.queryByRole("spinbutton", { name: TARGET })).not.toBeInTheDocument();
+      await save();
+      expect(sentBody()).toEqual({
+        name: "Books",
+        description: "Shelf",
+        fields: STORED_FIELDS,
+        isFiniteSet: false,
+        targetCount: null,
+      });
+    });
+
+    it("keeps a drafted target when finite is unchecked and checked again before saving", async () => {
+      vi.mocked(getCollection).mockResolvedValue(finiteWithTarget);
+      renderEdit();
+      fireEvent.change(await screen.findByRole("spinbutton", { name: TARGET }), { target: { value: "165" } });
+      fireEvent.click(screen.getByRole("checkbox", { name: FINITE }));
+      fireEvent.click(screen.getByRole("checkbox", { name: FINITE }));
+      expect(screen.getByRole("spinbutton", { name: TARGET })).toHaveValue(165);
+      await save();
+      expect(sentBody()).toMatchObject({ isFiniteSet: true, targetCount: 165 });
+    });
+
+    it("sends a null target for a collection that stays not a finite set", async () => {
+      renderEdit();
+      await screen.findAllByLabelText(/field label/i);
+      expect(screen.queryByRole("spinbutton", { name: TARGET })).not.toBeInTheDocument();
+      await save();
+      expect(sentBody()).toEqual({
+        name: "Books",
+        description: "Shelf",
+        fields: STORED_FIELDS,
+        isFiniteSet: false,
+        targetCount: null,
+      });
+    });
+
+    it("makes a collection a finite set with a target, starting from an empty box", async () => {
+      renderEdit();
+      await screen.findAllByLabelText(/field label/i);
+      fireEvent.click(screen.getByRole("checkbox", { name: FINITE }));
+      const target = screen.getByRole("spinbutton", { name: TARGET });
+      expect(target).toHaveValue(null);
+      fireEvent.change(target, { target: { value: "102" } });
+      await save();
+      expect(sentBody()).toMatchObject({ isFiniteSet: true, targetCount: 102 });
+    });
+
+    it("does not save a target out of range", async () => {
+      vi.mocked(getCollection).mockResolvedValue(finiteWithTarget);
+      renderEdit();
+      const target = await screen.findByRole("spinbutton", { name: TARGET });
+      fireEvent.change(target, { target: { value: "100001" } });
+      fireEvent.click(screen.getByRole("button", { name: /save changes/i }));
+      expect(target).toBeInvalid();
+      expect(updateCollection).not.toHaveBeenCalled();
+    });
+  });
 });
