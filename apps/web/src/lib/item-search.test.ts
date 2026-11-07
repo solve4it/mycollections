@@ -1,6 +1,6 @@
 import type { FieldDefinition } from "@mycollections/core";
 import { describe, expect, it } from "vitest";
-import { effectiveFilters, effectiveSort, validateItemSearch } from "./item-search.js";
+import { effectiveFilters, effectiveSort, inStatusTab, statusTabOf, validateItemSearch } from "./item-search.js";
 
 describe("validateItemSearch (#41)", () => {
   it("keeps a search and a well-formed sort", () => {
@@ -75,5 +75,41 @@ describe("filters in the URL (#41)", () => {
     ]);
     expect(effectiveFilters(filter, fields)).toEqual([{ field: "genre", op: "in", value: ["Jazz"] }]);
     expect(effectiveFilters(undefined, fields)).toEqual([]);
+  });
+});
+
+describe("the status tab in the URL (#42)", () => {
+  it("keeps collected and remaining, and spells All as no param at all", () => {
+    expect(validateItemSearch({ show: "collected" })).toEqual({ show: "collected" });
+    expect(validateItemSearch({ show: "remaining", q: "dune" })).toEqual({ q: "dune", show: "remaining" });
+    // Canonical: `?show=all` and no param are one view, so they are one URL (R17).
+    expect(validateItemSearch({ show: "all" })).toEqual({});
+  });
+
+  it("drops a tab it does not know rather than failing the page", () => {
+    expect(validateItemSearch({ show: "owned" })).toEqual({});
+    expect(validateItemSearch({ show: "Collected" })).toEqual({});
+    expect(validateItemSearch({ show: "" })).toEqual({});
+    expect(validateItemSearch({ show: ["collected"] })).toEqual({});
+  });
+
+  it("reads no param as the All tab", () => {
+    expect(statusTabOf({})).toBe("all");
+    expect(statusTabOf({ show: "collected" })).toBe("collected");
+    expect(statusTabOf({ show: "remaining" })).toBe("remaining");
+  });
+
+  it("puts Owned under Collected, Wanted and Ordered under Remaining, and everything under All", () => {
+    const table = (["owned", "wanted", "ordered"] as const).map((status) => [
+      status,
+      inStatusTab(status, "all"),
+      inStatusTab(status, "collected"),
+      inStatusTab(status, "remaining"),
+    ]);
+    expect(table).toEqual([
+      ["owned", true, true, false],
+      ["wanted", true, false, true],
+      ["ordered", true, false, true],
+    ]);
   });
 });
