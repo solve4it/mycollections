@@ -487,15 +487,32 @@ A search (#41) can take a row off the list as a side effect of an edit — and a
 which in a browser loses focus too: React moves a keyed row with `insertBefore`, which takes the
 node out of the document for a moment, and focus inside it falls to `<body>`. That is why the Save
 handoff is chosen by the **page**, not the row, and why it runs even when the row is still listed: the row's own `useFocusHandoff` would unmount with
-it. The page asks whether the item is still listed once the list has been fetched again — a
-mutation's `mutate`-level `onSuccess` runs after its hook-level `onSuccess`, which awaits the
-invalidation's refetch — and the hidden cases also say why the item went, through the announcer.
-An add the search hides says so in the add form's own region.
+it. The page asks whether the item is still listed once the list has been fetched again, and the
+hidden cases also say why the item went, through the announcer. An add the search hides says so in
+the add form's own region.
+
+**A row-owned mutation whose follow-up belongs to the page chains it on the promise:**
+`mutateAsync(input).then(pageCallback, ignoreRejection)`, never a `mutate`-level `onSuccess` (#42).
+A `mutate`-level callback belongs to the calling component's `MutationObserver`, and the observer
+only notifies while it has listeners. If the list fetched again has already unmounted the row by the
+time the mutation settles, the callback is silently dropped: no undo toast after a Delete, and no
+focus handoff after a Save that a search hides. The promise is not tied to any component, and it
+resolves after the hook-level `onSuccess`, which awaits the invalidation, so the list is still fresh
+when the page reads it. The rejection handler is empty on purpose: the mutation's error state already
+drives the row's alert, and the query client's mutation cache reports it. This applies to an item
+row's Save (`onSaved`) and Delete (`onDeleted`), and to any later row action whose result the page
+acts on. A finite set's header made this visible. Its counts query is a second refetch under the
+items prefix, and that gave the browser time to commit the new list first. Before it, the race was
+there but always won. `keyboard.spec.ts` pins both cases on a finite set with a target.
 
 A handoff can be asked for after focus has already fallen: in a browser, a mutation's re-fetched
-data can commit before its `mutate`-level `onSuccess` runs, unmounting the control first. The hook
-never treats `<body>` as "the control still holding focus" — that read made it wait out its deadline
-and leave focus on `<body>` (#41, found by the tag manager's keyboard spec; jsdom's timing hid it).
+data can commit before the follow-up runs, unmounting the control first. The hook never treats
+`<body>` as "the control still holding focus". That read made it wait out its deadline and leave
+focus on `<body>` (#41, found by the tag manager's keyboard spec; jsdom's timing hid it). Asking
+for a handoff also **schedules a commit of the host**, because the effect that completes it only runs
+after one. A page whose callback changes none of its own state, such as the Save a search hides,
+which only asks for the handoff and speaks through the shell, would otherwise never commit again,
+and focus stayed on `<body>` (#42).
 
 So: **a new control that disables itself, or an action that removes the control that triggered it,
 owes a spec in one of those two blocks.** The deletion case also owes a destination before it owes
@@ -705,7 +722,7 @@ differently — persistent and empty, never conditional:
   exist to be named.
 - **A message that cannot change is not a live region at all.** A notice decided once — the setup
   screen's "storage will not remember your token", Settings' session-only token hint, the trash's
-  loading line — is in its screen's first commit or in none of them, so `role="status"` on it buys
+  loading line, a finite set's "add how many items the set has" hint (#42) — is in its screen's first commit or in none of them, so `role="status"` on it buys
   no announcement and makes every page-level status query ambiguous. Demote it to a plain `<p>`
   (`.form-hint` where the styling applies). The test to write is that it carries _no_ role, found
   by its text: a `queryByRole("status")` assertion goes vacuous the moment the role is gone.

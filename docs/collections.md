@@ -26,6 +26,14 @@ The number is optional. If you do not know it yet, leave the box empty and add i
 
 If you clear the **Finite set** tick, the box disappears, and the collection is saved without a size. Ticking it again before you submit brings back what you had typed.
 
+### Seeing your progress
+
+Once a finite set has a size, its card on the Collections page and the top of its own page show how far along you are, for example **3 of 5 collected**, with a bar beneath. Only items marked **Owned** count as collected. Wanted and ordered items are what you still need, and items in the trash do not count at all.
+
+When you own as many items as the set has, a **Complete** badge appears beside the count. This happens even if some wanted or ordered items are still listed. If you own more than the set's size, for example duplicates or variants, the count says so (**6 of 5 collected**) and the bar stays full.
+
+A finite set without a size shows no bar. Its page reminds you to add the size from **Edit collection**. Collections that are not finite sets show neither the bar nor the reminder.
+
 ## Editing and deleting
 
 Open a collection and choose **Edit collection** to change its name, description, whether it is a finite set and how many items the set has, and — the part that matters most — its fields. Emptying the **Number of items in the set** box, or clearing the **Finite set** tick, removes the stored size when you save. A collection's shape is not fixed at creation: add a field you wish you had, rename one that reads badly, drop one you never fill in, or drag the order around.
