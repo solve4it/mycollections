@@ -351,7 +351,9 @@ export class ItemsRepository {
         owned: sql<number>`sum(${schema.items.status} = 'owned')`,
       })
       .from(schema.items)
-      .where(isNull(schema.items.deletedAt))
+      // Trashing a collection stamps none of its items, so a live item can sit in a trashed collection.
+      .innerJoin(schema.collections, eq(schema.collections.id, schema.items.collectionId))
+      .where(and(isNull(schema.items.deletedAt), isNull(schema.collections.deletedAt)))
       .groupBy(schema.items.collectionId)
       .all();
     return Object.fromEntries(rows.map((r) => [r.collectionId, { total: r.total, owned: r.owned }]));

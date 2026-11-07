@@ -7,6 +7,9 @@ describe("collectionProgress (#42)", () => {
     ["a collection that is not a finite set", { isFiniteSet: false, targetCount: null }, 3],
     // Not a state the schema accepts, but a hand-built object must not get a bar either.
     ["a target on a collection that is not a finite set", { isFiniteSet: false, targetCount: 5 }, 3],
+    // Out of range for the schema too; it must not become a "complete" set with a NaN fill.
+    ["a target of zero", { isFiniteSet: true, targetCount: 0 }, 3],
+    ["a negative target", { isFiniteSet: true, targetCount: -1 }, 3],
   ])("returns null for %s", (_label, collection, owned) => {
     expect(collectionProgress(collection, owned)).toBeNull();
   });

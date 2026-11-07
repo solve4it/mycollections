@@ -30,14 +30,15 @@ export interface CollectionProgress {
 /**
  * The progress of a finite set toward its target, or `null` when there is
  * nothing to measure: the collection is not a finite set, or its size is not
- * known yet. Only owned items count — wanted and ordered ones are what remains.
+ * known yet (or is out of range). Only owned items count — wanted and ordered ones are what remains.
  */
 export function collectionProgress(
   collection: Pick<Collection, "isFiniteSet" | "targetCount">,
   ownedCount: number,
 ): CollectionProgress | null {
   const target = collection.targetCount;
-  if (!collection.isFiniteSet || target === null) return null;
+  // `!(target >= 1)` also refuses a target the schema forbids (0, negative), never a NaN fill.
+  if (!collection.isFiniteSet || target === null || !(target >= 1)) return null;
   return {
     owned: ownedCount,
     target,

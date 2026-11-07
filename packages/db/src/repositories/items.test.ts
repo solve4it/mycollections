@@ -224,6 +224,14 @@ describe("ItemsRepository", () => {
     it("returns an empty map when there are no items", async () => {
       expect(await handle.items.countsByCollection()).toEqual({});
     });
+
+    it("leaves out a trashed collection, though its items were never stamped", async () => {
+      const trashed = await handle.collections.create({ name: "Stamps", fields, isFiniteSet: false });
+      await handle.items.create({ collectionId: trashed.id, status: "owned", fields: {} });
+      await handle.items.create({ collectionId: collection.id, status: "wanted", fields: {} });
+      await handle.collections.softDelete(trashed.id);
+      expect(await handle.items.countsByCollection()).toEqual({ [collection.id]: { total: 1, owned: 0 } });
+    });
   });
 
   describe("countsForCollection (#42)", () => {
