@@ -11,18 +11,26 @@ describe("parseItemSort", () => {
     expect(parseItemSort("-name")).toEqual({ key: "name", direction: "desc" });
   });
 
+  it("reads the status as a key of its own, in both directions (#42)", () => {
+    expect(parseItemSort("status")).toEqual({ key: "status", direction: "asc" });
+    expect(parseItemSort("-status")).toEqual({ key: "status", direction: "desc" });
+  });
+
   it("takes everything after 'field:' as the field id, colons included", () => {
     expect(parseItemSort("field:pages")).toEqual({ key: "field", fieldId: "pages", direction: "asc" });
     expect(parseItemSort("-field:a:b")).toEqual({ key: "field", fieldId: "a:b", direction: "desc" });
   });
 
-  it.each(["", "-", "title", "field:", "-field:", "--name", "CreatedAt"])("rejects %j", (raw) => {
-    expect(parseItemSort(raw)).toBeNull();
-  });
+  it.each(["", "-", "title", "field:", "-field:", "--name", "CreatedAt", "Status", "--status", "status:owned"])(
+    "rejects %j",
+    (raw) => {
+      expect(parseItemSort(raw)).toBeNull();
+    },
+  );
 });
 
 describe("formatItemSort", () => {
-  it.each(["createdAt", "-updatedAt", "name", "-field:a:b"])("round-trips %j", (raw) => {
+  it.each(["createdAt", "-updatedAt", "name", "status", "-status", "-field:a:b"])("round-trips %j", (raw) => {
     const sort = parseItemSort(raw);
     expect(sort).not.toBeNull();
     expect(formatItemSort(sort as NonNullable<typeof sort>)).toBe(raw);

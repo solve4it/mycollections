@@ -52,6 +52,8 @@ export function ItemSortSelect({ value, searching, fields, onSort }: ItemSortSel
         <option value="-updatedAt">{t("sort_updated")}</option>
         <option value="name">{t("sort_name_a_z")}</option>
         <option value="-name">{t("sort_name_z_a")}</option>
+        <option value="status">{t("sort_status_collected")}</option>
+        <option value="-status">{t("sort_status_remaining")}</option>
         {sortable.map((field) => {
           const [ascending, descending] = directionKeys(field.type);
           return (

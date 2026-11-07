@@ -36,6 +36,20 @@ A collection with `isFiniteSet: true` is a set with a known end — the 50 state
 
 Only owned items count toward the target ("collected"); wanted and ordered ones are what remains. `owned` is never capped, so a set holding more than its target (duplicates, variants) reports the honest "6 of 5" — only `fraction`, the share of a bar to fill, stops at 1. `complete` means owned has reached the target even while wanted items remain. Counts come from live items only: trashed items count toward nothing.
 
+### Item list queries (#41, #42)
+
+`item-query.ts` holds the vocabulary the API parses and the web writes into its URL. `parseItemSort()` reads one sort key, JSON:API style (`-` prefix for descending), into an `ItemSort`; `formatItemSort()` is its inverse; anything else parses to `null`.
+
+| Key               | Ascending                                                                    | Descending (`-`)                           |
+| ----------------- | ---------------------------------------------------------------------------- | ------------------------------------------ |
+| `createdAt`       | Oldest first                                                                 | Newest first                               |
+| `updatedAt`       | Least recently updated first                                                 | Most recently updated first                |
+| `name`            | The item's display name, A to Z                                              | Z to A                                     |
+| `status`          | Collected first: owned, ordered, wanted                                      | Still to get first: wanted, ordered, owned |
+| `field:<fieldId>` | One schema field's value (`isSortableFieldType()` says which types can sort) | Reversed                                   |
+
+Items that compare equal keep insertion order in the sort's own direction, so a descending key reverses ties too. Empty values sort last in both directions, which makes a descending `name` or field sort the exact reverse of its ascending one only when no value is empty; `status`, `createdAt` and `updatedAt` are never empty. So `-status` lists wanted items newest first, not merely wanted before owned.
+
 ### Provider contracts
 
 | Export                                                    | Purpose                                                                                                                                                  |

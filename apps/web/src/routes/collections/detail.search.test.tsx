@@ -65,6 +65,11 @@ function serve(_collectionId: string, query: ItemListQuery = {}): Promise<Item[]
     found.sort((a, b) => titleOf(a).localeCompare(titleOf(b)));
     if (query.sort === "-name") found.reverse();
   }
+  if (query.sort === "status" || query.sort === "-status") {
+    const rank = { owned: 0, ordered: 1, wanted: 2 } as const;
+    found.sort((a, b) => rank[a.status] - rank[b.status]);
+    if (query.sort === "-status") found.reverse();
+  }
   return Promise.resolve(found);
 }
 
@@ -334,6 +339,33 @@ describe("sorting a collection (#41)", () => {
 
     fireEvent.change(sortSelect(), { target: { value: "" } });
     await waitFor(() => expect(router.state.location.search).toEqual({}));
+  });
+
+  it("sorts by status from the select, and opens on a status sort from the URL (#42)", async () => {
+    stored = [{ ...ZELDA, status: "wanted" }, ZELDA_II, { ...MARIO, status: "ordered" }];
+    const { router } = renderAt(BASE);
+    await waitFor(() => expect(rowTitles()).toEqual(["Zelda", "Zelda II", "Mario"]));
+
+    const option = within(sortSelect()).getByRole("option", { name: "Status, remaining first" });
+    fireEvent.change(sortSelect(), { target: { value: (option as HTMLOptionElement).value } });
+
+    await waitFor(() => expect(rowTitles()).toEqual(["Zelda", "Mario", "Zelda II"]));
+    expect(router.state.location.search).toEqual({ sort: "-status" });
+    expect(vi.mocked(listItems)).toHaveBeenLastCalledWith(COLLECTION.id, {
+      q: undefined,
+      sort: "-status",
+      filter: undefined,
+    });
+
+    cleanup();
+    renderAt(`${BASE}?sort=status`);
+    await waitFor(() => expect(rowTitles()).toEqual(["Zelda II", "Mario", "Zelda"]));
+    expect(sortSelect()).toHaveValue("status");
+    expect(vi.mocked(listItems)).toHaveBeenLastCalledWith(COLLECTION.id, {
+      q: undefined,
+      sort: "status",
+      filter: undefined,
+    });
   });
 
   it("a save that moves the row under the sort keeps focus on that row's Edit", async () => {

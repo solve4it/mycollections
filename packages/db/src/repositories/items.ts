@@ -247,6 +247,13 @@ function filterCondition(filter: ItemFilter, fields: FieldDefinition[]): SQL {
 }
 
 /**
+ * An item's place in the status sort (#42): collected first — owned, then
+ * ordered (on its way), then wanted. Rows are validated against the status enum
+ * when read, so the ELSE arm is only a guard that keeps the order total.
+ */
+const statusRank = sql`(CASE ${schema.items.status} WHEN 'owned' THEN 0 WHEN 'ordered' THEN 1 WHEN 'wanted' THEN 2 ELSE 3 END)`;
+
+/**
  * ORDER BY terms for a sort: empty values last whichever the direction, text
  * compared case-insensitively (ASCII only — SQLite's NOCASE does not fold é),
  * and the implicit rowid as the tie-break so equal keys keep insertion order.
@@ -256,6 +263,7 @@ function orderTerms(sort: ItemSort, fields: FieldDefinition[]): SQL[] {
   const rowid = sql`${schema.items}.rowid ${dir}`;
   if (sort.key === "createdAt") return [sql`${schema.items.createdAt} ${dir}`, rowid];
   if (sort.key === "updatedAt") return [sql`${schema.items.updatedAt} ${dir}`, rowid];
+  if (sort.key === "status") return [sql`${statusRank} ${dir}`, rowid];
 
   let value: SQL | null;
   if (sort.key === "name") {

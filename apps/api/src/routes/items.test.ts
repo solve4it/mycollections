@@ -106,6 +106,29 @@ describe("GET /api/collections/:id/items — search and sort (#41)", () => {
     expect(titlesOf(await list("sort=name"))).toEqual(["Dune", "Dune Messiah", "Emma"]);
   });
 
+  it("sorts by status: collected first, or remaining first (#42)", async () => {
+    // Insertion (Dune, Emma, Dune Messiah), name and status orders all disagree.
+    await handle.items.create({ collectionId: books.id, status: "ordered", fields: { title: "Atlas", pages: 900 } });
+    await handle.items.create({ collectionId: books.id, status: "wanted", fields: { title: "Beloved", pages: 320 } });
+    const idByTitle = new Map(
+      (await handle.items.listByCollection(books.id)).map((item) => [item.fields.title as string, item.id]),
+    );
+    const ids = (...titles: string[]) => titles.map((title) => idByTitle.get(title));
+    const idsOf = (res: { json: <T>() => T }) => res.json<Item[]>().map((item) => item.id);
+
+    const ascending = await list("sort=status");
+    expect(ascending.statusCode).toBe(200);
+    expect(idsOf(ascending)).toEqual(ids("Dune", "Emma", "Atlas", "Dune Messiah", "Beloved"));
+
+    const descending = await list("sort=-status");
+    expect(descending.statusCode).toBe(200);
+    expect(idsOf(descending)).toEqual(ids("Beloved", "Dune Messiah", "Atlas", "Emma", "Dune"));
+  });
+
+  it("applies the status sort to search results (#42)", async () => {
+    expect(titlesOf(await list("q=dune&sort=-status"))).toEqual(["Dune Messiah", "Dune"]);
+  });
+
   it("treats hostile search text as words, not a server error", async () => {
     const res = await list(`q=${encodeURIComponent('"NEAR( title:\u0000 ^*')}`);
     expect(res.statusCode).toBe(200);
@@ -122,6 +145,9 @@ describe("GET /api/collections/:id/items — search and sort (#41)", () => {
 
   it.each([
     ["sort=title", "a sort key that is not one"],
+    ["sort=bogus", "a made-up sort key"],
+    ["sort=Status", "a status key in the wrong case"],
+    ["sort=--status", "a doubled direction"],
     ["sort=field:missing", "an unknown field"],
     ["sort=field:tags", "an unsortable field type"],
   ])("rejects %s (%s) with a 400 that does not echo the query", async (query) => {

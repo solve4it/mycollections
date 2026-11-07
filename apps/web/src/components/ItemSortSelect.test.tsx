@@ -33,6 +33,8 @@ describe("ItemSortSelect (#41)", () => {
       "Recently updated",
       "Name, A to Z",
       "Name, Z to A",
+      "Status, collected first",
+      "Status, remaining first",
       "Title, A to Z",
       "Title, Z to A",
       "Year, low to high",
@@ -62,6 +64,25 @@ describe("ItemSortSelect (#41)", () => {
     expect(onSort).toHaveBeenLastCalledWith("name");
     fireEvent.change(select(), { target: { value: "" } });
     expect(onSort).toHaveBeenLastCalledWith(undefined);
+  });
+
+  it("offers the status orders, shows one in force, and reports each (#42)", () => {
+    const onSort = vi.fn();
+    render(<ItemSortSelect value="-status" searching={false} fields={[]} onSort={onSort} />);
+    expect(select()).toHaveValue("-status");
+    expect(within(select()).getByRole("option", { name: "Status, remaining first" })).toHaveValue("-status");
+    expect(within(select()).getByRole("option", { name: "Status, collected first" })).toHaveValue("status");
+
+    fireEvent.change(select(), { target: { value: "status" } });
+    expect(onSort).toHaveBeenLastCalledWith("status");
+    fireEvent.change(select(), { target: { value: "-status" } });
+    expect(onSort).toHaveBeenLastCalledWith("-status");
+  });
+
+  it("offers the status orders while searching too (#42)", () => {
+    render(<ItemSortSelect value="status" searching fields={FIELDS} onSort={vi.fn()} />);
+    expect(select()).toHaveValue("status");
+    expect(optionLabels()).toContain("Status, remaining first");
   });
 
   it("takes its id from useId, so two on a screen do not share a label", () => {
