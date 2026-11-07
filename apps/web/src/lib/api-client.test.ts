@@ -4,6 +4,7 @@ import {
   createItem,
   deleteItem,
   emptyTrash,
+  getCollectionCounts,
   getTagValues,
   listCollections,
   listItems,
@@ -178,5 +179,20 @@ describe("api-client item list query (#41)", () => {
     await expect(getTagValues("c1", "my tags")).resolves.toEqual(body);
     expect(url(fetchMock).pathname).toBe("/api/collections/c1/tag-values");
     expect(url(fetchMock).searchParams.get("field")).toBe("my tags");
+  });
+});
+
+describe("api-client collection counts (#42)", () => {
+  it("reads a collection's live item counts from its counts route", async () => {
+    const counts = { total: 7, owned: 3, wanted: 2, ordered: 2 };
+    const fetchMock = mockFetch(200, counts);
+    await expect(getCollectionCounts("c1")).resolves.toEqual(counts);
+    expect(new URL(String(fetchMock.mock.calls[0]?.[0])).pathname).toBe("/api/collections/c1/counts");
+    expect(initOf(fetchMock).method).toBeUndefined();
+  });
+
+  it("rejects rather than resolving to zeros when the counts cannot be read", async () => {
+    mockFetch(404, { message: "Collection not found" });
+    await expect(getCollectionCounts("c1")).rejects.toEqual(new ApiError(404));
   });
 });

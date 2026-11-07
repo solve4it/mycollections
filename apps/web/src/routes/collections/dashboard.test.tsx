@@ -223,3 +223,55 @@ describe("CollectionsPage", () => {
     expect(listCollections).toHaveBeenCalledTimes(1);
   });
 });
+
+describe("a finite set's progress on its card (#42)", () => {
+  const FINITE = { ...SAMPLE_COLLECTION, isFiniteSet: true, targetCount: 5, itemCount: 4, ownedCount: 3 };
+
+  function card(name: string): HTMLElement {
+    const link = screen.getByText(name).closest("a");
+    if (!link) throw new Error(`no card link for ${name}`);
+    return link;
+  }
+
+  it("ends the card with the owned count against the target, from the list's ownedCount", async () => {
+    vi.mocked(listCollections).mockResolvedValue([FINITE]);
+    renderCollections();
+    await screen.findByText("Books");
+
+    const body = card("Books").querySelector(".collection-card-body");
+    // Owned (3), not itemCount (4): wanted and ordered items are what remains.
+    expect(body?.lastElementChild).toHaveClass("collection-progress");
+    expect(body?.lastElementChild).toHaveTextContent(/^3 of 5 collected$/);
+    // Inside the link, so it is part of what the card is called.
+    expect(card("Books")).toHaveAccessibleName(expect.stringMatching(/Books My book collection 3 of 5 collected$/));
+  });
+
+  it("says Complete on a set whose owned count has reached its target, and only then", async () => {
+    vi.mocked(listCollections).mockResolvedValue([
+      { ...FINITE, ownedCount: 5 },
+      { ...FINITE, id: "00000000-0000-0000-0000-000000000002", name: "Coins", ownedCount: 6 },
+      { ...FINITE, id: "00000000-0000-0000-0000-000000000003", name: "Stamps", ownedCount: 0 },
+    ]);
+    renderCollections();
+    await screen.findByText("Books");
+
+    expect(card("Books").querySelector(".collection-progress")).toHaveTextContent(/^5 of 5 collected\s*Complete$/);
+    expect(card("Coins").querySelector(".collection-progress")).toHaveTextContent(/^6 of 5 collected\s*Complete$/);
+    expect(card("Stamps").querySelector(".collection-progress")).toHaveTextContent(/^0 of 5 collected$/);
+  });
+
+  it("shows nothing on a finite set with no target, leaving the card's name as it was (R6)", async () => {
+    vi.mocked(listCollections).mockResolvedValue([
+      { ...FINITE, targetCount: null },
+      { ...SAMPLE_COLLECTION, id: "00000000-0000-0000-0000-000000000002", name: "Movies" },
+    ]);
+    renderCollections();
+    await screen.findByText("Books");
+
+    expect(card("Books").querySelector(".collection-progress")).toBeNull();
+    expect(card("Movies").querySelector(".collection-progress")).toBeNull();
+    // No hint on the card either: the collection's own page explains a missing target.
+    expect(card("Books")).not.toHaveTextContent(/collected|progress/i);
+    expect(card("Books")).toHaveAccessibleName(expect.stringMatching(/4 items Books My book collection$/));
+  });
+});

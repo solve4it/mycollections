@@ -1,10 +1,11 @@
-import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, type QueryClient, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   createCollection,
   createItem,
   deleteItem,
   emptyTrash,
   getCollection,
+  getCollectionCounts,
   getTagValues,
   type ItemInput,
   type ItemListQuery,
@@ -27,6 +28,22 @@ export function useCollections() {
   return useQuery({ queryKey: ["collections"], queryFn: listCollections });
 }
 
+/**
+ * Fetches the dashboard list again even though it is not on screen (#42).
+ *
+ * Its cards show each finite set's owned count against its target, and every
+ * change that moves those numbers is made on another screen. Invalidating with
+ * the default `refetchType: "active"` would only mark the list stale, so going
+ * back would paint the old count and then jump to the new one; fetching the
+ * inactive query now means the return shows the right numbers from the first
+ * frame. Exact, so no collection's own queries ride along — and a list that was
+ * never loaded is not fetched at all. Not awaited: nothing on the screen making
+ * the change waits on the dashboard.
+ */
+function refreshDashboard(queryClient: QueryClient) {
+  void queryClient.invalidateQueries({ queryKey: ["collections"], exact: true, refetchType: "all" });
+}
+
 export function useCreateCollection() {
   const queryClient = useQueryClient();
   return useMutation({
@@ -39,7 +56,11 @@ export function useImportData() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: importData,
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["collections"] }),
+    // Run from Settings, where the dashboard is not on screen.
+    onSuccess: () => {
+      refreshDashboard(queryClient);
+      return queryClient.invalidateQueries({ queryKey: ["collections"] });
+    },
   });
 }
 
@@ -52,12 +73,30 @@ export function useUpdateCollection(id: string) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (input: UpdateCollectionInput) => updateCollection(id, input),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["collections"] }),
+    onSuccess: () => {
+      // A changed target or finite flag changes the dashboard's bar (#42).
+      refreshDashboard(queryClient);
+      return queryClient.invalidateQueries({ queryKey: ["collections"] });
+    },
   });
 }
 
 export function useCollection(id: string) {
   return useQuery({ queryKey: ["collections", id], queryFn: () => getCollection(id) });
+}
+
+/**
+ * A collection's live item counts (#42), for a finite set's progress in its
+ * header. Under the `["collections", id, "items"]` prefix every item mutation
+ * invalidates, so an add, edit, delete or undo refreshes the bar with the list.
+ * Enabled only when there is something to measure — a finite set with a target.
+ */
+export function useCollectionCounts(id: string, enabled: boolean) {
+  return useQuery({
+    queryKey: ["collections", id, "items", "counts"],
+    queryFn: () => getCollectionCounts(id),
+    enabled,
+  });
 }
 
 /**
@@ -138,7 +177,10 @@ export function useCreateItem(collectionId: string) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (input: ItemInput) => createItem(collectionId, input),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["collections", collectionId, "items"] }),
+    onSuccess: () => {
+      refreshDashboard(queryClient);
+      return queryClient.invalidateQueries({ queryKey: ["collections", collectionId, "items"] });
+    },
   });
 }
 
@@ -146,7 +188,10 @@ export function useUpdateItem(collectionId: string) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: ({ itemId, input }: { itemId: string; input: ItemInput }) => updateItem(collectionId, itemId, input),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["collections", collectionId, "items"] }),
+    onSuccess: () => {
+      refreshDashboard(queryClient);
+      return queryClient.invalidateQueries({ queryKey: ["collections", collectionId, "items"] });
+    },
   });
 }
 
@@ -154,7 +199,10 @@ export function useDeleteItem(collectionId: string) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (itemId: string) => deleteItem(collectionId, itemId),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["collections", collectionId, "items"] }),
+    onSuccess: () => {
+      refreshDashboard(queryClient);
+      return queryClient.invalidateQueries({ queryKey: ["collections", collectionId, "items"] });
+    },
   });
 }
 
@@ -175,6 +223,7 @@ export function useRestoreTrashedItem() {
     mutationFn: ({ collectionId, itemId }: { collectionId: string; itemId: string }) =>
       restoreItem(collectionId, itemId),
     onSuccess: () => {
+      refreshDashboard(queryClient);
       void queryClient.invalidateQueries({ queryKey: ["trash"] });
       return queryClient.invalidateQueries({ queryKey: ["collections"] });
     },
@@ -186,6 +235,7 @@ export function useRestoreCollection() {
   return useMutation({
     mutationFn: (id: string) => restoreCollection(id),
     onSuccess: () => {
+      refreshDashboard(queryClient);
       void queryClient.invalidateQueries({ queryKey: ["trash"] });
       return queryClient.invalidateQueries({ queryKey: ["collections"] });
     },
@@ -225,8 +275,10 @@ export function useRestoreItem(collectionId: string) {
   return useMutation({
     mutationFn: (itemId: string) => restoreItem(collectionId, itemId),
     // Same key as useDeleteItem: an undo has to put back exactly what the delete
-    // took away. The dashboard's itemCount needs no invalidation here — that
-    // query reloads when it mounts, and it never mounts beside this one.
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["collections", collectionId, "items"] }),
+    // took away — and, like it, the dashboard's counts (#42).
+    onSuccess: () => {
+      refreshDashboard(queryClient);
+      return queryClient.invalidateQueries({ queryKey: ["collections", collectionId, "items"] });
+    },
   });
 }

@@ -47,6 +47,13 @@ const PAIRS: Array<[string, string, number, string]> = [
   ["manila", "cabinet", NON_TEXT, "active notch on the cabinet"],
   ["progress", "card", NON_TEXT, "progress fill on cards"],
   ["progress", "line", NON_TEXT, "progress fill against its track"],
+  // The rest of a finite set's bar (#42): the fill also meets the surface the
+  // widget sits on — the card on the dashboard, the paper in the collection
+  // header — and turns --owned once the set is complete.
+  ["progress", "paper", NON_TEXT, "progress fill on the collection header's paper"],
+  ["owned", "line", NON_TEXT, "complete fill against its track"],
+  ["owned", "card", NON_TEXT, "complete fill on cards"],
+  ["owned", "paper", NON_TEXT, "complete fill on the collection header's paper"],
   ["danger", "paper", TEXT, "error text on page background"],
   ["danger", "card", TEXT, "error text on cards"],
   ["danger", "danger-surface", TEXT, "error text on its own tinted strip"],

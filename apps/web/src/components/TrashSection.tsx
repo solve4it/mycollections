@@ -120,7 +120,10 @@ export function TrashSection() {
       <TrashContents
         locale={locale}
         query={trash}
-        onPurging={(list, index) => handOffFocus(purgeDestination(list, index))}
+        // Names the confirm being removed: the row goes only once the purge
+        // lands, and a confirm pressed without taking focus (a Safari click, an
+        // iOS tap) leaves focus on <body> meanwhile (#42).
+        onPurging={(list, index, confirm) => handOffFocus(purgeDestination(list, index), { removing: confirm })}
         onEmpty={() => {
           // Drop the previous confirmation as the next empty starts: it describes
           // an older event, and leaving it up would let it sit beside this one's
@@ -167,7 +170,7 @@ interface TrashContentsProps {
   locale: string;
   onEmpty: () => void;
   /** Asked for before a purge removes the row and the button that confirmed it. */
-  onPurging: (list: "collections" | "items", index: number) => void;
+  onPurging: (list: "collections" | "items", index: number, confirm: HTMLElement) => void;
   pending: boolean;
 }
 
@@ -205,7 +208,7 @@ function TrashContents({ query, locale, onEmpty, onPurging, pending }: TrashCont
                 key={collection.id}
                 collection={collection}
                 locale={locale}
-                onPurging={() => onPurging("collections", index)}
+                onPurging={(confirm) => onPurging("collections", index, confirm)}
               />
             ))}
           </ul>
@@ -216,7 +219,12 @@ function TrashContents({ query, locale, onEmpty, onPurging, pending }: TrashCont
           <h3>{t("trash_items_heading")}</h3>
           <ul className="trash-list" data-trash-list="items">
             {trash.items.map((item, index) => (
-              <ItemRow key={item.id} item={item} locale={locale} onPurging={() => onPurging("items", index)} />
+              <ItemRow
+                key={item.id}
+                item={item}
+                locale={locale}
+                onPurging={(confirm) => onPurging("items", index, confirm)}
+              />
             ))}
           </ul>
         </>
@@ -255,7 +263,7 @@ function CollectionRow({
 }: {
   collection: Collection;
   locale: string;
-  onPurging: () => void;
+  onPurging: (confirm: HTMLElement) => void;
 }) {
   const { t } = useTranslation("settings");
   const restore = useRestoreCollection();
@@ -294,8 +302,8 @@ function CollectionRow({
             confirmLabel={t("trash_delete_forever")}
             cancelLabel={t("trash_cancel")}
             pending={purge.isPending}
-            onConfirm={() => {
-              onPurging();
+            onConfirm={(confirm) => {
+              onPurging(confirm);
               purge.mutate(collection.id);
             }}
           />
@@ -321,7 +329,15 @@ function itemName(item: DeletedItem, untitled: string): string {
   return untitled;
 }
 
-function ItemRow({ item, locale, onPurging }: { item: DeletedItem; locale: string; onPurging: () => void }) {
+function ItemRow({
+  item,
+  locale,
+  onPurging,
+}: {
+  item: DeletedItem;
+  locale: string;
+  onPurging: (confirm: HTMLElement) => void;
+}) {
   const { t } = useTranslation("settings");
   const restore = useRestoreTrashedItem();
   const purge = usePurgeItem();
@@ -360,8 +376,8 @@ function ItemRow({ item, locale, onPurging }: { item: DeletedItem; locale: strin
             confirmLabel={t("trash_delete_forever")}
             cancelLabel={t("trash_cancel")}
             pending={purge.isPending}
-            onConfirm={() => {
-              onPurging();
+            onConfirm={(confirm) => {
+              onPurging(confirm);
               purge.mutate(item.id);
             }}
           />

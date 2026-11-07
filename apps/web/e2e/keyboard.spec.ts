@@ -152,12 +152,24 @@ test.describe("keyboard traversal of every screen", () => {
    * Two collections rather than one, with different item counts and only one
    * carrying a description: a card whose name came from the wrong collection, or
    * which dropped the count or the description, could not pass.
+   *
+   * And three finite sets (#42): the progress is inside the card's link, so it
+   * is part of what the card is called — last, after the name, so a user still
+   * hears which collection before how far along it is. Owned items only (the
+   * coin set's wanted coin is not counted), "Complete" only once owned reaches
+   * the target, and nothing at all on a finite set with no target (R6).
    */
   test("the collections list with collections", async ({ page, api }) => {
     await api.reset();
     const vinyl = await api.createCollection({ name: "Vinyl records", description: "Jazz", fields: FIELDS });
     await api.createItem(vinyl.id, { title: "Kind of Blue", year: 1959 });
     await api.createCollection({ name: "Board games", fields: FIELDS });
+    const coins = await api.createCollection({ name: "Coin set", fields: FIELDS, isFiniteSet: true, targetCount: 3 });
+    await api.createItem(coins.id, { title: "Penny" }, "owned");
+    await api.createItem(coins.id, { title: "Nickel" }, "wanted");
+    const stamps = await api.createCollection({ name: "Stamp set", fields: FIELDS, isFiniteSet: true, targetCount: 1 });
+    await api.createItem(stamps.id, { title: "Penny Black" }, "owned");
+    await api.createCollection({ name: "Card set", fields: FIELDS, isFiniteSet: true });
 
     await page.goto("/collections");
     await expect(page.getByRole("heading", { level: 1, name: "Collections" })).toBeVisible();
@@ -167,6 +179,9 @@ test.describe("keyboard traversal of every screen", () => {
         'link "Create collection"',
         'link "C-xx ·1 item Vinyl records Jazz"',
         'link "C-xx ·0 items Board games"',
+        'link "C-xx ·2 items Coin set 1 of 3 collected"',
+        'link "C-xx ·1 item Stamp set 1 of 1 collected Complete"',
+        'link "C-xx ·0 items Card set"',
       ]),
     );
   });
@@ -1226,6 +1241,163 @@ test.describe("searching a collection (#41)", () => {
 
     await expect(page.getByRole("listitem").last()).toContainText("Ziggurat");
     await expect(page.getByRole("button", { name: editName("Ziggurat") })).toBeFocused();
+  });
+});
+
+/**
+ * Presses a control without giving it focus first, and leaves focus on <body>
+ * while it runs. A mouse click in Safari or Firefox on macOS does this, and so
+ * do an iOS tap and a VoiceOver double-tap. A programmatic `.click()` is the
+ * same thing in Chromium, whose own mouse clicks do focus a button.
+ */
+async function pressWithoutFocus(control: import("@playwright/test").Locator): Promise<void> {
+  await control.evaluate((element: HTMLElement) => {
+    (document.activeElement as HTMLElement | null)?.blur();
+    element.click();
+  });
+}
+
+/**
+ * The removals again, pressed with focus on <body> (#42 review). A handoff
+ * asked for then cannot tell "focus already fell" from "nothing has been removed
+ * yet" by reading `document.activeElement`. If it resolves at once, "the row
+ * at this index" is still the row being deleted, and focus follows that row out
+ * of the document. Each caller names the control it is removing, and the
+ * handoff waits for that control to leave.
+ */
+test.describe("focus when the removed control never held it", () => {
+  for (const finite of [false, true]) {
+    test(`deleting a row hands focus to the row in its place${finite ? " on a finite set with a target" : ""}`, async ({
+      page,
+      api,
+    }) => {
+      await api.reset();
+      const collection = await api.createCollection(
+        finite
+          ? { name: "Vinyl records", fields: FIELDS, isFiniteSet: true, targetCount: 5 }
+          : { name: "Vinyl records", fields: FIELDS },
+      );
+      await api.createItem(collection.id, { title: "Kind of Blue", year: 1959 });
+      await api.createItem(collection.id, { title: "Blue Train", year: 1957 });
+
+      await page.goto(`/collections/${collection.id}`);
+      await expect(page.getByRole("listitem")).toHaveCount(2);
+      if (finite) await expect(page.locator(".collection-detail .collection-progress")).toHaveText("2 of 5 collected");
+
+      await pressWithoutFocus(page.getByRole("button", { name: deleteName("Kind of Blue") }));
+
+      await expect(page.getByRole("listitem")).toHaveCount(1);
+      await expect(
+        page.getByRole("button", { name: editName("Blue Train") }),
+        "the successor's Edit, not <body>",
+      ).toBeFocused();
+      await expect(page.getByRole("button", { name: "Undo" })).toBeVisible();
+    });
+  }
+
+  test("purging a trash row hands focus to the next row in the same list", async ({ page, api }) => {
+    await api.reset();
+    const collection = await api.createCollection({ name: "Vinyl records", fields: FIELDS });
+    const first = await api.createItem(collection.id, { title: "Kind of Blue", year: 1959 });
+    const second = await api.createItem(collection.id, { title: "Blue Train", year: 1957 });
+    await api.deleteItem(collection.id, first.id);
+    await api.deleteItem(collection.id, second.id);
+
+    await page.goto("/settings");
+    const restores = page.getByRole("button", { name: /^Restore/ });
+    await expect(restores).toHaveCount(2);
+
+    await page.getByRole("button", { name: purgeName("Kind of Blue") }).click();
+    // The prompt is open, so this is now its confirm, under the same name.
+    await pressWithoutFocus(page.getByRole("button", { name: purgeName("Kind of Blue") }));
+    await expect(restores).toHaveCount(1);
+
+    await expect(restores.first(), "focus must land in the list that was purged, not on <body>").toBeFocused();
+    await expect(restores.first()).toHaveAccessibleName(restoreName("Blue Train"));
+  });
+
+  test("removing a filter chip hands focus to the chip in its place", async ({ page, api }) => {
+    await api.reset();
+    const collection = await api.createCollection({ name: "Vinyl records", fields: FIELDS });
+    await api.createItem(collection.id, { title: "Kind of Blue", year: 1959 });
+    const filter = JSON.stringify([
+      { field: "year", op: "gte", value: 1958 },
+      { field: "year", op: "lte", value: 1960 },
+    ]);
+
+    await page.goto(`/collections/${collection.id}?filter=${encodeURIComponent(filter)}`);
+    const chips = page.getByRole("button", { name: /^Remove filter Year/ });
+    await expect(chips).toHaveCount(2);
+
+    // The chip goes only once the router has moved, a commit after the press.
+    await pressWithoutFocus(page.getByRole("button", { name: "Remove filter Year: from 1958" }));
+
+    await expect(chips).toHaveCount(1);
+    await expect(chips.first(), "the chip now in its place, not <body>").toBeFocused();
+  });
+});
+
+/**
+ * A finite set with a target (#42), whose header reads its counts from a
+ * second query under the items prefix. That second refetch gives the browser
+ * time to commit the list fetched again, unmounting the row, before the row's
+ * mutation settles, and a `mutate`-level callback on the row's own observer is
+ * then dropped (R1). These two are the page-owned follow-ups that would vanish:
+ * the delete's Undo, and the Save's focus handoff when a search hides the row.
+ */
+test.describe("a finite set with a target (#42)", () => {
+  test("deleting a row still offers Undo, and the header's count follows", async ({ page, api }) => {
+    await api.reset();
+    const collection = await api.createCollection({
+      name: "Coin set",
+      fields: FIELDS,
+      isFiniteSet: true,
+      targetCount: 3,
+    });
+    await api.createItem(collection.id, { title: "Penny", year: 1909 }, "owned");
+    await api.createItem(collection.id, { title: "Nickel", year: 1913 }, "owned");
+
+    await page.goto(`/collections/${collection.id}`);
+    const progress = page.locator(".collection-detail .collection-progress");
+    await expect(progress).toHaveText("2 of 3 collected");
+
+    await page.getByRole("button", { name: deleteName("Penny") }).focus();
+    await page.keyboard.press("Enter");
+
+    await expect(page.getByRole("listitem")).toHaveCount(1);
+    await expect(page.locator(".undo-toast-live")).toContainText("Deleted “Penny”");
+    await expect(page.getByRole("button", { name: "Undo" })).toBeVisible();
+    await expect(page.getByRole("button", { name: editName("Nickel") })).toBeFocused();
+    await expect(progress).toHaveText("1 of 3 collected");
+  });
+
+  test("saving an item a search no longer matches hands focus to the row in its place", async ({ page, api }) => {
+    await api.reset();
+    const collection = await api.createCollection({
+      name: "Coin set",
+      fields: FIELDS,
+      isFiniteSet: true,
+      targetCount: 3,
+    });
+    await api.createItem(collection.id, { title: "Buffalo nickel", year: 1913 }, "owned");
+    await api.createItem(collection.id, { title: "Jefferson nickel", year: 1938 }, "owned");
+
+    await page.goto(`/collections/${collection.id}?q=nickel`);
+    await expect(page.locator(".collection-detail .collection-progress")).toHaveText("2 of 3 collected");
+    await page.getByRole("button", { name: editName("Buffalo nickel") }).click();
+    const editor = page.getByRole("form", { name: "Editing “Buffalo nickel”" });
+    await editor.getByRole("textbox", { name: "Title" }).fill("Indian Head cent");
+    await editor.getByRole("button", { name: "Save" }).focus();
+    await page.keyboard.press("Enter");
+
+    await expect(page.getByRole("button", { name: editName("Indian Head cent") })).toHaveCount(0);
+    await expect(
+      page.getByRole("button", { name: editName("Jefferson nickel") }),
+      "the successor rule, as for a delete — not <body>",
+    ).toBeFocused();
+    await expect(page.locator('.visually-hidden[aria-live="polite"]')).toContainText(
+      "Saved “Indian Head cent”. It no longer matches the current search or filters, so it isn’t shown.",
+    );
   });
 });
 

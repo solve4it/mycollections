@@ -763,7 +763,14 @@ p[role="alert"] {
   --cover-ink: hsl(var(--cover-hue) 32% 55%);
 }
 
+/* A column that fills the card, so a finite set's progress (#42) can sit at the
+   bottom with margin-block-start: auto and line up across a grid row whatever
+   the description's length. Bottom margins only, so nothing here relied on the
+   margin collapsing a flex container does not do. */
 .collection-card-body {
+  display: flex;
+  flex-direction: column;
+  flex-grow: 1;
   padding: var(--space-4);
 }
 
@@ -804,6 +811,67 @@ p[role="alert"] {
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
+}
+
+/* A finite set's progress (#42): the mono count is the content, the bar repeats
+   it for the eye. Flex so the count, the Complete badge and the track are
+   separate boxes — which is also what puts a space between them in the card
+   link's accessible name. The track takes a row of its own. */
+.collection-progress {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-3);
+  margin: var(--space-3) 0 0;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  color: var(--ink);
+}
+
+.collection-card-body .collection-progress {
+  margin-block-start: auto;
+  padding-block-start: var(--space-3);
+}
+
+.collection-detail .collection-progress {
+  max-inline-size: 28rem;
+}
+
+/* The same sticker voice as a status tag, in the owned green it shares with the
+   full bar: --owned clears 4.5:1 as small text on card and paper alike. */
+.collection-progress-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--owned);
+}
+
+/* The border is what gives the track an edge: --line on --card is 1.28:1, so a
+   bare track at 0% would be invisible and fill and track would merge in
+   forced colors. --ink-muted clears 3:1 against both surfaces. */
+.collection-progress-track {
+  display: block;
+  flex: 1 0 100%;
+  block-size: 0.5rem;
+  border: 1px solid var(--ink-muted);
+  border-radius: 999px;
+  background: var(--line);
+  overflow: hidden;
+}
+
+/* Width comes from an inline `inline-size`, never from a custom property:
+   --progress is the fill's COLOR token, and declaring it on an element would
+   shadow the color for the subtree and paint this fill an invalid color. */
+.collection-progress-fill {
+  display: block;
+  block-size: 100%;
+  background: var(--progress);
+}
+
+.collection-progress-complete .collection-progress-fill {
+  background: var(--owned);
 }
 
 /* Skeletons (#225). A skeleton is a picture of what is coming, so it is drawn
@@ -1538,13 +1606,27 @@ p[role="alert"] {
   .skeleton {
     border: 1px solid CanvasText;
   }
+
+  /* A finite set's bar (#42): the track keeps its edge, and the fill opts out
+     of forced colors to paint a system color — otherwise it is repainted as
+     Canvas and the amount disappears into the track. Complete is listed so its
+     owned green does not outrank the system color here; the Complete badge's
+     word carries that state. */
+  .collection-progress-track {
+    border-color: CanvasText;
+  }
+
+  .collection-progress-fill,
+  .collection-progress-complete .collection-progress-fill {
+    forced-color-adjust: none;
+    background: Highlight;
+  }
 }
 
 /* Motion is opt-out for anyone who asks for it (#223; #225 inherits this block
    for its skeletons and screen transitions). KEEP THIS BLOCK LAST: the style
    tests read this file only up to it (`css.split(REDUCED_MOTION)[0]`), so a rule
-   added below is invisible to every one of them.
-   for its skeletons and screen transitions). A near-zero duration rather than
+   added below is invisible to every one of them. A near-zero duration rather than
    `none` keeps transitionend/animationend handlers firing, so anything waiting
    on one does not hang. */
 @media (prefers-reduced-motion: reduce) {

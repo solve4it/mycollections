@@ -305,12 +305,52 @@ so `getByText("3 items")` — the guard that the card shows item counts rather t
 (#191) — still matches. The grid is `minmax(260px, 1fr)`: at 240px the covers pack into a wall
 of pattern on a wide screen.
 
-The finite-set progress bar named in the original #223 scope was **moved to #42**, which owns
-that widget verbatim. The model then had no target total — `isFiniteSet` was a boolean and
-nothing recorded how many items the set should have — and `status` defaults to `owned` on create,
-so "owned of entered" would have read 100% for essentially every collection. #42 therefore added
-the target count first: `targetCount`, a nullable integer (1–100,000) that only a finite set may
-hold. Progress is owned items against that target; a finite set with no target shows no bar.
+## Finite-set progress (#42)
+
+The bar named in the original #223 scope moved to #42, because the model then had no target total:
+`isFiniteSet` was a boolean, and `status` defaults to `owned` on create, so "owned of entered" would
+have read 100% for nearly every collection. #42 added `targetCount` first, a nullable integer
+(1–100,000) that only a finite set may hold. Progress is **owned** items against that target.
+Wanted and ordered items are what remains, and trashed items do not count.
+
+One widget, `components/CollectionProgress.tsx`, appears in two places: last in the card body,
+pushed to the card's foot with `margin-block-start: auto` so bars line up across a grid row, and
+directly under the collection page's title row.
+
+- **The words are the content.** It is a `<p class="collection-progress">` holding a
+  `--font-mono` count, "3 of 5 collected", pluralized on the target. Numbers interpolate the same way
+  as the eyebrow's `items_count`, so the two figures on a card agree. Once owned reaches the target,
+  a **Complete** badge follows, set as an uppercase sticker label in `--owned` with an `aria-hidden`
+  check icon. The badge, not the green, is what says the set is done. A set over its target says so
+  honestly ("6 of 5 collected").
+- **The bar repeats the words for the eye.** The track and fill are `aria-hidden` `<span>`s set to
+  `display: block`. The fill's width is an inline `inline-size`, capped at 100%. It is **never** a
+  custom property: `--progress` is already the fill's color token, and declaring it on an element
+  would shadow the color for the subtree and paint the fill an invalid color (the class of bug #223
+  hit with `--cover-hue`). `card.integration.test.ts` fails if any rule outside the palette blocks,
+  or any shipped component, sets `--progress`.
+- **Fill** is `--progress`, then `--owned` when complete. **Track** is `--line` with a 1px
+  `--ink-muted` border. `--line` on `--card` is only 1.28:1, so a bare track at 0% would be
+  invisible. The border gives it an edge at 5.84:1 on card and 5.43:1 on paper (light).
+- **Forced colors**: the track's border becomes `CanvasText`, and the fill opts out with
+  `forced-color-adjust: none` and paints `Highlight`. Otherwise it would be repainted as Canvas and
+  merge into the track.
+- **Nothing to measure means no bar.** A non-finite collection shows nothing. A finite set with no
+  target shows nothing on its card. Its page shows a plain `.form-hint`, "Add how many items the set
+  has in Edit collection to see your progress.", which is not a live region because it is decided
+  once with the collection. While the page's counts load, or if they fail, there is no bar rather
+  than a zero, which would claim the set is empty.
+
+Measured (light / dark), all enforced by `tokens.integration.test.ts` at the 3:1 non-text floor:
+`--progress` on `--line` 3.22 / 6.55, on `--card` 4.10 / 8.08, on `--paper` 3.82 / 9.06; `--owned`
+on `--line` 4.27 / 5.72, on `--card` 5.44 / 7.06, on `--paper` 5.06 / 7.91. Light-mode
+`--progress` on `--line` has the least headroom, at 0.22.
+
+**Why not `<progress>` or `<meter>`** (or `role="progressbar"`): on the card the widget sits inside
+the card's `<Link>`. A native progress element there is a second accessible object whose value is
+added to the link's name on top of the words that already say it. `<progress>` also clamps its
+value to `max`, so an over-target set would read as exactly full and lose the honest "6 of 5". The
+words carry the meaning, and the bar is decoration that repeats them.
 
 ## Waiting and emptiness (#225)
 

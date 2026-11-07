@@ -445,7 +445,8 @@ out of the tab order, hiding it from exactly the user who cannot see the grey.
 
 **An action that removes the control holding focus names where focus goes.** `useFocusHandoff()`
 in `lib/focus-handoff.ts` is the one primitive for it: call the function it returns from the
-handler that is about to remove the control, passing a function that resolves the destination, and
+handler that is about to remove the control, passing a function that resolves the destination (and,
+when the removal lands later than the request, the control being removed; see below), and
 call it from a component that _survives_ the removal — the effect completing the handoff runs after
 that component's next commit, so a hook inside the thing being unmounted dies first. The
 destination may return `null` while it is not in the document yet, which is not a failure: an Undo
@@ -487,15 +488,55 @@ A search (#41) can take a row off the list as a side effect of an edit — and a
 which in a browser loses focus too: React moves a keyed row with `insertBefore`, which takes the
 node out of the document for a moment, and focus inside it falls to `<body>`. That is why the Save
 handoff is chosen by the **page**, not the row, and why it runs even when the row is still listed: the row's own `useFocusHandoff` would unmount with
-it. The page asks whether the item is still listed once the list has been fetched again — a
-mutation's `mutate`-level `onSuccess` runs after its hook-level `onSuccess`, which awaits the
-invalidation's refetch — and the hidden cases also say why the item went, through the announcer.
-An add the search hides says so in the add form's own region.
+it. The page asks whether the item is still listed once the list has been fetched again, and the
+hidden cases also say why the item went, through the announcer. An add the search hides says so in
+the add form's own region.
+
+**A row-owned mutation whose follow-up belongs to the page chains it on the promise:**
+`mutateAsync(input).then(pageCallback, ignoreRejection)`, never a `mutate`-level `onSuccess` (#42).
+A `mutate`-level callback belongs to the calling component's `MutationObserver`, and the observer
+only notifies while it has listeners. If the list fetched again has already unmounted the row by the
+time the mutation settles, the callback is silently dropped: no undo toast after a Delete, and no
+focus handoff after a Save that a search hides. The promise is not tied to any component, and it
+resolves after the hook-level `onSuccess`, which awaits the invalidation, so the list is still fresh
+when the page reads it. The rejection handler is empty on purpose: the mutation's error state already
+drives the row's alert, and the query client's mutation cache reports it. This applies to an item
+row's Save (`onSaved`) and Delete (`onDeleted`), and to any later row action whose result the page
+acts on. A finite set's header made this visible. Its counts query is a second refetch under the
+items prefix, and that gave the browser time to commit the new list first. Before it, the race was
+there but always won. `keyboard.spec.ts` pins both cases on a finite set with a target.
 
 A handoff can be asked for after focus has already fallen: in a browser, a mutation's re-fetched
-data can commit before its `mutate`-level `onSuccess` runs, unmounting the control first. The hook
-never treats `<body>` as "the control still holding focus" — that read made it wait out its deadline
-and leave focus on `<body>` (#41, found by the tag manager's keyboard spec; jsdom's timing hid it).
+data can commit before the follow-up runs, unmounting the control first. The hook never treats
+`<body>` as "the control still holding focus". That read made it wait out its deadline and leave
+focus on `<body>` (#41, found by the tag manager's keyboard spec; jsdom's timing hid it). Asking
+for a handoff also **schedules a commit of the host**, because the effect that completes it only runs
+after one. A page whose callback changes none of its own state, such as the Save a search hides,
+which only asks for the handoff and speaks through the shell, would otherwise never commit again,
+and focus stayed on `<body>` (#42).
+
+**A request made before the removal names the control it removes:**
+`handOffFocus(destination, { removing: event.currentTarget })`. The hook then waits while that
+element is still in the document, wherever focus is, and asks for the destination only once it has
+gone (#42). `document.activeElement` cannot tell the two cases apart. A mouse click in Safari or
+Firefox on macOS, an iOS tap, a VoiceOver double-tap and a programmatic `click()` all press a button
+without focusing it, so a request made before the removal also finds `<body>`. Read alone, that
+looks like "focus already fell", so the request resolves on the next commit. "The row at this index"
+is then still the row being deleted, and focus leaves the document with it. On a finite set the
+header's counts query can supply that early commit even without the scheduled one.
+
+The callers that need `removing` are the ones whose removal lands after the request:
+- a row's Delete, which removes the row once the server answers;
+- a trash row's confirmed Delete forever, where `ConfirmButton` passes its confirm button to
+  `onConfirm`;
+- a filter chip, which goes once the router has moved.
+
+A request made in the same handler as a synchronous removal does not need it, because React commits
+both together: Cancel, Dismiss, Remove field and Clear filters are examples. Nor does a request made
+after the removal, such as the hidden Save, which is the case "already on `<body>`" is right for. The
+tag manager's `successor()` waits by its own guard instead, returning `null` while the removed tag is
+listed. `keyboard.spec.ts` presses each of the first three without focus ("focus when the removed
+control never held it").
 
 So: **a new control that disables itself, or an action that removes the control that triggered it,
 owes a spec in one of those two blocks.** The deletion case also owes a destination before it owes
@@ -705,7 +746,7 @@ differently — persistent and empty, never conditional:
   exist to be named.
 - **A message that cannot change is not a live region at all.** A notice decided once — the setup
   screen's "storage will not remember your token", Settings' session-only token hint, the trash's
-  loading line — is in its screen's first commit or in none of them, so `role="status"` on it buys
+  loading line, a finite set's "add how many items the set has" hint (#42) — is in its screen's first commit or in none of them, so `role="status"` on it buys
   no announcement and makes every page-level status query ambiguous. Demote it to a plain `<p>`
   (`.form-hint` where the styling applies). The test to write is that it carries _no_ role, found
   by its text: a `queryByRole("status")` assertion goes vacuous the moment the role is gone.
