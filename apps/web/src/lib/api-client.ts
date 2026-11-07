@@ -4,6 +4,7 @@ import type {
   DeletedItem,
   FieldDefinition,
   Item,
+  ItemCounts,
   ItemStatus,
 } from "@mycollections/core";
 import { getToken } from "./token.js";
@@ -92,6 +93,17 @@ export async function getCollection(id: string): Promise<Collection> {
   const res = await request(`/api/collections/${id}`);
   if (!res.ok) throw new ApiError(res.status);
   return res.json() as Promise<Collection>;
+}
+
+/**
+ * A collection's live items, in total and per status (#42) — what the
+ * collection header measures a finite set's progress with. A trashed or unknown
+ * collection is a 404, which rejects here rather than reading as zeros.
+ */
+export async function getCollectionCounts(id: string): Promise<ItemCounts> {
+  const res = await request(`/api/collections/${id}/counts`);
+  if (!res.ok) throw new ApiError(res.status);
+  return res.json() as Promise<ItemCounts>;
 }
 
 /** What a tag change touched: live items, and trashed ones counted apart. */
