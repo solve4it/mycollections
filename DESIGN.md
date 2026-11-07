@@ -352,6 +352,28 @@ added to the link's name on top of the words that already say it. `<progress>` a
 value to `max`, so an over-target set would read as exactly full and lose the honest "6 of 5". The
 words carry the meaning, and the bar is decoration that repeats them.
 
+## Status tabs (#42)
+
+**All / Collected / Remaining** sit between the filters and the list, on every collection. They are
+a drawer's index tabs on paper rather than a segmented control: a `--line` hairline under the row,
+and the selected tab standing on it with a 3px `--accent-text` underline, an `--ink` label and weight
+600, where the others are `--ink-muted` at 500. Weight and underline together mean the state is
+never carried by color alone. Every tab reserves the underline as a transparent border, so selecting
+one moves nothing; the 44px height is `.touch-target`'s, not the tab rule's.
+
+Measured on `--paper` (light / dark): the `--ink-muted` label 5.43 / 6.91, the `--ink` label
+14.23 / 14.76, the `--accent-text` underline 6.41 / 7.50. `tabs.integration.test.ts` enforces all
+three, the labels at the text floor and the underline at the non-text one. **Forced colors** paints a
+transparent border, which would underline every tab alike, so unselected tabs take `Canvas` and the
+selected one `Highlight`.
+
+The panel is a tab stop (APG), so it keeps the global focus ring, drawn round the list with
+`--radius-sm`. An empty tab reuses the empty state: "Nothing collected yet", and for Remaining
+"Nothing on your wanted list", "N more to find" on a finite set short of its target, or "All
+collected" once it is complete — owned at or past the target, even with wanted items listed. It
+never says "No items yet", which would claim the collection is empty when the tab only hides what is
+in it.
+
 ## Waiting and emptiness (#225)
 
 **Empty states** are the cabinet with a drawer pulled open and nothing in it: the mark, a title
