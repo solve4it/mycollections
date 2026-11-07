@@ -48,6 +48,8 @@
   "sort_updated": "Recently updated",
   "sort_name_a_z": "Name, A to Z",
   "sort_name_z_a": "Name, Z to A",
+  "sort_status_collected": "Status, collected first",
+  "sort_status_to_get": "Status, still to get first",
   "sort_a_z": "{{field}}, A to Z",
   "sort_z_a": "{{field}}, Z to A",
   "sort_low_high": "{{field}}, low to high",

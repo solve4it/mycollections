@@ -7,6 +7,14 @@ describe("validateItemSearch (#41)", () => {
     expect(validateItemSearch({ q: "dune", sort: "-field:year" })).toEqual({ q: "dune", sort: "-field:year" });
   });
 
+  it("keeps a status sort in either direction, and drops a misspelt one (#42)", () => {
+    expect(validateItemSearch({ sort: "status" })).toEqual({ sort: "status" });
+    expect(validateItemSearch({ sort: "-status" })).toEqual({ sort: "-status" });
+    expect(validateItemSearch({ sort: "Status" })).toEqual({});
+    expect(validateItemSearch({ sort: "--status" })).toEqual({});
+    expect(validateItemSearch({ sort: "status:owned" })).toEqual({});
+  });
+
   it("turns a value some other serializer parsed back into text", () => {
     expect(validateItemSearch({ q: 1984 })).toEqual({ q: "1984" });
   });
@@ -30,6 +38,11 @@ describe("effectiveSort", () => {
   it("passes a sort the collection can honour", () => {
     expect(effectiveSort("-name", fields)).toBe("-name");
     expect(effectiveSort("field:title", fields)).toBe("field:title");
+  });
+
+  it("passes a status sort on any collection — every item has a status (#42)", () => {
+    expect(effectiveSort("status", fields)).toBe("status");
+    expect(effectiveSort("-status", [])).toBe("-status");
   });
 
   it("drops a field sort the collection cannot honour, so the list still loads", () => {
