@@ -54,6 +54,12 @@ export {
   MediaSchema,
 } from "./media.js";
 export { PLUGIN_API_VERSION } from "./plugin-api.js";
+export {
+  type CollectionProgress,
+  collectionProgress,
+  type ItemCounts,
+  ItemCountsSchema,
+} from "./progress.js";
 export type {
   AuthProvider,
   AuthUser,

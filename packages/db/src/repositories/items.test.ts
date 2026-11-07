@@ -187,25 +187,101 @@ describe("ItemsRepository", () => {
     expect(await handle.media.getById(m.id, { includeDeleted: true })).toBeNull();
   });
 
-  describe("countByCollection", () => {
-    it("counts non-deleted items grouped by collection, omitting empty ones", async () => {
+  describe("countsByCollection (#42)", () => {
+    it("counts live items and live owned items per collection, in one map", async () => {
       const other = await handle.collections.create({ name: "Movies", fields, isFiniteSet: false });
-      const empty = await handle.collections.create({ name: "Coins", fields, isFiniteSet: false });
+      // A collection with no items at all is absent from the map, like one whose items are all trashed.
+      await handle.collections.create({ name: "Coins", fields, isFiniteSet: false });
+      const allTrashed = await handle.collections.create({ name: "Stamps", fields, isFiniteSet: false });
 
-      await handle.items.create({ collectionId: collection.id, fields: {} });
-      await handle.items.create({ collectionId: collection.id, fields: {} });
-      const deleted = await handle.items.create({ collectionId: collection.id, fields: {} });
-      await handle.items.softDelete(deleted.id);
-      await handle.items.create({ collectionId: other.id, fields: {} });
+      // Books: 3 owned, 2 wanted, 1 ordered live — plus a trashed owned and a trashed wanted.
+      for (const status of ["owned", "owned", "owned", "wanted", "wanted", "ordered"] as const) {
+        await handle.items.create({ collectionId: collection.id, status, fields: {} });
+      }
+      for (const status of ["owned", "wanted"] as const) {
+        const trashed = await handle.items.create({ collectionId: collection.id, status, fields: {} });
+        await handle.items.softDelete(trashed.id);
+      }
+      // Movies: 1 owned, 3 wanted — a different split, so a leak between collections shows.
+      for (const status of ["owned", "wanted", "wanted", "wanted"] as const) {
+        await handle.items.create({ collectionId: other.id, status, fields: {} });
+      }
+      const gone = await handle.items.create({ collectionId: allTrashed.id, status: "owned", fields: {} });
+      await handle.items.softDelete(gone.id);
 
-      const counts = await handle.items.countByCollection();
-      expect(counts[collection.id]).toBe(2);
-      expect(counts[other.id]).toBe(1);
-      expect(counts[empty.id]).toBeUndefined();
+      expect(await handle.items.countsByCollection()).toEqual({
+        [collection.id]: { total: 6, owned: 3 },
+        [other.id]: { total: 4, owned: 1 },
+      });
+    });
+
+    it("reports zero owned for a collection holding only wanted and ordered items", async () => {
+      await handle.items.create({ collectionId: collection.id, status: "wanted", fields: {} });
+      await handle.items.create({ collectionId: collection.id, status: "ordered", fields: {} });
+      expect(await handle.items.countsByCollection()).toEqual({ [collection.id]: { total: 2, owned: 0 } });
     });
 
     it("returns an empty map when there are no items", async () => {
-      expect(await handle.items.countByCollection()).toEqual({});
+      expect(await handle.items.countsByCollection()).toEqual({});
+    });
+
+    it("leaves out a trashed collection, though its items were never stamped", async () => {
+      const trashed = await handle.collections.create({ name: "Stamps", fields, isFiniteSet: false });
+      await handle.items.create({ collectionId: trashed.id, status: "owned", fields: {} });
+      await handle.items.create({ collectionId: collection.id, status: "wanted", fields: {} });
+      await handle.collections.softDelete(trashed.id);
+      expect(await handle.items.countsByCollection()).toEqual({ [collection.id]: { total: 1, owned: 0 } });
+    });
+  });
+
+  describe("countsForCollection (#42)", () => {
+    it("counts one collection's live items per status, ignoring trashed items and other collections", async () => {
+      const other = await handle.collections.create({ name: "Movies", fields, isFiniteSet: false });
+      for (const status of ["owned", "owned", "owned", "wanted", "wanted", "ordered"] as const) {
+        await handle.items.create({ collectionId: collection.id, status, fields: {} });
+      }
+      for (const status of ["owned", "ordered", "ordered"] as const) {
+        const trashed = await handle.items.create({ collectionId: collection.id, status, fields: {} });
+        await handle.items.softDelete(trashed.id);
+      }
+      for (const status of ["owned", "wanted", "wanted", "wanted", "ordered"] as const) {
+        await handle.items.create({ collectionId: other.id, status, fields: {} });
+      }
+
+      expect(await handle.items.countsForCollection(collection.id)).toEqual({
+        total: 6,
+        owned: 3,
+        wanted: 2,
+        ordered: 1,
+      });
+      expect(await handle.items.countsForCollection(other.id)).toEqual({
+        total: 5,
+        owned: 1,
+        wanted: 3,
+        ordered: 1,
+      });
+    });
+
+    it("answers zeros, not nulls, for a collection whose items are all trashed", async () => {
+      const trashed = await handle.items.create({ collectionId: collection.id, status: "owned", fields: {} });
+      await handle.items.softDelete(trashed.id);
+      expect(await handle.items.countsForCollection(collection.id)).toEqual({
+        total: 0,
+        owned: 0,
+        wanted: 0,
+        ordered: 0,
+      });
+    });
+
+    it("counts a status change at once", async () => {
+      const item = await handle.items.create({ collectionId: collection.id, status: "wanted", fields: {} });
+      await handle.items.update(item.id, { status: "owned" });
+      expect(await handle.items.countsForCollection(collection.id)).toEqual({
+        total: 1,
+        owned: 1,
+        wanted: 0,
+        ordered: 0,
+      });
     });
   });
 });

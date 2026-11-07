@@ -12,6 +12,8 @@ describe("@mycollections/core public surface", () => {
       "FieldDefinitionSchema",
       "CollectionSchema",
       "TARGET_COUNT_MAX",
+      "collectionProgress",
+      "ItemCountsSchema",
       "ItemSchema",
       "MediaSchema",
     ]) {

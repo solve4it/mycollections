@@ -48,6 +48,7 @@ const SAMPLE_COLLECTION = {
   isFiniteSet: false,
   targetCount: null,
   itemCount: 3,
+  ownedCount: 2,
   createdAt: "2024-01-01T00:00:00.000Z",
   updatedAt: "2024-01-01T00:00:00.000Z",
   deletedAt: null,
@@ -84,13 +85,13 @@ describe("CollectionsPage", () => {
   });
 
   it("uses the singular label for a single item", async () => {
-    vi.mocked(listCollections).mockResolvedValue([{ ...SAMPLE_COLLECTION, itemCount: 1 }]);
+    vi.mocked(listCollections).mockResolvedValue([{ ...SAMPLE_COLLECTION, itemCount: 1, ownedCount: 1 }]);
     renderCollections();
     expect(await screen.findByText("1 item")).toBeInTheDocument();
   });
 
   it("shows 0 items for an empty collection", async () => {
-    vi.mocked(listCollections).mockResolvedValue([{ ...SAMPLE_COLLECTION, itemCount: 0 }]);
+    vi.mocked(listCollections).mockResolvedValue([{ ...SAMPLE_COLLECTION, itemCount: 0, ownedCount: 0 }]);
     renderCollections();
     expect(await screen.findByText("0 items")).toBeInTheDocument();
   });

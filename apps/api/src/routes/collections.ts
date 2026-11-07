@@ -1,4 +1,4 @@
-import type { Collection, FieldDefinition } from "@mycollections/core";
+import type { Collection, CollectionWithItemCount, FieldDefinition, ItemCounts } from "@mycollections/core";
 import type { DatabaseHandle, UpdateCollectionInput } from "@mycollections/db";
 import type { FastifyInstance } from "fastify";
 
@@ -57,9 +57,14 @@ function retypedFieldIds(existing: FieldDefinition[], incoming: readonly unknown
 }
 
 export async function registerCollectionRoutes(app: FastifyInstance, db: DatabaseHandle) {
-  app.get("/api/collections", async () => {
-    const [collections, counts] = await Promise.all([db.collections.list(), db.items.countByCollection()]);
-    return collections.map((collection) => ({ ...collection, itemCount: counts[collection.id] ?? 0 }));
+  app.get("/api/collections", async (): Promise<CollectionWithItemCount[]> => {
+    // One GROUP BY for every collection's numbers; a collection with no live
+    // items is absent from the map and reads as zeros.
+    const [collections, counts] = await Promise.all([db.collections.list(), db.items.countsByCollection()]);
+    return collections.map((collection) => {
+      const tally = counts[collection.id];
+      return { ...collection, itemCount: tally?.total ?? 0, ownedCount: tally?.owned ?? 0 };
+    });
   });
 
   app.post("/api/collections", { schema: { body: createBodySchema } }, async (request, reply) => {
@@ -91,6 +96,19 @@ export async function registerCollectionRoutes(app: FastifyInstance, db: Databas
     const collection = await db.collections.getById(id);
     if (!collection) throw app.httpErrors.notFound("Collection not found");
     return collection;
+  });
+
+  /**
+   * A collection's live items counted per status (#42) — what its progress and
+   * its Collected/Remaining split are drawn from. Answered for every collection,
+   * finite or not; whether to show progress is the client's call.
+   */
+  app.get("/api/collections/:id/counts", async (request): Promise<ItemCounts> => {
+    const { id } = request.params as { id: string };
+    // getById hides a trashed collection, so its counts are a 404, not zeros.
+    const collection = await db.collections.getById(id);
+    if (!collection) throw app.httpErrors.notFound("Collection not found");
+    return db.items.countsForCollection(id);
   });
 
   app.patch("/api/collections/:id", { schema: { body: updateBodySchema } }, async (request, _reply) => {

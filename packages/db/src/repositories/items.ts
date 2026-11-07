@@ -5,6 +5,7 @@ import {
   filterSuitsField,
   ITEM_FILTER_MAX_VALUE_LENGTH,
   type Item,
+  type ItemCounts,
   type ItemFilter,
   ItemFilterValueSchema,
   ItemSchema,
@@ -25,6 +26,12 @@ export interface CreateItemInput {
   collectionId: string;
   status?: ItemStatus;
   fields: Record<string, unknown>;
+}
+
+/** A collection's live items and the owned ones among them — the dashboard's numbers (#42). */
+export interface CollectionItemTally {
+  total: number;
+  owned: number;
 }
 
 export interface UpdateItemInput {
@@ -332,18 +339,45 @@ export class ItemsRepository {
   }
 
   /**
-   * Counts non-deleted items grouped by collection, in a single query. Returns a
-   * map of collection id -> count; collections with no items are absent (callers
-   * should treat a missing key as 0).
+   * Counts live (non-deleted) items, and the owned ones among them, grouped by
+   * collection in a single query (#42). Collections with no live items are
+   * absent; callers treat a missing key as `{ total: 0, owned: 0 }`.
    */
-  async countByCollection(): Promise<Record<string, number>> {
+  async countsByCollection(): Promise<Record<string, CollectionItemTally>> {
     const rows = this.#db
-      .select({ collectionId: schema.items.collectionId, count: sql<number>`count(*)` })
+      .select({
+        collectionId: schema.items.collectionId,
+        total: sql<number>`count(*)`,
+        owned: sql<number>`sum(${schema.items.status} = 'owned')`,
+      })
       .from(schema.items)
-      .where(isNull(schema.items.deletedAt))
+      // Trashing a collection stamps none of its items, so a live item can sit in a trashed collection.
+      .innerJoin(schema.collections, eq(schema.collections.id, schema.items.collectionId))
+      .where(and(isNull(schema.items.deletedAt), isNull(schema.collections.deletedAt)))
       .groupBy(schema.items.collectionId)
       .all();
-    return Object.fromEntries(rows.map((r) => [r.collectionId, r.count]));
+    return Object.fromEntries(rows.map((r) => [r.collectionId, { total: r.total, owned: r.owned }]));
+  }
+
+  /**
+   * One collection's live items, counted per status in a single query (#42).
+   * It does not check the collection exists or is live — the route does that
+   * first, so a trashed collection is a 404 rather than a row of zeros.
+   */
+  async countsForCollection(collectionId: string): Promise<ItemCounts> {
+    const status = schema.items.status;
+    const row = this.#db
+      .select({
+        total: sql<number>`count(*)`,
+        // sum() over no rows is NULL; coalesce so an empty collection reads as zeros.
+        owned: sql<number>`coalesce(sum(${status} = 'owned'), 0)`,
+        wanted: sql<number>`coalesce(sum(${status} = 'wanted'), 0)`,
+        ordered: sql<number>`coalesce(sum(${status} = 'ordered'), 0)`,
+      })
+      .from(schema.items)
+      .where(and(eq(schema.items.collectionId, collectionId), isNull(schema.items.deletedAt)))
+      .get();
+    return row ?? { total: 0, owned: 0, wanted: 0, ordered: 0 };
   }
 
   /**

@@ -13,6 +13,7 @@ export {
   type UpdateCollectionInput,
 } from "./repositories/collections.js";
 export {
+  type CollectionItemTally,
   type CreateItemInput,
   InvalidItemQueryError,
   ItemsRepository,

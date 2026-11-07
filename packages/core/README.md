@@ -12,6 +12,9 @@ This is a private, pure-TypeScript package — no runtime concerns beyond [Zod](
 | --------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
 | `CollectionSchema` / `Collection`                   | A user-defined collection (records, LEGO sets, audio gear, …) and its field schema                                         |
 | `TARGET_COUNT_MAX`                                  | The largest `targetCount` a finite set may declare (`100_000`)                                                             |
+| `CollectionWithItemCount`                           | A collection as the dashboard lists it, with `itemCount` (live items) and `ownedCount` (live owned items)                  |
+| `ItemCountsSchema` / `ItemCounts`                   | `{ total, owned, wanted, ordered }` — a collection's live items, counted per status                                        |
+| `collectionProgress()` / `CollectionProgress`       | A finite set's progress toward its target, or `null` when there is nothing to measure — see below                          |
 | `ItemSchema` / `Item`                               | A single item inside a collection                                                                                          |
 | `MediaSchema` / `Media`                             | Media (currently images) attached to an item                                                                               |
 | `ItemStatusSchema` / `ItemStatus` / `ITEM_STATUSES` | `"owned" \| "wanted" \| "ordered"`                                                                                         |
@@ -21,6 +24,17 @@ This is a private, pure-TypeScript package — no runtime concerns beyond [Zod](
 ### Finite sets and their target (#42)
 
 A collection with `isFiniteSet: true` is a set with a known end — the 50 state quarters, a LEGO wave. `targetCount` is how many items complete it: an integer from 1 to `TARGET_COUNT_MAX`, or `null` when the size is not known yet. It defaults to `null`, so documents written before the field existed (version 1 backups among them) still parse. Only a finite set may carry a target: `targetCount` set on a collection with `isFiniteSet: false` fails validation with the fixed message `targetCount requires isFiniteSet` at the `targetCount` path. The schema never coerces — `"5"`, `true` and `2.5` are all rejected.
+
+`collectionProgress(collection, ownedCount)` is the one place progress is worked out. It returns `null` unless the collection is a finite set with a target — no target means no bar, never "0 of ?". Otherwise it returns `{ owned, target, fraction, complete }`:
+
+| Owned / target | `owned` | `fraction` | `complete` |
+| -------------- | ------- | ---------- | ---------- |
+| 0 of 5         | `0`     | `0`        | `false`    |
+| 3 of 5         | `3`     | `0.6`      | `false`    |
+| 5 of 5         | `5`     | `1`        | `true`     |
+| 6 of 5         | `6`     | `1`        | `true`     |
+
+Only owned items count toward the target ("collected"); wanted and ordered ones are what remains. `owned` is never capped, so a set holding more than its target (duplicates, variants) reports the honest "6 of 5" — only `fraction`, the share of a bar to fill, stops at 1. `complete` means owned has reached the target even while wanted items remain. Counts come from live items only: trashed items count toward nothing.
 
 ### Provider contracts
 

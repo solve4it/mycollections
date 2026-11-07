@@ -97,6 +97,7 @@ describe("api-client ↔ Fastify (real HTTP)", () => {
     const listed = collections.find((c) => c.id === collection.id);
     expect(listed?.name).toBe("Books");
     expect(listed?.itemCount).toBe(0);
+    expect(listed?.ownedCount).toBe(0);
 
     // POST item, then GET items.
     const item = await client.createItem(collection.id, { fields: { title: "Dune" } });
