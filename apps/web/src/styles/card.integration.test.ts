@@ -1,5 +1,5 @@
-import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { readdirSync, readFileSync } from "node:fs";
+import { join, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import { declaration, parseRules, rulesFor } from "./css-rules.js";
 import { extractBlock } from "./wcag.js";
@@ -133,3 +133,93 @@ describe("reduced motion", () => {
     expect(declaration(hover?.body ?? "", "transform")).toBe("none");
   });
 });
+
+/**
+ * A finite set's progress (#42), on the card and the collection header. The
+ * fill colors come from tokens, so the contrast test holds them; what is held
+ * here is that the rules actually use those tokens, that the track has an edge
+ * of its own, and that forced-colors mode keeps fill and track apart.
+ */
+describe("finite-set progress", () => {
+  const FORCED_OPENER = "@media (forced-colors: active)";
+  const forcedBlock = extractBlock(css, FORCED_OPENER);
+  const FORCED = parseRules(forcedBlock.slice(1, -1));
+  // The everyday rules, with the forced-colors overrides set aside so `only()`
+  // can tell the base fill from its high-contrast stand-in.
+  const BASE = parseRules((css.split(REDUCED_MOTION)[0] ?? "").replace(`${FORCED_OPENER} ${forcedBlock}`, ""));
+  const only = (selector: string) => {
+    const matches = rulesFor(BASE, selector);
+    expect(matches, `global.css must declare exactly one \`${selector}\` rule`).toHaveLength(1);
+    const rule = matches[0];
+    if (!rule) throw new Error(`no rule for ${selector}`);
+    return rule;
+  };
+
+  it("fills in manila-ink, and in the owned green once the set is complete", () => {
+    expect(declaration(only(".collection-progress-fill").body, "background")).toBe("var(--progress)");
+    expect(declaration(only(".collection-progress-complete .collection-progress-fill").body, "background")).toBe(
+      "var(--owned)",
+    );
+  });
+
+  it("draws the track with a border, since --line on --card is only 1.28:1", () => {
+    const track = only(".collection-progress-track");
+    expect(declaration(track.body, "background")).toBe("var(--line)");
+    expect(declaration(track.body, "border")).toBe("1px solid var(--ink-muted)");
+    // Spans inside a <p>: inline by default, where a block size does nothing.
+    expect(declaration(track.body, "display")).toBe("block");
+    expect(declaration(only(".collection-progress-fill").body, "display")).toBe("block");
+  });
+
+  it("keeps fill and track apart in forced-colors mode", () => {
+    const track = rulesFor(FORCED, ".collection-progress-track")[0];
+    expect(declaration(track?.body ?? "", "border-color")).toBe("CanvasText");
+    const fill = rulesFor(FORCED, ".collection-progress-fill")[0];
+    // Forced colors repaints a background as Canvas, which would erase the fill;
+    // opting it out and painting a system color keeps the amount visible.
+    expect(declaration(fill?.body ?? "", "forced-color-adjust")).toBe("none");
+    expect(declaration(fill?.body ?? "", "background")).toBe("Highlight");
+  });
+
+  it("sits last on the card, pushed to the bottom so bars line up across a grid row", () => {
+    const body = only(".collection-card-body");
+    expect(declaration(body.body, "display")).toBe("flex");
+    expect(declaration(body.body, "flex-direction")).toBe("column");
+    expect(declaration(body.body, "flex-grow")).toBe("1");
+    expect(declaration(only(".collection-card-body .collection-progress").body, "margin-block-start")).toBe("auto");
+  });
+
+  it("never declares the --progress color token anywhere but the palette blocks", () => {
+    // --progress is a color. A rule that set it as a fill amount would shadow
+    // the token for its subtree and paint every fill below it invalid (#42).
+    const declaring = parseRules(css).filter((rule) => /(^|[;{\s])--progress\s*:/.test(rule.body));
+    expect(declaring.map((rule) => rule.selector)).toEqual([
+      ":root",
+      ":root",
+      ':root[data-theme="dark"]',
+      ':root[data-theme="light"]',
+    ]);
+  });
+
+  it("never sets --progress as an inline style in the app's source", () => {
+    // Comments may name the token (the widget explains why it avoids it); code
+    // may not set it — as a style key, or inside a style string.
+    const offenders = sourceFiles(resolve("src")).filter((path) => {
+      const code = readFileSync(path, "utf8")
+        .replace(/\/\*[\s\S]*?\*\//g, "")
+        .replace(/^\s*\/\/.*$/gm, "");
+      return /["'`]--progress["'`]\s*[:\]]|--progress\s*:|setProperty\(\s*["'`]--progress/.test(code);
+    });
+    expect(offenders).toEqual([]);
+  });
+});
+
+/** Shipped components only: tests and stylesheets describe the token. */
+function sourceFiles(dir: string): string[] {
+  return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+    const path = join(dir, entry.name);
+    if (entry.isDirectory()) return sourceFiles(path);
+    if (!/\.tsx?$/.test(entry.name) || /\.test\.tsx?$/.test(entry.name)) return [];
+    return [path];
+  });
+}
