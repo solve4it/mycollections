@@ -14,6 +14,10 @@ A **collection** is a bucket for related items, backed by a plugin that knows th
 
 _Walkthrough for creating a collection and picking a plugin type._
 
+### What a collection needs
+
+A name of up to 120 characters (a description, if you give one, can run to 2,000), and at least one field, each with a label. The form will not submit without them, and it says which box needs attention: a name or label left empty or made only of spaces is marked where it is. If you have removed every field, a message appears beside **Add field** and the cursor moves there. An empty field row is not skipped — give it a label or remove it. The same rules apply in **Edit collection**.
+
 ### Finite sets and their size
 
 Some collections have a known end: a trading-card set of 102 cards, a series of 24 figures, every album an artist released. Tick **Finite set (a fixed, known number of items)** when you create the collection, and a second box appears beneath it: **Number of items in the set**. Enter how many items the complete set has — a whole number from 1 to 100,000.
