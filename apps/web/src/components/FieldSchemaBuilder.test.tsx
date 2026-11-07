@@ -15,6 +15,11 @@ function Harness({ initial }: { initial: FieldDraft[] }) {
   return <FieldSchemaBuilder fields={fields} onChange={setFields} />;
 }
 
+function NoFields({ error }: { error?: string }) {
+  const [fields, setFields] = useState<FieldDraft[]>([]);
+  return <FieldSchemaBuilder fields={fields} onChange={setFields} noFieldsError={error} />;
+}
+
 const labelInputs = () => screen.getAllByRole("textbox", { name: "Field label" }) as HTMLInputElement[];
 
 describe("FieldSchemaBuilder", () => {
@@ -115,5 +120,49 @@ describe("FieldSchemaBuilder", () => {
     fireEvent.click(remove);
 
     await waitFor(() => expect(screen.getByRole("button", { name: "Add field" })).toHaveFocus());
+  });
+
+  // The server refuses a field without a label (core: `label: z.string().min(1)`),
+  // and the forms used to drop such rows — or, with no labelled row at all,
+  // refuse the submit without a word (#42).
+  describe("a field's label", () => {
+    it("is required, so an empty one stops the submit at that row", () => {
+      render(<Harness initial={[draft("a", "Title"), draft("b", "")]} />);
+      const [title, blank] = labelInputs() as [HTMLInputElement, HTMLInputElement];
+      expect(title).toBeRequired();
+      expect(title).toBeValid();
+      expect(blank).toBeRequired();
+      expect(blank).toBeInvalid();
+      expect(blank.validity.valueMissing).toBe(true);
+    });
+
+    it("of only spaces is marked invalid, saying why", () => {
+      render(<Harness initial={[draft("a", "Title")]} />);
+      const [label] = labelInputs() as [HTMLInputElement];
+      fireEvent.change(label, { target: { value: "   " } });
+      expect(label).toBeInvalid();
+      expect(label.validationMessage).toBe("Enter a label for this field.");
+
+      fireEvent.change(label, { target: { value: " Year " } });
+      expect(label).toBeValid();
+    });
+  });
+
+  describe("with no field left", () => {
+    it("shows nothing until the form says the submit was refused", () => {
+      render(<NoFields />);
+      expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Add field" })).not.toHaveAccessibleDescription();
+    });
+
+    it("says why at Add field, the control that fixes it", () => {
+      render(<NoFields error="A collection needs at least one field. Add one to continue." />);
+      expect(screen.getByRole("alert")).toHaveTextContent(
+        "A collection needs at least one field. Add one to continue.",
+      );
+      expect(screen.getByRole("button", { name: "Add field" })).toHaveAccessibleDescription(
+        "A collection needs at least one field. Add one to continue.",
+      );
+    });
   });
 });

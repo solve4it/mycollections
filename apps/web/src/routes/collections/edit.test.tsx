@@ -251,6 +251,36 @@ describe("EditCollectionPage", () => {
     expect(nameBox).toBeValid();
   });
 
+  it("caps the name and description at the server's limits", async () => {
+    renderEdit();
+    expect(await screen.findByLabelText(/collection name/i)).toHaveAttribute("maxlength", "120");
+    expect(screen.getByLabelText(/description/i)).toHaveAttribute("maxlength", "2000");
+  });
+
+  it("refuses a field label emptied to only spaces, saying why", async () => {
+    renderEdit();
+    const [title] = (await screen.findAllByLabelText(/field label/i)) as [HTMLInputElement];
+    fireEvent.change(title, { target: { value: "   " } });
+    fireEvent.click(screen.getByRole("button", { name: /save changes/i }));
+    expect(title).toBeInvalid();
+    expect(title.validationMessage).toBe("Enter a label for this field.");
+    expect(updateCollection).not.toHaveBeenCalled();
+  });
+
+  it("says why at Add field when every field has been removed, instead of doing nothing", async () => {
+    renderEdit();
+    await screen.findAllByLabelText(/field label/i);
+    for (const remove of screen.getAllByRole("button", { name: /remove field/i })) fireEvent.click(remove);
+    expect(screen.queryAllByLabelText(/field label/i)).toHaveLength(0);
+
+    fireEvent.click(screen.getByRole("button", { name: /save changes/i }));
+
+    const addField = screen.getByRole("button", { name: /add field/i });
+    expect(screen.getByRole("alert")).toHaveTextContent("A collection needs at least one field. Add one to continue.");
+    expect(addField).toHaveFocus();
+    expect(updateCollection).not.toHaveBeenCalled();
+  });
+
   describe("a finite set's target count (#42)", () => {
     const FINITE = "Finite set (a fixed, known number of items)";
     const TARGET = "Number of items in the set";

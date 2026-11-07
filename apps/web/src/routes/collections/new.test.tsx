@@ -132,6 +132,57 @@ describe("NewCollectionPage", () => {
     expect(nameBox).toBeValid();
   });
 
+  it("caps the name and description at the server's limits", async () => {
+    renderNew();
+    expect(await screen.findByLabelText(/collection name/i)).toHaveAttribute("maxlength", "120");
+    expect(screen.getByLabelText(/description/i)).toHaveAttribute("maxlength", "2000");
+  });
+
+  // Found driving #42: a blank or space-only label was silently dropped, and with
+  // no labelled row left the submit did nothing at all. The server needs every
+  // field labelled, so each row's label is required.
+  it("refuses an empty field row at its label instead of dropping it", async () => {
+    renderNew();
+    fireEvent.change(await screen.findByLabelText(/collection name/i), { target: { value: "Books" } });
+    fireEvent.change(screen.getByLabelText(/field label/i), { target: { value: "Title" } });
+    fireEvent.click(screen.getByRole("button", { name: /add field/i }));
+    fireEvent.click(screen.getByRole("button", { name: /create collection/i }));
+    const [, blank] = screen.getAllByLabelText(/field label/i) as [HTMLInputElement, HTMLInputElement];
+    expect(blank).toBeInvalid();
+    expect(createCollection).not.toHaveBeenCalled();
+  });
+
+  it("refuses a field label of only spaces, saying why", async () => {
+    renderNew();
+    fireEvent.change(await screen.findByLabelText(/collection name/i), { target: { value: "Books" } });
+    const label = screen.getByLabelText(/field label/i) as HTMLInputElement;
+    fireEvent.change(label, { target: { value: "   " } });
+    fireEvent.click(screen.getByRole("button", { name: /create collection/i }));
+    expect(label.validationMessage).toBe("Enter a label for this field.");
+    expect(createCollection).not.toHaveBeenCalled();
+  });
+
+  it("says why at Add field when every field has been removed, and moves focus there", async () => {
+    renderNew();
+    fireEvent.change(await screen.findByLabelText(/collection name/i), { target: { value: "Books" } });
+    fireEvent.click(screen.getByRole("button", { name: /remove field/i }));
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /create collection/i }));
+
+    const addField = screen.getByRole("button", { name: /add field/i });
+    expect(screen.getByRole("alert")).toHaveTextContent("A collection needs at least one field. Add one to continue.");
+    expect(addField).toHaveAccessibleDescription("A collection needs at least one field. Add one to continue.");
+    expect(addField).toHaveFocus();
+    expect(createCollection).not.toHaveBeenCalled();
+
+    fireEvent.click(addField);
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText(/field label/i), { target: { value: "Title" } });
+    fireEvent.click(screen.getByRole("button", { name: /create collection/i }));
+    await waitFor(() => expect(createCollection).toHaveBeenCalledTimes(1));
+  });
+
   describe("a finite set's target count (#42)", () => {
     const FINITE = "Finite set (a fixed, known number of items)";
     const TARGET = "Number of items in the set";

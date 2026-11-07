@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { CollectionSchema, TARGET_COUNT_MAX } from "./collection.js";
+import { COLLECTION_DESCRIPTION_MAX, COLLECTION_NAME_MAX, CollectionSchema, TARGET_COUNT_MAX } from "./collection.js";
 
 const baseCollection = {
   id: "11111111-1111-4111-8111-111111111111",
@@ -19,6 +19,22 @@ describe("CollectionSchema", () => {
 
   it("rejects an empty name", () => {
     expect(() => CollectionSchema.parse({ ...baseCollection, name: "" })).toThrow();
+  });
+
+  // Shared so the web forms cap their boxes at the server's own limits (#42).
+  it("caps a name at COLLECTION_NAME_MAX characters", () => {
+    expect(COLLECTION_NAME_MAX).toBe(120);
+    expect(CollectionSchema.parse({ ...baseCollection, name: "n".repeat(COLLECTION_NAME_MAX) }).name).toHaveLength(120);
+    expect(CollectionSchema.safeParse({ ...baseCollection, name: "n".repeat(COLLECTION_NAME_MAX + 1) }).success).toBe(
+      false,
+    );
+  });
+
+  it("caps a description at COLLECTION_DESCRIPTION_MAX characters", () => {
+    expect(COLLECTION_DESCRIPTION_MAX).toBe(2000);
+    const longest = "d".repeat(COLLECTION_DESCRIPTION_MAX);
+    expect(CollectionSchema.parse({ ...baseCollection, description: longest }).description).toBe(longest);
+    expect(CollectionSchema.safeParse({ ...baseCollection, description: `${longest}d` }).success).toBe(false);
   });
 
   it("rejects a non-uuid id", () => {
