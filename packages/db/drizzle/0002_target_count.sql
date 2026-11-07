@@ -1,0 +1,1 @@
+ALTER TABLE `collections` ADD `target_count` integer;
