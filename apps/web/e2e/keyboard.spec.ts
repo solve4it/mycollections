@@ -190,6 +190,38 @@ test.describe("keyboard traversal of every screen", () => {
   });
 
   /**
+   * The same form once Space has made it a finite set (#42): the target box
+   * appears directly after the checkbox that asked for it, so the next Tab
+   * reaches it, and the box carries what was typed. Walked from the checkbox
+   * because that is where the keyboard user is — the stops before it are
+   * asserted, unchanged, by the test above.
+   */
+  test("the new collection form as a finite set", async ({ page, api }) => {
+    await api.reset();
+    await page.goto("/collections/new");
+    await expect(page.getByRole("heading", { level: 1, name: "New collection" })).toBeVisible();
+
+    const finite = page.getByRole("checkbox", { name: "Finite set (a fixed, known number of items)" });
+    await finite.focus();
+    await page.keyboard.press(" ");
+    await expect(finite, "Space on the finite checkbox must check it").toBeChecked();
+    await page.getByRole("spinbutton", { name: "Number of items in the set" }).fill("102");
+    await finite.focus();
+
+    expect(await tabOrder(page), "the tab order of the new collection form as a finite set").toEqual(
+      restOfSequence([
+        'spinbutton "Number of items in the set": "102"',
+        'textbox "Field label"',
+        'combobox "Field type"',
+        'checkbox "Required"',
+        'button "Remove field"',
+        'button "Add field"',
+        'button "Create collection"',
+      ]),
+    );
+  });
+
+  /**
    * The editor, whose every control arrives carrying a stored value — so the
    * stops assert what the form was filled with, not merely that it has fields.
    * Two field rows, the first required and the second not, so a checkbox reading
@@ -207,6 +239,38 @@ test.describe("keyboard traversal of every screen", () => {
       'textbox "Collection name": Vinyl records',
       'textbox "Description": Jazz',
       'checkbox "Finite set (a fixed, known number of items)"',
+      'textbox "Field label": Title',
+      'combobox "Field type"',
+      'checkbox "Required" [checked]',
+      'button "Remove field"',
+      'textbox "Field label": Year',
+      'combobox "Field type"',
+      'checkbox "Required"',
+      'button "Remove field"',
+      'button "Add field"',
+      'button "Save changes"',
+    ]);
+  });
+
+  /** The editor of a finite set with a target (#42): the box follows the checkbox, filled with the stored target. */
+  test("the collection editor of a finite set", async ({ page, api }) => {
+    await api.reset();
+    const collection = await api.createCollection({
+      name: "Pokémon Base Set",
+      fields: FIELDS,
+      isFiniteSet: true,
+      targetCount: 102,
+    });
+
+    await page.goto(`/collections/${collection.id}/edit`);
+    await expect(page.getByRole("heading", { level: 1, name: "Edit collection" })).toBeVisible();
+
+    await expectTabOrder(page, "the collection editor of a finite set", [
+      'link "Back to collection"',
+      'textbox "Collection name": Pokémon Base Set',
+      'textbox "Description"',
+      'checkbox "Finite set (a fixed, known number of items)" [checked]',
+      'spinbutton "Number of items in the set": "102"',
       'textbox "Field label": Title',
       'combobox "Field type"',
       'checkbox "Required" [checked]',

@@ -181,6 +181,38 @@ test.describe("accessibility", () => {
     await expectNoAccessibilityViolations(page);
   });
 
+  /** The target box (#42), a state the route-level scan above never enters: it only exists once finite is checked. */
+  test("the new collection form as a finite set with a target", async ({ page }) => {
+    await page.goto("/collections/new");
+    await expect(page).toHaveURL(/\/collections\/new$/);
+    await page.getByRole("checkbox", { name: "Finite set (a fixed, known number of items)" }).check();
+    const target = page.getByRole("spinbutton", { name: "Number of items in the set" });
+    await target.fill("102");
+    await expect(target).toHaveValue("102");
+    await expect(target).toHaveAccessibleDescription(
+      "Optional. A whole number from 1 to 100,000 — leave it empty if you do not know it yet.",
+    );
+
+    await expectNoAccessibilityViolations(page);
+  });
+
+  test("the collection editor of a finite set with a target", async ({ page, api }) => {
+    await api.reset();
+    const collection = await api.createCollection({
+      name: "Pokémon Base Set",
+      fields: FIELDS,
+      isFiniteSet: true,
+      targetCount: 102,
+    });
+
+    await page.goto(`/collections/${collection.id}/edit`);
+    await expect(page).toHaveURL(`/collections/${collection.id}/edit`);
+    await expect(page.getByRole("checkbox", { name: "Finite set (a fixed, known number of items)" })).toBeChecked();
+    await expect(page.getByRole("spinbutton", { name: "Number of items in the set" })).toHaveValue("102");
+
+    await expectNoAccessibilityViolations(page);
+  });
+
   test("a collection with items", async ({ page, api }) => {
     await api.reset();
     const collection = await api.createCollection({ name: "Vinyl records", fields: FIELDS });

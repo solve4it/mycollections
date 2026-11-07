@@ -23,6 +23,8 @@ export class ApiFixture {
     description?: string;
     fields: FieldSpec[];
     isFiniteSet?: boolean;
+    /** Only alongside `isFiniteSet: true` — the server refuses a target on any other collection (#42). */
+    targetCount?: number | null;
   }): Promise<SeededCollection> {
     const res = await this.request.post(`${API_URL}/api/collections`, {
       headers: this.headers,
