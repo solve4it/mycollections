@@ -1,4 +1,6 @@
 export {
+  COLLECTION_DESCRIPTION_MAX,
+  COLLECTION_NAME_MAX,
   type Collection,
   CollectionSchema,
   type CollectionWithItemCount,

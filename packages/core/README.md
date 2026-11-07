@@ -8,18 +8,19 @@ This is a private, pure-TypeScript package — no runtime concerns beyond [Zod](
 
 ### Domain models
 
-| Export                                              | Purpose                                                                                                                    |
-| --------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| `CollectionSchema` / `Collection`                   | A user-defined collection (records, LEGO sets, audio gear, …) and its field schema                                         |
-| `TARGET_COUNT_MAX`                                  | The largest `targetCount` a finite set may declare (`100_000`)                                                             |
-| `CollectionWithItemCount`                           | A collection as the dashboard lists it, with `itemCount` (live items) and `ownedCount` (live owned items)                  |
-| `ItemCountsSchema` / `ItemCounts`                   | `{ total, owned, wanted, ordered }` — a collection's live items, counted per status                                        |
-| `collectionProgress()` / `CollectionProgress`       | A finite set's progress toward its target, or `null` when there is nothing to measure — see below                          |
-| `ItemSchema` / `Item`                               | A single item inside a collection                                                                                          |
-| `MediaSchema` / `Media`                             | Media (currently images) attached to an item                                                                               |
-| `ItemStatusSchema` / `ItemStatus` / `ITEM_STATUSES` | `"owned" \| "wanted" \| "ordered"`                                                                                         |
-| `FieldDefinitionSchema` / `FieldDefinition`         | Per-collection user-defined field schema                                                                                   |
-| `BUILT_IN_FIELD_TYPES` / `BuiltInFieldType`         | The 12 built-in field types: `text, number, boolean, date, url, email, select, multiselect, rating, currency, image, tags` |
+| Export                                               | Purpose                                                                                                                    |
+| ---------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `CollectionSchema` / `Collection`                    | A user-defined collection (records, LEGO sets, audio gear, …) and its field schema                                         |
+| `TARGET_COUNT_MAX`                                   | The largest `targetCount` a finite set may declare (`100_000`)                                                             |
+| `COLLECTION_NAME_MAX` / `COLLECTION_DESCRIPTION_MAX` | The longest collection name (`120`) and description (`2000`); the API's body schema and the web forms cap at these         |
+| `CollectionWithItemCount`                            | A collection as the dashboard lists it, with `itemCount` (live items) and `ownedCount` (live owned items)                  |
+| `ItemCountsSchema` / `ItemCounts`                    | `{ total, owned, wanted, ordered }` — a collection's live items, counted per status                                        |
+| `collectionProgress()` / `CollectionProgress`        | A finite set's progress toward its target, or `null` when there is nothing to measure — see below                          |
+| `ItemSchema` / `Item`                                | A single item inside a collection                                                                                          |
+| `MediaSchema` / `Media`                              | Media (currently images) attached to an item                                                                               |
+| `ItemStatusSchema` / `ItemStatus` / `ITEM_STATUSES`  | `"owned" \| "wanted" \| "ordered"`                                                                                         |
+| `FieldDefinitionSchema` / `FieldDefinition`          | Per-collection user-defined field schema                                                                                   |
+| `BUILT_IN_FIELD_TYPES` / `BuiltInFieldType`          | The 12 built-in field types: `text, number, boolean, date, url, email, select, multiselect, rating, currency, image, tags` |
 
 ### Finite sets and their target (#42)
 

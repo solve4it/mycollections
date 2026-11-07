@@ -1,4 +1,10 @@
-import { type Collection, type FieldDefinition, ItemCountsSchema } from "@mycollections/core";
+import {
+  COLLECTION_DESCRIPTION_MAX,
+  COLLECTION_NAME_MAX,
+  type Collection,
+  type FieldDefinition,
+  ItemCountsSchema,
+} from "@mycollections/core";
 import { type DatabaseHandle, openDatabase } from "@mycollections/db";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { buildApp } from "../app.js";
@@ -196,6 +202,39 @@ describe("POST /api/collections", () => {
       payload: { name: "", fields: baseFields, isFiniteSet: false },
     });
     expect(res.statusCode).toBe(400);
+  });
+
+  // The limits the web forms cap their boxes at, and the rule the forms enforce
+  // before submit — pinned here so the two cannot drift apart (#42).
+  it.each([
+    ["a name at COLLECTION_NAME_MAX", { name: "n".repeat(COLLECTION_NAME_MAX) }, 201],
+    ["a name one past COLLECTION_NAME_MAX", { name: "n".repeat(COLLECTION_NAME_MAX + 1) }, 400],
+    ["a description at COLLECTION_DESCRIPTION_MAX", { description: "d".repeat(COLLECTION_DESCRIPTION_MAX) }, 201],
+    ["a description one past the max", { description: "d".repeat(COLLECTION_DESCRIPTION_MAX + 1) }, 400],
+    ["no fields at all", { fields: [] }, 400],
+    ["a field with an empty label", { fields: [{ id: "title", type: "text", label: "" }] }, 400],
+  ])("answers %s with %s", async (_label, override, status) => {
+    const app = await makeApp();
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/collections",
+      headers: { ...auth, "Content-Type": "application/json" },
+      payload: { name: "Books", fields: baseFields, isFiniteSet: false, ...override },
+    });
+    expect(res.statusCode).toBe(status);
+  });
+
+  it("refuses a rename past COLLECTION_NAME_MAX, leaving the stored name", async () => {
+    const app = await makeApp();
+    const col = await handle.collections.create({ name: "Books", fields: baseFields, isFiniteSet: false });
+    const res = await app.inject({
+      method: "PATCH",
+      url: `/api/collections/${col.id}`,
+      headers: { ...auth, "Content-Type": "application/json" },
+      payload: { name: "n".repeat(COLLECTION_NAME_MAX + 1) },
+    });
+    expect(res.statusCode).toBe(400);
+    expect((await handle.collections.getById(col.id))?.name).toBe("Books");
   });
 });
 
