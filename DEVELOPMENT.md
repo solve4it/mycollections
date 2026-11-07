@@ -445,7 +445,8 @@ out of the tab order, hiding it from exactly the user who cannot see the grey.
 
 **An action that removes the control holding focus names where focus goes.** `useFocusHandoff()`
 in `lib/focus-handoff.ts` is the one primitive for it: call the function it returns from the
-handler that is about to remove the control, passing a function that resolves the destination, and
+handler that is about to remove the control, passing a function that resolves the destination (and,
+when the removal lands later than the request, the control being removed; see below), and
 call it from a component that _survives_ the removal — the effect completing the handoff runs after
 that component's next commit, so a hook inside the thing being unmounted dies first. The
 destination may return `null` while it is not in the document yet, which is not a failure: an Undo
@@ -513,6 +514,29 @@ for a handoff also **schedules a commit of the host**, because the effect that c
 after one. A page whose callback changes none of its own state, such as the Save a search hides,
 which only asks for the handoff and speaks through the shell, would otherwise never commit again,
 and focus stayed on `<body>` (#42).
+
+**A request made before the removal names the control it removes:**
+`handOffFocus(destination, { removing: event.currentTarget })`. The hook then waits while that
+element is still in the document, wherever focus is, and asks for the destination only once it has
+gone (#42). `document.activeElement` cannot tell the two cases apart. A mouse click in Safari or
+Firefox on macOS, an iOS tap, a VoiceOver double-tap and a programmatic `click()` all press a button
+without focusing it, so a request made before the removal also finds `<body>`. Read alone, that
+looks like "focus already fell", so the request resolves on the next commit. "The row at this index"
+is then still the row being deleted, and focus leaves the document with it. On a finite set the
+header's counts query can supply that early commit even without the scheduled one.
+
+The callers that need `removing` are the ones whose removal lands after the request:
+- a row's Delete, which removes the row once the server answers;
+- a trash row's confirmed Delete forever, where `ConfirmButton` passes its confirm button to
+  `onConfirm`;
+- a filter chip, which goes once the router has moved.
+
+A request made in the same handler as a synchronous removal does not need it, because React commits
+both together: Cancel, Dismiss, Remove field and Clear filters are examples. Nor does a request made
+after the removal, such as the hidden Save, which is the case "already on `<body>`" is right for. The
+tag manager's `successor()` waits by its own guard instead, returning `null` while the removed tag is
+listed. `keyboard.spec.ts` presses each of the first three without focus ("focus when the removed
+control never held it").
 
 So: **a new control that disables itself, or an action that removes the control that triggered it,
 owes a spec in one of those two blocks.** The deletion case also owes a destination before it owes
