@@ -183,6 +183,47 @@ describe("NewCollectionPage", () => {
     await waitFor(() => expect(createCollection).toHaveBeenCalledTimes(1));
   });
 
+  // The server refuses a choice field with no options (core: `options` is
+  // `.min(1)`), which used to reach the user only as the generic alert.
+  it.each([
+    ["an empty options box", ""],
+    ["commas and spaces with no option between them", " , ,"],
+  ])("refuses a single-choice field with %s, saying why", async (_label, optionsText) => {
+    renderNew();
+    fireEvent.change(await screen.findByLabelText(/collection name/i), { target: { value: "Games" } });
+    fireEvent.change(screen.getByLabelText(/field label/i), { target: { value: "Platform" } });
+    fireEvent.change(screen.getByLabelText(/field type/i), { target: { value: "select" } });
+    const options = screen.getByLabelText(/options/i) as HTMLInputElement;
+    expect(options).toBeRequired();
+    fireEvent.change(options, { target: { value: optionsText } });
+    fireEvent.click(screen.getByRole("button", { name: /create collection/i }));
+    expect(options).toBeInvalid();
+    expect(options.validationMessage).toBe("Add at least one option, separated by commas.");
+    expect(createCollection).not.toHaveBeenCalled();
+
+    fireEvent.change(options, { target: { value: "PC" } });
+    expect(options).toBeValid();
+  });
+
+  it("shows only the no-fields alert after an earlier create failed", async () => {
+    vi.mocked(createCollection).mockRejectedValueOnce(new Error("API error 500"));
+    renderNew();
+    fireEvent.change(await screen.findByLabelText(/collection name/i), { target: { value: "Books" } });
+    fireEvent.change(screen.getByLabelText(/field label/i), { target: { value: "Title" } });
+    fireEvent.click(screen.getByRole("button", { name: /create collection/i }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Could not create the collection.");
+
+    fireEvent.click(screen.getByRole("button", { name: /remove field/i }));
+    fireEvent.click(screen.getByRole("button", { name: /create collection/i }));
+
+    await waitFor(() =>
+      expect(screen.getAllByRole("alert").map((alert) => alert.textContent)).toEqual([
+        "A collection needs at least one field. Add one to continue.",
+      ]),
+    );
+    expect(createCollection).toHaveBeenCalledTimes(1);
+  });
+
   describe("a finite set's target count (#42)", () => {
     const FINITE = "Finite set (a fixed, known number of items)";
     const TARGET = "Number of items in the set";

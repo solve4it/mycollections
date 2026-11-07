@@ -281,6 +281,43 @@ describe("EditCollectionPage", () => {
     expect(updateCollection).not.toHaveBeenCalled();
   });
 
+  it("refuses a choice field whose options are cleared, saying why", async () => {
+    vi.mocked(getCollection).mockResolvedValue({
+      ...collection,
+      fields: [
+        { id: "title", type: "text", label: "Title", required: true },
+        { id: "format", type: "multiselect", label: "Format", required: false, options: ["Hardback", "Paperback"] },
+      ],
+    });
+    renderEdit();
+    const options = (await screen.findByLabelText(/options/i)) as HTMLInputElement;
+    expect(options).toHaveValue("Hardback, Paperback");
+    expect(options).toBeRequired();
+    fireEvent.change(options, { target: { value: " , " } });
+    fireEvent.click(screen.getByRole("button", { name: /save changes/i }));
+    expect(options).toBeInvalid();
+    expect(options.validationMessage).toBe("Add at least one option, separated by commas.");
+    expect(updateCollection).not.toHaveBeenCalled();
+  });
+
+  it("shows only the no-fields alert after an earlier save failed", async () => {
+    vi.mocked(updateCollection).mockRejectedValueOnce(new Error("API error 500"));
+    renderEdit();
+    await screen.findAllByLabelText(/field label/i);
+    fireEvent.click(screen.getByRole("button", { name: /save changes/i }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Could not save the collection.");
+
+    for (const remove of screen.getAllByRole("button", { name: /remove field/i })) fireEvent.click(remove);
+    fireEvent.click(screen.getByRole("button", { name: /save changes/i }));
+
+    await waitFor(() =>
+      expect(screen.getAllByRole("alert").map((alert) => alert.textContent)).toEqual([
+        "A collection needs at least one field. Add one to continue.",
+      ]),
+    );
+    expect(updateCollection).toHaveBeenCalledTimes(1);
+  });
+
   describe("a finite set's target count (#42)", () => {
     const FINITE = "Finite set (a fixed, known number of items)";
     const TARGET = "Number of items in the set";
