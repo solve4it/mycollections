@@ -1,6 +1,6 @@
 import type { Collection } from "@mycollections/core";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { createMemoryHistory, createRouter, RouterProvider } from "@tanstack/react-router";
+import { createMemoryHistory, createRoute, createRouter, RouterProvider } from "@tanstack/react-router";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { rootRoute } from "../__root.js";
@@ -47,7 +47,19 @@ function item(id: string, deletedAt: string | null = null) {
   };
 }
 
-const testRouteTree = rootRoute.addChildren([editCollectionRoute, collectionsRoute]);
+/**
+ * Where a successful save navigates. A stand-in rather than the real detail
+ * screen, which would need every item query mocked: without any route here the
+ * navigation hit TanStack Router's not-found warning whenever it finished before
+ * the test's cleanup — which it did only under the load of a full run.
+ */
+const detailStubRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/collections/$id",
+  component: () => <p>Collection detail</p>,
+});
+
+const testRouteTree = rootRoute.addChildren([editCollectionRoute, collectionsRoute, detailStubRoute]);
 
 function renderEdit() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
@@ -251,9 +263,9 @@ describe("EditCollectionPage", () => {
       expect(screen.getByRole("checkbox", { name: FINITE })).toBeChecked();
     });
 
-    it("saves the stored target back unchanged", async () => {
+    it("saves the stored target back unchanged, then returns to the collection", async () => {
       vi.mocked(getCollection).mockResolvedValue(finiteWithTarget);
-      renderEdit();
+      const { router } = renderEdit();
       await screen.findByRole("spinbutton", { name: TARGET });
       await save();
       expect(sentBody()).toEqual({
@@ -263,6 +275,8 @@ describe("EditCollectionPage", () => {
         isFiniteSet: true,
         targetCount: 151,
       });
+      expect(await screen.findByText("Collection detail")).toBeInTheDocument();
+      expect(router.state.location.pathname).toBe(`/collections/${COLLECTION_ID}`);
     });
 
     it("saves a changed target", async () => {
