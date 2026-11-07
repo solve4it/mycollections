@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useReducer, useRef } from "react";
 
 /**
  * Where focus should go once the control holding it has been removed.
@@ -102,7 +102,15 @@ export function useFocusHandoff(): (destination: FocusDestination) => void {
     if (handoff.commits > MAX_COMMITS || Date.now() - handoff.requestedAt > DEADLINE_MS) pending.current = null;
   });
 
+  // A request also schedules a commit of the host. Without one, a handoff asked
+  // for after the removal has already committed waits for a render that may
+  // never come: the collection page, when a row's Save is hidden by a search,
+  // only asks for the handoff and speaks through the shell — nothing of its own
+  // changes, so it never commits and focus stayed on <body> (#42).
+  const [, requestCommit] = useReducer((count: number) => count + 1, 0);
+
   return useCallback((destination: FocusDestination) => {
     pending.current = { destination, from: document.activeElement, requestedAt: Date.now(), commits: 0 };
+    requestCommit();
   }, []);
 }
