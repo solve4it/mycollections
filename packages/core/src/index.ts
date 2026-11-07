@@ -1,4 +1,9 @@
-export { type Collection, CollectionSchema, type CollectionWithItemCount } from "./collection.js";
+export {
+  type Collection,
+  CollectionSchema,
+  type CollectionWithItemCount,
+  TARGET_COUNT_MAX,
+} from "./collection.js";
 export {
   buildErrorReport,
   type CreateErrorReporterOptions,

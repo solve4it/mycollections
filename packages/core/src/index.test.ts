@@ -11,6 +11,7 @@ describe("@mycollections/core public surface", () => {
       "BUILT_IN_FIELD_TYPES",
       "FieldDefinitionSchema",
       "CollectionSchema",
+      "TARGET_COUNT_MAX",
       "ItemSchema",
       "MediaSchema",
     ]) {
