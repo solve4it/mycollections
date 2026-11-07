@@ -274,6 +274,82 @@ describe("ItemsRepository sort", () => {
     ]);
   });
 
+  describe("by status (#42)", () => {
+    // Insertion, name and status orders all disagree, so only the status sort
+    // (with its insertion-order tie-break) can produce the expected lists.
+    beforeEach(async () => {
+      await handle.items.create({ collectionId: books.id, status: "wanted", fields: { title: "Alpha" } });
+      await handle.items.create({ collectionId: books.id, status: "owned", fields: { title: "Echo" } });
+      await handle.items.create({ collectionId: books.id, status: "ordered", fields: { title: "Bravo" } });
+      await handle.items.create({ collectionId: books.id, status: "wanted", fields: { title: "Delta" } });
+      await handle.items.create({ collectionId: books.id, status: "owned", fields: { title: "Charlie" } });
+    });
+
+    const status = (direction: "asc" | "desc") => ({ key: "status" as const, direction });
+
+    it("puts collected items first: owned, ordered, wanted, ties in insertion order", async () => {
+      expect(await titles({ sort: status("asc") })).toEqual(["Echo", "Charlie", "Bravo", "Alpha", "Delta"]);
+    });
+
+    it("reverses exactly for still-to-get first: wanted, ordered, owned, ties newest first", async () => {
+      expect(await titles({ sort: status("desc") })).toEqual(["Delta", "Alpha", "Bravo", "Charlie", "Echo"]);
+    });
+
+    it("breaks ties on insertion order, not on a timestamp or the name", async () => {
+      // Backdate the later-inserted owned item: a createdAt tie-break would now
+      // put Charlie before Echo, and a name tie-break always would.
+      handle.sqlite
+        .prepare(
+          "UPDATE items SET created_at = '2000-01-01T00:00:00.000Z', updated_at = created_at WHERE json_extract(fields, '$.title') = ?",
+        )
+        .run("Charlie");
+      expect(await titles({ sort: status("asc") })).toEqual(["Echo", "Charlie", "Bravo", "Alpha", "Delta"]);
+      expect(await titles({ sort: status("desc") })).toEqual(["Delta", "Alpha", "Bravo", "Charlie", "Echo"]);
+    });
+
+    it("orders search results by status instead of rank", async () => {
+      await handle.items.create({ collectionId: books.id, status: "wanted", fields: { title: "Dune Dune Dune" } });
+      await handle.items.create({ collectionId: books.id, status: "owned", fields: { title: "Dune Messiah" } });
+      // Unsorted, rank puts the denser match first; the status sort overrides it.
+      expect(await titles({ q: "dune" })).toEqual(["Dune Dune Dune", "Dune Messiah"]);
+      expect(await titles({ q: "dune", sort: status("asc") })).toEqual(["Dune Messiah", "Dune Dune Dune"]);
+      expect(await titles({ q: "dune", sort: status("desc") })).toEqual(["Dune Dune Dune", "Dune Messiah"]);
+    });
+
+    it("composes with a filter", async () => {
+      await handle.items.create({
+        collectionId: books.id,
+        status: "wanted",
+        fields: { title: "Foxtrot", genre: "Fiction" },
+      });
+      await handle.items.create({
+        collectionId: books.id,
+        status: "owned",
+        fields: { title: "Golf", genre: "History" },
+      });
+      await handle.items.create({
+        collectionId: books.id,
+        status: "owned",
+        fields: { title: "Hotel", genre: "Fiction" },
+      });
+      const filters = [{ field: "genre", op: "in" as const, value: ["Fiction"] }];
+      expect(await titles({ filters, sort: status("asc") })).toEqual(["Hotel", "Foxtrot"]);
+      expect(await titles({ filters, sort: status("desc") })).toEqual(["Foxtrot", "Hotel"]);
+    });
+
+    it("leaves out trashed items and other collections' items", async () => {
+      const trashed = await handle.items.create({ collectionId: books.id, status: "owned", fields: { title: "Zulu" } });
+      await handle.items.softDelete(trashed.id);
+      const other = await handle.collections.create({ name: "Records", fields, isFiniteSet: false });
+      await handle.items.create({ collectionId: other.id, status: "owned", fields: { title: "Kilo" } });
+      expect(await titles({ sort: status("asc") })).toEqual(["Echo", "Charlie", "Bravo", "Alpha", "Delta"]);
+    });
+
+    it("composes with the status filter", async () => {
+      expect(await titles({ status: "wanted", sort: status("desc") })).toEqual(["Delta", "Alpha"]);
+    });
+  });
+
   it.each([
     ["missing", "an unknown field"],
     ["tags", "a tags field"],
