@@ -62,6 +62,13 @@ function NewCollectionPage() {
             onChange={(e) => setName(e.target.value)}
             placeholder={t("name_placeholder")}
             required
+            ref={(input) => {
+              // `required` lets a name of spaces through, which the submit
+              // handler then refused without a word. Marking it invalid makes
+              // the browser stop the submit and say why, as it does for an empty
+              // box; set on every render, so it never outlives the problem.
+              input?.setCustomValidity(name !== "" && name.trim() === "" ? t("name_blank") : "");
+            }}
           />
         </div>
 

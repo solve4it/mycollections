@@ -116,6 +116,22 @@ describe("NewCollectionPage", () => {
     expect(createCollection).not.toHaveBeenCalled();
   });
 
+  // Found driving #42: `required` accepts a name of spaces, and the handler then
+  // refused it without a word — Create did nothing at all.
+  it("refuses a name of only spaces at the name box, saying why", async () => {
+    renderNew();
+    const nameBox = (await screen.findByLabelText(/collection name/i)) as HTMLInputElement;
+    fireEvent.change(nameBox, { target: { value: "   " } });
+    fireEvent.change(screen.getByLabelText(/field label/i), { target: { value: "Title" } });
+    fireEvent.click(screen.getByRole("button", { name: /create collection/i }));
+    expect(nameBox).toBeInvalid();
+    expect(nameBox.validationMessage).toBe("Enter a name for the collection.");
+    expect(createCollection).not.toHaveBeenCalled();
+
+    fireEvent.change(nameBox, { target: { value: "  Books " } });
+    expect(nameBox).toBeValid();
+  });
+
   describe("a finite set's target count (#42)", () => {
     const FINITE = "Finite set (a fixed, known number of items)";
     const TARGET = "Number of items in the set";

@@ -16,6 +16,7 @@
   "items_count_other": "{{count}} items",
   "new_title": "New collection",
   "name_label": "Collection name",
+  "name_blank": "Enter a name for the collection.",
   "name_placeholder": "e.g. Books, Vinyl Records, Board Games",
   "description_label": "Description",
   "finite_label": "Finite set (a fixed, known number of items)",

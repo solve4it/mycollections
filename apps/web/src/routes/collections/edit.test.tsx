@@ -236,6 +236,21 @@ describe("EditCollectionPage", () => {
     expect(screen.queryByRole("button", { name: /save changes/i })).not.toBeInTheDocument();
   });
 
+  // Found driving #42: `required` accepts a name of spaces, and the handler then
+  // refused it without a word — Save changes did nothing at all.
+  it("refuses a name of only spaces at the name box, saying why", async () => {
+    renderEdit();
+    const nameBox = (await screen.findByLabelText(/collection name/i)) as HTMLInputElement;
+    fireEvent.change(nameBox, { target: { value: "   " } });
+    fireEvent.click(screen.getByRole("button", { name: /save changes/i }));
+    expect(nameBox).toBeInvalid();
+    expect(nameBox.validationMessage).toBe("Enter a name for the collection.");
+    expect(updateCollection).not.toHaveBeenCalled();
+
+    fireEvent.change(nameBox, { target: { value: "Books" } });
+    expect(nameBox).toBeValid();
+  });
+
   describe("a finite set's target count (#42)", () => {
     const FINITE = "Finite set (a fixed, known number of items)";
     const TARGET = "Number of items in the set";

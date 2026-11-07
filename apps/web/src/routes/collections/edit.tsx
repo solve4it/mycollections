@@ -134,6 +134,11 @@ function EditCollectionPage() {
             value={draft.name}
             onChange={(e) => setDraft({ ...draft, name: e.target.value })}
             required
+            ref={(input) => {
+              // As in the new-collection form: a name of spaces passes
+              // `required`, so the browser is told it is invalid, and says so.
+              input?.setCustomValidity(draft.name !== "" && draft.name.trim() === "" ? t("name_blank") : "");
+            }}
           />
         </div>
 
