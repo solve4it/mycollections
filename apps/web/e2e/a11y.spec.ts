@@ -196,6 +196,21 @@ test.describe("accessibility", () => {
     await expectNoAccessibilityViolations(page);
   });
 
+  /** The one refusal the form shows itself (#42): no field left, said at Add field. */
+  test("the new collection form refusing a submit with no field", async ({ page }) => {
+    await page.goto("/collections/new");
+    await expect(page).toHaveURL(/\/collections\/new$/);
+    await page.getByLabel("Collection name").fill("Vinyl records");
+    await page.getByRole("button", { name: "Remove field" }).click();
+    await page.getByRole("button", { name: "Create collection" }).click();
+    await expect(page.getByRole("alert")).toHaveText("A collection needs at least one field. Add one to continue.");
+    await expect(page.getByRole("button", { name: "Add field" })).toHaveAccessibleDescription(
+      "A collection needs at least one field. Add one to continue.",
+    );
+
+    await expectNoAccessibilityViolations(page);
+  });
+
   test("the collection editor of a finite set with a target", async ({ page, api }) => {
     await api.reset();
     const collection = await api.createCollection({

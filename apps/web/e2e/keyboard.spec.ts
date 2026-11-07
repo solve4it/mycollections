@@ -1076,6 +1076,34 @@ test.describe("focus when the control holding it goes away", () => {
     ).toBeFocused();
   });
 
+  /**
+   * A submit with no field left (#42). It used to do nothing at all; there is
+   * no field box for the browser to stop at, so the form names the control that
+   * fixes it — Add field, which the alert describes — and moves focus there.
+   */
+  test("creating a collection with no field hands focus to Add field, saying why", async ({ page, api }) => {
+    await api.reset();
+    await page.goto("/collections/new");
+    await expect(page.getByRole("heading", { level: 1, name: "New collection" })).toBeVisible();
+
+    await page.getByRole("textbox", { name: "Collection name" }).fill("Vinyl records");
+    await page.getByRole("button", { name: "Remove field" }).click();
+    const create = page.getByRole("button", { name: "Create collection" });
+    await create.focus();
+    await page.keyboard.press("Enter");
+
+    const addField = page.getByRole("button", { name: "Add field" });
+    await expect(page.getByRole("alert")).toHaveText("A collection needs at least one field. Add one to continue.");
+    await expect(addField, "a refused submit must hand focus to the control that fixes it").toBeFocused();
+    await expect(addField).toHaveAccessibleDescription("A collection needs at least one field. Add one to continue.");
+    await expect(page).toHaveURL(/\/collections\/new$/);
+
+    // Adding the field it asked for takes the alert away.
+    await page.keyboard.press("Enter");
+    await expect(page.getByRole("textbox", { name: "Field label" })).toHaveCount(1);
+    await expect(page.getByRole("alert")).toHaveCount(0);
+  });
+
   test("purging a trash row hands focus to the next row in the same list", async ({ page, api }) => {
     await api.reset();
     const collection = await api.createCollection({ name: "Vinyl records", fields: FIELDS });
