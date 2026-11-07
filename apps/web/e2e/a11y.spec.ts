@@ -173,6 +173,42 @@ test.describe("accessibility", () => {
     await expectNoAccessibilityViolations(page);
   });
 
+  /**
+   * A finite set's progress on its card (#42), at every state the bar has: an
+   * empty set, part-way, exactly complete, and over the target — the last two
+   * carrying the Complete badge — beside a finite set with no target, which
+   * shows nothing. The words are asserted before the scan because they are the
+   * content; the bar only repeats them.
+   */
+  test("the collections list with finite sets at 0%, part-way, complete and over their target", async ({
+    page,
+    api,
+  }) => {
+    await api.reset();
+    const finite = async (name: string, target: number | null, owned: number, wanted = 0) => {
+      const collection = await api.createCollection({ name, fields: FIELDS, isFiniteSet: true, targetCount: target });
+      for (let n = 0; n < owned; n++) await api.createItem(collection.id, { title: `${name} ${n + 1}` }, "owned");
+      for (let n = 0; n < wanted; n++)
+        await api.createItem(collection.id, { title: `${name} want ${n + 1}` }, "wanted");
+    };
+    await finite("Empty set", 4, 0, 1);
+    await finite("Part-way set", 4, 1, 2);
+    await finite("Complete set", 2, 2);
+    await finite("Over set", 2, 3);
+    await finite("Stamp album", null, 1);
+
+    await page.goto("/collections");
+    await expect(page).toHaveURL(/\/collections$/);
+    const card = (name: string) => page.getByRole("link", { name: new RegExp(name) });
+    await expect(card("Empty set").locator(".collection-progress")).toHaveText("0 of 4 collected");
+    await expect(card("Part-way set").locator(".collection-progress")).toHaveText("1 of 4 collected");
+    await expect(card("Complete set").locator(".collection-progress")).toHaveText("2 of 2 collectedComplete");
+    await expect(card("Over set").locator(".collection-progress")).toHaveText("3 of 2 collectedComplete");
+    await expect(card("Stamp album").locator(".collection-progress")).toHaveCount(0);
+
+    await expectNoAccessibilityViolations(page);
+  });
+
   test("the new collection form", async ({ page }) => {
     await page.goto("/collections/new");
     await expect(page).toHaveURL(/\/collections\/new$/);
@@ -361,6 +397,28 @@ test.describe("accessibility", () => {
     await expect(editor.getByRole("textbox", { name: "Title", exact: true })).toHaveValue("Kind of Blue");
     await expect(addForm.getByRole("textbox", { name: "Title", exact: true })).toHaveValue("");
 
+    await expectNoAccessibilityViolations(page);
+  });
+
+  /** The header's two finite-set states (#42): a bar measured from the counts route, and the hint asking for a target. */
+  test("a finite set's header with its progress, and one with no target yet", async ({ page, api }) => {
+    await api.reset();
+    const sized = await api.createCollection({ name: "Coin set", fields: FIELDS, isFiniteSet: true, targetCount: 3 });
+    await api.createItem(sized.id, { title: "Penny" }, "owned");
+    await api.createItem(sized.id, { title: "Nickel" }, "wanted");
+    const unsized = await api.createCollection({ name: "Stamp set", fields: FIELDS, isFiniteSet: true });
+
+    await page.goto(`/collections/${sized.id}`);
+    await expect(page.getByRole("heading", { level: 1, name: "Coin set" })).toBeVisible();
+    await expect(page.locator(".collection-detail .collection-progress")).toHaveText("1 of 3 collected");
+    await expectNoAccessibilityViolations(page);
+
+    await page.goto(`/collections/${unsized.id}`);
+    await expect(page.getByRole("heading", { level: 1, name: "Stamp set" })).toBeVisible();
+    const hint = page.getByText("Add how many items the set has in Edit collection to see your progress.");
+    await expect(hint).toBeVisible();
+    await expect(hint).not.toHaveAttribute("aria-live");
+    await expect(page.locator(".collection-detail .collection-progress")).toHaveCount(0);
     await expectNoAccessibilityViolations(page);
   });
 
