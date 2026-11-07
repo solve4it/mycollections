@@ -1,5 +1,5 @@
 import { BUILT_IN_FIELD_TYPES, type BuiltInFieldType, type FieldDefinition } from "@mycollections/core";
-import { useId, useRef } from "react";
+import { type RefObject, useId, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { scopedId } from "../lib/dom-id.js";
 import { useFocusHandoff } from "../lib/focus-handoff.js";
@@ -70,21 +70,39 @@ export interface FieldSchemaBuilderProps {
   lockedTypeKeys?: ReadonlySet<string>;
   /** Why those types are locked. Required whenever `lockedTypeKeys` is non-empty. */
   lockedTypeHint?: string;
+  /**
+   * Why the form refused a submit with no field left (#42) — a collection needs
+   * at least one. Shown as an alert after Add field, which it also describes:
+   * that is the control that fixes it, and there is no field box to mark
+   * invalid. The form decides when; leave it unset otherwise.
+   */
+  noFieldsError?: string;
+  /** Lets the form move focus to Add field when it refuses a submit with no field. */
+  addFieldRef?: RefObject<HTMLButtonElement | null>;
 }
 
-export function FieldSchemaBuilder({ fields, onChange, lockedTypeKeys, lockedTypeHint }: FieldSchemaBuilderProps) {
+export function FieldSchemaBuilder({
+  fields,
+  onChange,
+  lockedTypeKeys,
+  lockedTypeHint,
+  noFieldsError,
+  addFieldRef: givenAddFieldRef,
+}: FieldSchemaBuilderProps) {
   const { t } = useTranslation("collections");
 
   // Held here rather than in the row: the row is what gets removed, and a
   // handoff asked for from inside it would be unmounted before it could finish.
   const handOffFocus = useFocusHandoff();
-  const addFieldRef = useRef<HTMLButtonElement>(null);
+  const ownAddFieldRef = useRef<HTMLButtonElement>(null);
+  const addFieldRef = givenAddFieldRef ?? ownAddFieldRef;
 
   // Keyed by the field's own key, the same thing React keys the row by (#369).
   // Array positions renumbered the ids under every row that survived a removal,
   // and a literal prefix would collide with a second builder on the screen.
   const idPrefix = useId();
   const rowId = (key: string, part: string) => scopedId(idPrefix, part, key);
+  const noFieldsId = scopedId(idPrefix, "no-fields");
 
   function updateField(key: string, patch: Partial<FieldDraft>) {
     onChange(fields.map((f) => (f.key === key ? { ...f, ...patch } : f)));
@@ -109,6 +127,16 @@ export function FieldSchemaBuilder({ fields, onChange, lockedTypeKeys, lockedTyp
                 type="text"
                 value={field.label}
                 onChange={(e) => updateField(field.key, { label: e.target.value })}
+                // Every field needs a label — the server refuses one without —
+                // so an empty row stops the submit here rather than being
+                // dropped, and a label of only spaces says why, as the
+                // collection's name does (#42).
+                required
+                ref={(input) => {
+                  input?.setCustomValidity(
+                    field.label !== "" && field.label.trim() === "" ? t("field_label_blank") : "",
+                  );
+                }}
               />
             </div>
 
@@ -196,10 +224,18 @@ export function FieldSchemaBuilder({ fields, onChange, lockedTypeKeys, lockedTyp
         ref={addFieldRef}
         className="touch-target button-quiet"
         onClick={() => onChange([...fields, emptyField()])}
+        aria-describedby={noFieldsError ? noFieldsId : undefined}
       >
         <Icon name="add" />
         {t("add_field")}
       </button>
+      {/* Inserted with its message already inside: a `role="alert"` is
+          announced when it appears. */}
+      {noFieldsError && (
+        <p id={noFieldsId} role="alert">
+          {noFieldsError}
+        </p>
+      )}
     </fieldset>
   );
 }

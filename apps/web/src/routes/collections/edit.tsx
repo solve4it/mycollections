@@ -1,5 +1,6 @@
+import { COLLECTION_DESCRIPTION_MAX, COLLECTION_NAME_MAX } from "@mycollections/core";
 import { createRoute, Link, redirect, useNavigate } from "@tanstack/react-router";
-import { type FormEvent, useState } from "react";
+import { type FormEvent, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { FailureSurface } from "../../components/ErrorScreen.js";
 import { buildField, type FieldDraft, FieldSchemaBuilder, fieldToDraft } from "../../components/FieldSchemaBuilder.js";
@@ -44,6 +45,8 @@ function EditCollectionPage() {
     targetCount: string;
     fields: FieldDraft[];
   } | null>(null);
+  const [noFieldsRefused, setNoFieldsRefused] = useState(false);
+  const addFieldRef = useRef<HTMLButtonElement>(null);
 
   if (collection && draft?.loadedFrom !== collection.id) {
     setDraft({
@@ -99,8 +102,13 @@ function EditCollectionPage() {
     // What `disabled` used to do, without taking focus off the button (#368).
     if (updateCollection.isPending) return;
     if (draft === null) return;
-    const labeled = draft.fields.filter((f) => f.label.trim().length > 0);
-    if (!draft.name.trim() || labeled.length === 0) return;
+    // As in the new-collection form: a blank name or label is stopped by the
+    // browser at its box, and no field left is said at Add field (#42).
+    if (draft.fields.length === 0) {
+      setNoFieldsRefused(true);
+      addFieldRef.current?.focus();
+      return;
+    }
 
     updateCollection.mutate(
       {
@@ -108,7 +116,7 @@ function EditCollectionPage() {
         // Sent even when empty: a cleared description has to clear the stored
         // one, and an omitted key would leave the old text in place.
         description: draft.description.trim(),
-        fields: labeled.map(buildField),
+        fields: draft.fields.map(buildField),
         isFiniteSet: draft.isFiniteSet,
         // Sent even when there is none, like the description: an emptied box or
         // an unchecked finite set has to clear the stored target (#42).
@@ -134,6 +142,7 @@ function EditCollectionPage() {
             value={draft.name}
             onChange={(e) => setDraft({ ...draft, name: e.target.value })}
             required
+            maxLength={COLLECTION_NAME_MAX}
             ref={(input) => {
               // As in the new-collection form: a name of spaces passes
               // `required`, so the browser is told it is invalid, and says so.
@@ -148,6 +157,7 @@ function EditCollectionPage() {
             id="collection-description"
             value={draft.description}
             onChange={(e) => setDraft({ ...draft, description: e.target.value })}
+            maxLength={COLLECTION_DESCRIPTION_MAX}
           />
         </div>
 
@@ -160,9 +170,14 @@ function EditCollectionPage() {
 
         <FieldSchemaBuilder
           fields={draft.fields}
-          onChange={(fields) => setDraft({ ...draft, fields })}
+          onChange={(fields) => {
+            setDraft({ ...draft, fields });
+            if (fields.length > 0) setNoFieldsRefused(false);
+          }}
           lockedTypeKeys={lockedTypeKeys}
           lockedTypeHint={t("field_type_locked")}
+          noFieldsError={noFieldsRefused ? t("fields_none") : undefined}
+          addFieldRef={addFieldRef}
         />
         <p className="form-hint">{t("remove_field_note")}</p>
 

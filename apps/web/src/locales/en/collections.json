@@ -24,6 +24,8 @@
   "target_hint": "Optional. A whole number from 1 to {{max}} — leave it empty if you do not know it yet.",
   "fields_legend": "Fields",
   "field_label_label": "Field label",
+  "field_label_blank": "Enter a label for this field.",
+  "fields_none": "A collection needs at least one field. Add one to continue.",
   "field_type_label": "Field type",
   "field_required_label": "Required",
   "field_options_label": "Options (comma-separated)",
