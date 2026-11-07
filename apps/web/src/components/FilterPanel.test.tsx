@@ -185,8 +185,10 @@ describe("AppliedFilters (#41)", () => {
         .getAllByRole("button")
         .map((b) => b.getAttribute("aria-label")),
     ).toEqual(["Remove filter Genre: Jazz, Blues", "Remove filter Year: from 1959", "Remove filter Boxed: not set"]);
-    fireEvent.click(within(list).getByRole("button", { name: "Remove filter Year: from 1959" }));
-    expect(onRemove).toHaveBeenCalledWith(1);
+    const yearChip = within(list).getByRole("button", { name: "Remove filter Year: from 1959" });
+    fireEvent.click(yearChip);
+    // The chip itself rides along, for the page's focus handoff to wait on (#42).
+    expect(onRemove).toHaveBeenCalledWith(1, yearChip);
     fireEvent.click(screen.getByRole("button", { name: "Clear filters" }));
     expect(onClear).toHaveBeenCalled();
   });

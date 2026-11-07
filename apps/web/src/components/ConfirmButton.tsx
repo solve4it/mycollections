@@ -27,7 +27,11 @@ interface ConfirmButtonProps {
    * announced when it was inserted rather than being part of any name.
    */
   accessibleLabel?: string;
-  onConfirm: () => void;
+  /**
+   * Receives the confirm button, which goes with the question once the action
+   * lands: a caller handing focus on names it as the control being removed.
+   */
+  onConfirm: (confirm: HTMLButtonElement) => void;
   /** True while the confirmed action is in flight. Holds the question open and blocks a second send. */
   pending?: boolean;
   icon?: IconName;
@@ -113,9 +117,9 @@ export function ConfirmButton({
           // user just pressed would take their place on the page with it. The
           // handler is what refuses the second press.
           aria-disabled={pending || undefined}
-          onClick={() => {
+          onClick={(event) => {
             if (pending) return;
-            onConfirm();
+            onConfirm(event.currentTarget);
           }}
         >
           {confirmLabel}

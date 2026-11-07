@@ -255,7 +255,8 @@ function Facet({ collectionId, field, facet, panelOpen, onChange }: FacetProps) 
 interface AppliedFiltersProps {
   fields: FieldDefinition[];
   filters: ItemFilter[];
-  onRemove: (index: number) => void;
+  /** `chip` is the control being removed, for the focus handoff to wait on. */
+  onRemove: (index: number, chip: HTMLElement) => void;
   onClear: () => void;
 }
 
@@ -300,7 +301,7 @@ export function AppliedFilters({ fields, filters, onRemove, onClear }: AppliedFi
               className="touch-target button-quiet filter-chip"
               data-filter-chip=""
               aria-label={t("remove_filter", { label: label(filter) })}
-              onClick={() => onRemove(index)}
+              onClick={(event) => onRemove(index, event.currentTarget)}
             >
               {label(filter)}
               <span aria-hidden="true"> ×</span>

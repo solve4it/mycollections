@@ -345,13 +345,17 @@ function CollectionDetailPage() {
       <AppliedFilters
         fields={collection.fields}
         filters={filters}
-        onRemove={(index) => {
+        onRemove={(index, chip) => {
           // Successor rule, as for any removal: the chip now at this index, else
-          // the one before, else — with no chip left — the Filters toggle.
-          handOffFocus(() => {
-            const chips = Array.from(document.querySelectorAll<HTMLElement>("[data-filter-chip]"));
-            return chips[index] ?? chips[chips.length - 1] ?? filtersToggle();
-          });
+          // the one before, else — with no chip left — the Filters toggle. The
+          // chip only goes once the router has moved, so the handoff waits for it.
+          handOffFocus(
+            () => {
+              const chips = Array.from(document.querySelectorAll<HTMLElement>("[data-filter-chip]"));
+              return chips[index] ?? chips[chips.length - 1] ?? filtersToggle();
+            },
+            { removing: chip },
+          );
           setFilters(filters.filter((_, i) => i !== index));
         }}
         onClear={() => {
@@ -388,7 +392,11 @@ function CollectionDetailPage() {
             announce(t("saved_hidden", { name: itemLabel(collection, saved, t("untitled")) }));
           }
         }}
-        onDeleting={(index) => handOffFocus(rowDestination(index))}
+        // Names the Delete being removed: the row goes only once the server
+        // answers, and a Delete pressed without taking focus (a Safari click,
+        // an iOS tap) leaves focus on <body> meanwhile, which alone would read
+        // as "already gone" and send focus to the row being deleted (#42).
+        onDeleting={(index, trigger) => handOffFocus(rowDestination(index), { removing: trigger })}
         onDeleted={(item, index) => {
           // Drop any failure from a previous undo: the new toast is about a new
           // deletion, and must not open carrying the last one's error.
@@ -512,8 +520,8 @@ interface ItemListProps {
   onClearFilters: () => void;
   /** After a row's Save has landed and the list has been fetched again. */
   onSaved: (item: Item, index: number) => void;
-  /** Asked for as a delete starts, while the row is still on screen. */
-  onDeleting: (index: number) => void;
+  /** Asked for as a delete starts, while the row and its Delete (`trigger`) are still on screen. */
+  onDeleting: (index: number, trigger: HTMLElement) => void;
   onDeleted: (item: Item, index: number) => void;
 }
 
@@ -594,7 +602,7 @@ function ItemList({
             key={item.id}
             collection={collection}
             item={item}
-            onDeleting={() => onDeleting(index)}
+            onDeleting={(trigger) => onDeleting(index, trigger)}
             onDeleted={() => onDeleted(item, index)}
             onSaved={(saved) => onSaved(saved, index)}
           />
@@ -608,7 +616,7 @@ interface ItemRowProps {
   collection: Collection;
   item: Item;
   onSaved: (item: Item) => void;
-  onDeleting: () => void;
+  onDeleting: (trigger: HTMLElement) => void;
   onDeleted: () => void;
 }
 
@@ -722,10 +730,9 @@ function ItemRow({ collection, item, onDeleting, onDeleted, onSaved }: ItemRowPr
             type="button"
             aria-label={t("delete_item", { name })}
             className="touch-target button-quiet"
-            onClick={() => {
-              // Asked for before the mutation, while the row is still on screen
-              // and this button still holds focus.
-              onDeleting();
+            onClick={(event) => {
+              // Asked for before the mutation, while the row is still on screen.
+              onDeleting(event.currentTarget);
               // The toast is the page's, and this row is exactly what the
               // delete removes, so the follow-up rides the promise, not this
               // row's observer (#42, R1; see the editor's Save above).

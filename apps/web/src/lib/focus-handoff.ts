@@ -14,6 +14,23 @@ import { useCallback, useEffect, useReducer, useRef } from "react";
  */
 export type FocusDestination = () => HTMLElement | null;
 
+export interface FocusHandoffOptions {
+  /**
+   * The control the action is about to remove: pass `event.currentTarget`
+   * (#42). The handoff then waits for it to leave the document before asking
+   * where focus goes, however focus got there.
+   *
+   * Needed whenever the removal lands after the request, as a deletion that
+   * waits on the server does. `document.activeElement` cannot stand in for it:
+   * a mouse click in Safari or Firefox on macOS, an iOS tap, a VoiceOver
+   * double-tap and a programmatic `click()` all press a button without focusing
+   * it, so focus is already on <body>. Read that way, the request looks as if
+   * the removal has already happened, and it resolves at once. "The row at this
+   * index" is then still the row being deleted, and focus leaves with it.
+   */
+  removing?: Element | null;
+}
+
 /**
  * How long a handoff waits for a destination that has not arrived.
  *
@@ -30,6 +47,8 @@ interface Handoff {
   destination: FocusDestination;
   /** What held focus when the handoff was asked for. */
   from: Element | null;
+  /** The control the caller is about to remove, when it named one. */
+  removing: Element | null;
   requestedAt: number;
   commits: number;
 }
@@ -62,7 +81,7 @@ interface Handoff {
  * that completes the handoff runs after that component's next commit, so a hook
  * living inside the thing being unmounted dies before it can finish.
  */
-export function useFocusHandoff(): (destination: FocusDestination) => void {
+export function useFocusHandoff(): (destination: FocusDestination, options?: FocusHandoffOptions) => void {
   const pending = useRef<Handoff | null>(null);
 
   // No dependency array: this has to run after every commit of the host, since
@@ -87,6 +106,10 @@ export function useFocusHandoff(): (destination: FocusDestination) => void {
       return;
     }
 
+    // The control the caller named is still in the document: the removal has
+    // not happened yet, wherever focus is. Keep waiting.
+    if (handoff.removing?.isConnected) return;
+
     // The control is still in the document and still has focus: nothing has
     // been taken away yet, so there is nothing to rescue. Keep waiting.
     if (active === handoff.from && stillThere) return;
@@ -107,10 +130,21 @@ export function useFocusHandoff(): (destination: FocusDestination) => void {
   // never come: the collection page, when a row's Save is hidden by a search,
   // only asks for the handoff and speaks through the shell — nothing of its own
   // changes, so it never commits and focus stayed on <body> (#42).
+  //
+  // A request with no `removing` and focus already on <body> resolves on that
+  // commit, which is right only when the removal has already happened, as for
+  // that hidden Save. A request made *before* the removal names the control it
+  // removes, and the commit then finds it still there and waits.
   const [, requestCommit] = useReducer((count: number) => count + 1, 0);
 
-  return useCallback((destination: FocusDestination) => {
-    pending.current = { destination, from: document.activeElement, requestedAt: Date.now(), commits: 0 };
+  return useCallback((destination: FocusDestination, options: FocusHandoffOptions = {}) => {
+    pending.current = {
+      destination,
+      from: document.activeElement,
+      removing: options.removing ?? null,
+      requestedAt: Date.now(),
+      commits: 0,
+    };
     requestCommit();
   }, []);
 }
