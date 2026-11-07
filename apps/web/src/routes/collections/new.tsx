@@ -39,6 +39,9 @@ function NewCollectionPage() {
     // browser stops the submit at it. No field box is left to mark when every
     // field has been removed, so that one is said at Add field (#42).
     if (fields.length === 0) {
+      // A failed create from an earlier submit would otherwise leave its alert
+      // up beside this one, answering a submit that never went out.
+      createCollection.reset();
       setNoFieldsRefused(true);
       addFieldRef.current?.focus();
       return;

@@ -29,6 +29,7 @@
   "field_type_label": "Field type",
   "field_required_label": "Required",
   "field_options_label": "Options (comma-separated)",
+  "field_options_blank": "Add at least one option, separated by commas.",
   "add_field": "Add field",
   "remove_field": "Remove field",
   "submit": "Create collection",

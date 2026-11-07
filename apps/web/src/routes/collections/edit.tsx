@@ -105,6 +105,8 @@ function EditCollectionPage() {
     // As in the new-collection form: a blank name or label is stopped by the
     // browser at its box, and no field left is said at Add field (#42).
     if (draft.fields.length === 0) {
+      // Clears an earlier failed save's alert, so only this one answers.
+      updateCollection.reset();
       setNoFieldsRefused(true);
       addFieldRef.current?.focus();
       return;

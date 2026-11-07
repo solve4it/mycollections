@@ -178,6 +178,16 @@ export function FieldSchemaBuilder({
                   type="text"
                   value={field.optionsText}
                   onChange={(e) => updateField(field.key, { optionsText: e.target.value })}
+                  // The server refuses a choice field with no options (core:
+                  // `options` is `.min(1)`). `required` says so up front; the
+                  // custom message covers an empty box and one of only commas
+                  // and spaces alike, which parse to the same nothing (#42).
+                  required
+                  ref={(input) => {
+                    input?.setCustomValidity(
+                      parseOptions(field.optionsText).length === 0 ? t("field_options_blank") : "",
+                    );
+                  }}
                 />
               </div>
             )}
