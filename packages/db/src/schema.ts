@@ -21,6 +21,12 @@ export const collections = sqliteTable("collections", {
   /** JSON array of FieldDefinition. */
   fields: text("fields").notNull(),
   isFiniteSet: integer("is_finite_set", { mode: "boolean" }).notNull(),
+  /**
+   * How many items complete a finite set (#42); null when unknown or not a finite
+   * set. Deliberately no check(): SQLite cannot add a CHECK constraint without
+   * rebuilding the table, and the repository already normalizes every read.
+   */
+  targetCount: integer("target_count"),
   createdAt: text("created_at").notNull(),
   updatedAt: text("updated_at").notNull(),
   deletedAt: text("deleted_at"),

@@ -8,6 +8,7 @@ const collection: Collection = {
   name: "Records",
   fields: [{ id: "title", label: "Title", type: "text", required: true }],
   isFiniteSet: false,
+  targetCount: null,
   createdAt: "2026-01-01T00:00:00.000Z",
   updatedAt: "2026-01-01T00:00:00.000Z",
   deletedAt: null,
@@ -67,5 +68,30 @@ describe("ExportDocumentSchema", () => {
 
   it("rejects a malformed collection", () => {
     expect(() => ExportDocumentSchema.parse({ ...validDocument(), collections: [{ id: "not-a-uuid" }] })).toThrow();
+  });
+
+  it("reads a version 1 backup written before targets existed, defaulting targetCount to null (#42)", () => {
+    const { targetCount, ...older } = { ...collection, isFiniteSet: true };
+    void targetCount;
+    const parsed = ExportDocumentSchema.parse({ ...validDocument(), collections: [older] });
+    expect(parsed.collections[0]?.targetCount).toBeNull();
+    expect(parsed.collections[0]?.isFiniteSet).toBe(true);
+  });
+
+  it("keeps a finite set's target (#42)", () => {
+    const parsed = ExportDocumentSchema.parse({
+      ...validDocument(),
+      collections: [{ ...collection, isFiniteSet: true, targetCount: 50 }],
+    });
+    expect(parsed.collections[0]?.targetCount).toBe(50);
+  });
+
+  it("rejects a document holding a target on a collection that is not a finite set (#42)", () => {
+    const result = ExportDocumentSchema.safeParse({
+      ...validDocument(),
+      collections: [{ ...collection, isFiniteSet: false, targetCount: 50 }],
+    });
+    expect(result.success).toBe(false);
+    expect(result.error?.issues[0]?.message).toBe("targetCount requires isFiniteSet");
   });
 });

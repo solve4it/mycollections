@@ -11,11 +11,16 @@ This is a private, pure-TypeScript package — no runtime concerns beyond [Zod](
 | Export                                              | Purpose                                                                                                                    |
 | --------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
 | `CollectionSchema` / `Collection`                   | A user-defined collection (records, LEGO sets, audio gear, …) and its field schema                                         |
+| `TARGET_COUNT_MAX`                                  | The largest `targetCount` a finite set may declare (`100_000`)                                                             |
 | `ItemSchema` / `Item`                               | A single item inside a collection                                                                                          |
 | `MediaSchema` / `Media`                             | Media (currently images) attached to an item                                                                               |
 | `ItemStatusSchema` / `ItemStatus` / `ITEM_STATUSES` | `"owned" \| "wanted" \| "ordered"`                                                                                         |
 | `FieldDefinitionSchema` / `FieldDefinition`         | Per-collection user-defined field schema                                                                                   |
 | `BUILT_IN_FIELD_TYPES` / `BuiltInFieldType`         | The 12 built-in field types: `text, number, boolean, date, url, email, select, multiselect, rating, currency, image, tags` |
+
+### Finite sets and their target (#42)
+
+A collection with `isFiniteSet: true` is a set with a known end — the 50 state quarters, a LEGO wave. `targetCount` is how many items complete it: an integer from 1 to `TARGET_COUNT_MAX`, or `null` when the size is not known yet. It defaults to `null`, so documents written before the field existed (version 1 backups among them) still parse. Only a finite set may carry a target: `targetCount` set on a collection with `isFiniteSet: false` fails validation with the fixed message `targetCount requires isFiniteSet` at the `targetCount` path. The schema never coerces — `"5"`, `true` and `2.5` are all rejected.
 
 ### Provider contracts
 

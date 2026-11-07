@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { type Collection, CollectionSchema, type FieldDefinition } from "@mycollections/core";
+import { type Collection, CollectionSchema, type FieldDefinition, TARGET_COUNT_MAX } from "@mycollections/core";
 import { and, asc, desc, eq, isNotNull, isNull } from "drizzle-orm";
 import type { BetterSQLite3Database } from "drizzle-orm/better-sqlite3";
 import * as schema from "../schema.js";
@@ -13,12 +13,31 @@ export interface CreateCollectionInput {
   description?: string;
   fields: FieldDefinition[];
   isFiniteSet: boolean;
+  /** How many items complete a finite set (#42); only a finite set may carry one. */
+  targetCount?: number | null;
 }
 
 export type UpdateCollectionInput = Partial<CreateCollectionInput>;
 
 export interface ReadOptions {
   includeDeleted?: boolean;
+}
+
+/**
+ * The stored target as the domain allows it, or null. Every write path validates
+ * the target, so this only matters for a row nothing current could have written —
+ * edited by hand, left by a bug, or by a future version — and it keeps such a row
+ * from failing the whole list or export with a 500.
+ */
+function readTargetCount(row: CollectionRow): number | null {
+  const stored: unknown = row.targetCount;
+  return row.isFiniteSet &&
+    typeof stored === "number" &&
+    Number.isInteger(stored) &&
+    stored >= 1 &&
+    stored <= TARGET_COUNT_MAX
+    ? stored
+    : null;
 }
 
 function rowToCollection(row: CollectionRow): Collection {
@@ -28,6 +47,7 @@ function rowToCollection(row: CollectionRow): Collection {
     description: row.description ?? undefined,
     fields: JSON.parse(row.fields),
     isFiniteSet: row.isFiniteSet,
+    targetCount: readTargetCount(row),
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
     deletedAt: row.deletedAt,
@@ -41,6 +61,7 @@ function collectionToRow(collection: Collection): CollectionRow {
     description: collection.description ?? null,
     fields: JSON.stringify(collection.fields),
     isFiniteSet: collection.isFiniteSet,
+    targetCount: collection.targetCount,
     createdAt: collection.createdAt,
     updatedAt: collection.updatedAt,
     deletedAt: collection.deletedAt,
@@ -113,9 +134,14 @@ export class CollectionsRepository {
     if (!existing) {
       return null;
     }
+    const changes = stripUndefined(patch);
+    // Ending a finite set ends its target too, unless the patch names one — which
+    // the schema then refuses rather than silently dropping (#42).
+    const target = changes.isFiniteSet === false && !("targetCount" in changes) ? { targetCount: null } : {};
     const updated = CollectionSchema.parse({
       ...existing,
-      ...stripUndefined(patch),
+      ...changes,
+      ...target,
       id,
       updatedAt: new Date().toISOString(),
     });

@@ -8,7 +8,7 @@ An earlier draft of this package called for an in-memory SQLite mirror in front 
 
 | Table          | Purpose                                                                                                                   |
 | -------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| `collections`  | Collection metadata, `is_finite_set` flag, and the field schema (JSON array of `FieldDefinition`)                         |
+| `collections`  | Collection metadata, `is_finite_set` flag and its `target_count`, and the field schema (JSON array of `FieldDefinition`)  |
 | `items`        | Items with `status` (`owned`/`wanted`/`ordered`) and custom field values in a JSON column queryable with `json_extract()` |
 | `media`        | Per-item media (images) with primary designation and `storage_path`                                                       |
 | `user_profile` | Account info from the auth layer plus a JSON settings blob (theme, locale, opt-outs)                                      |
@@ -18,6 +18,7 @@ Later phases add their own tables via new migrations: `share_links` (#48), `plug
 - **Soft delete**: `collections`, `items`, and `media` carry a nullable `deleted_at`; repositories exclude soft-deleted rows unless asked (`includeDeleted`), and offer `restore()`. Hard deletes cascade (collection → items → media) via foreign keys.
 - **Trash**: `listDeleted()` on collections and items returns what soft delete has hidden, most recently deleted first (ties break on id, so the order is stable). `purge()` permanently removes a row, carrying the `deleted_at` test inside the `DELETE` so a concurrent restore cannot lose the row; it is a no-op on anything live. Deleting a collection stamps no child row — its items are hidden with it and return with it, so `items.listDeleted()` omits items whose collection is itself deleted.
 - **Timestamps** are ISO 8601 strings, matching the core Zod schemas.
+- **A finite set's target** (`target_count`, #42) is a nullable integer: how many items complete the set, or `NULL` when the size is unknown or the collection is not a finite set. `create`/`update` validate it with core's `CollectionSchema` — 1 to `TARGET_COUNT_MAX`, and only with `is_finite_set` — so a bad target throws before anything is written. `update(id, { isFiniteSet: false })` clears the target along with the flag; naming a target in that same patch is refused rather than dropped. Reads normalize: a stored target that is not a whole number in range, or sits on a collection that is not a finite set, reads as `null`, so one bad row (written by hand, or by another version) never fails a whole list or export. There is no `CHECK` constraint: SQLite cannot add one without rebuilding the table. Imports are checked whole — a backup holding one invalid target is rejected and nothing is imported.
 
 ## Search (`items_fts`, #41)
 
@@ -41,6 +42,8 @@ Later phases add their own tables via new migrations: `share_links` (#48), `plug
 ## Migrations
 
 Migrations are generated with drizzle-kit (`pnpm generate`) into `drizzle/` and ship with the package. `openDatabase()` applies pending migrations automatically on startup. If the database already has data and migrations are pending, a backup copy is written next to it first (`<path>.<timestamp>.bak`) — restoring is opening that file.
+
+`0002_target_count.sql` is the model for an additive column: drizzle-kit generated a single `ALTER TABLE … ADD` with no default, so existing rows read `NULL` and `items` is not rebuilt. `migrations.test.ts` pins it to exactly that statement and upgrades a database seeded at the previous migration — with raw SQL, since the repositories write columns the old table lacks — checking every row survives and the `.bak` is written.
 
 Some migrations are hand-written (`pnpm exec drizzle-kit generate --custom --name <name>`), because drizzle-kit cannot express virtual tables or triggers — `0001_items_fts.sql` is one. Three rules follow:
 
@@ -68,6 +71,12 @@ const collection = await handle.collections.create({
   fields: [{ id: "title", type: "text", label: "Title", required: true }],
   isFiniteSet: false,
 });
+const quarters = await handle.collections.create({
+  name: "State quarters",
+  fields: [{ id: "state", type: "text", label: "State", required: true }],
+  isFiniteSet: true,
+  targetCount: 50, // only a finite set may have one; null (the default) is "size unknown"
+});
 const item = await handle.items.create({ collectionId: collection.id, fields: { title: "Dune" } });
 const hits = await handle.items.findByFieldValue(collection.id, "title", "Dune"); // json_extract()
 
@@ -79,7 +88,7 @@ handle.close();
 | Export                            | Purpose                                                                                                                                                                  |
 | --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `openDatabase` / `DatabaseHandle` | Open + migrate the database; returns repositories, the Drizzle instance (`db`), and the raw connection (`sqlite`)                                                        |
-| `CollectionsRepository`           | CRUD, soft delete/restore, `listDeleted()`/`purge()` for the trash, hard delete                                                                                          |
+| `CollectionsRepository`           | CRUD (a finite set's `targetCount` included), soft delete/restore, `listDeleted()`/`purge()` for the trash, hard delete                                                  |
 | `ItemsRepository`                 | CRUD, list by status / search (`q`) / `sort` / `filters`, `tagValues()`, `reindex()`, `listDeleted()`/`purge()` for the trash, `findByFieldValue()` via `json_extract()` |
 | `MediaRepository`                 | CRUD plus `setPrimary()` (demotes the previous primary in the same transaction)                                                                                          |
 | `UserProfileRepository`           | `get()` / `upsert()` keyed by the auth layer's account key                                                                                                               |

@@ -116,3 +116,60 @@ describe("importBackup", () => {
     }
   });
 });
+
+describe("backups and a finite set's target (#42)", () => {
+  it("round-trips a target and a finite set without one", async () => {
+    const quarters = await handle.collections.create({ name: "Quarters", fields, isFiniteSet: true, targetCount: 50 });
+    const unsized = await handle.collections.create({ name: "Wave", fields, isFiniteSet: true });
+    const doc = await exportBackup(handle);
+    expect(doc.collections.map((c) => [c.name, c.targetCount])).toEqual([
+      ["Quarters", 50],
+      ["Wave", null],
+    ]);
+
+    const fresh = await openDatabase({ path: ":memory:" });
+    try {
+      importBackup(fresh, JSON.parse(JSON.stringify(doc)));
+      expect(await fresh.collections.getById(quarters.id)).toEqual(quarters);
+      expect(await fresh.collections.getById(unsized.id)).toEqual(unsized);
+    } finally {
+      fresh.close();
+    }
+  });
+
+  it("imports a backup written before targets existed with no target", async () => {
+    const { collection, item } = await seed();
+    const doc = JSON.parse(JSON.stringify(await exportBackup(handle)));
+    for (const c of doc.collections) {
+      delete c.targetCount;
+      c.isFiniteSet = true;
+    }
+
+    const fresh = await openDatabase({ path: ":memory:" });
+    try {
+      importBackup(fresh, doc);
+      const imported = await fresh.collections.getById(collection.id);
+      expect(imported?.isFiniteSet).toBe(true);
+      expect(imported?.targetCount).toBeNull();
+      expect(await fresh.items.listByCollection(collection.id)).toEqual([item]);
+    } finally {
+      fresh.close();
+    }
+  });
+
+  it("rejects the whole file when one collection has a target but is not a finite set", async () => {
+    await handle.collections.create({ name: "Quarters", fields, isFiniteSet: true, targetCount: 50 });
+    const { collection } = await seed();
+    const doc = JSON.parse(JSON.stringify(await exportBackup(handle)));
+    const bad = doc.collections.find((c: { id: string }) => c.id === collection.id);
+    bad.targetCount = 5;
+
+    const fresh = await openDatabase({ path: ":memory:" });
+    try {
+      expect(() => importBackup(fresh, doc)).toThrow("targetCount requires isFiniteSet");
+      expect(await fresh.collections.list({ includeDeleted: true })).toEqual([]);
+    } finally {
+      fresh.close();
+    }
+  });
+});

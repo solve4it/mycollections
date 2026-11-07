@@ -19,6 +19,7 @@ const COLLECTION: Collection = {
   name: "Games",
   fields: [{ id: "title", label: "Title", type: "text", required: true }],
   isFiniteSet: false,
+  targetCount: null,
   createdAt: "2024-01-01T00:00:00.000Z",
   updatedAt: "2024-01-01T00:00:00.000Z",
   deletedAt: null,

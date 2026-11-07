@@ -154,3 +154,103 @@ describe("CollectionsRepository", () => {
     expect(await handle.media.listByItem(item.id, { includeDeleted: true })).toHaveLength(0);
   });
 });
+
+describe("CollectionsRepository targetCount (#42)", () => {
+  it("defaults a new collection's target to null", async () => {
+    const created = await handle.collections.create({ name: "Coins", fields, isFiniteSet: true });
+    expect(created.targetCount).toBeNull();
+    expect((await handle.collections.getById(created.id))?.targetCount).toBeNull();
+  });
+
+  it("persists a finite set's target and reads it back", async () => {
+    const created = await handle.collections.create({ name: "Quarters", fields, isFiniteSet: true, targetCount: 50 });
+    expect(created.targetCount).toBe(50);
+    expect(await handle.collections.getById(created.id)).toEqual(created);
+    expect((await handle.collections.list()).map((c) => c.targetCount)).toEqual([50]);
+  });
+
+  it("refuses a target on a collection that is not a finite set", async () => {
+    await expect(
+      handle.collections.create({ name: "Books", fields, isFiniteSet: false, targetCount: 5 }),
+    ).rejects.toThrow("targetCount requires isFiniteSet");
+    expect(await handle.collections.list()).toEqual([]);
+  });
+
+  it("changes the target and leaves it alone when a patch omits it", async () => {
+    const created = await handle.collections.create({ name: "Quarters", fields, isFiniteSet: true, targetCount: 50 });
+    expect((await handle.collections.update(created.id, { targetCount: 56 }))?.targetCount).toBe(56);
+    expect((await handle.collections.update(created.id, { name: "State quarters" }))?.targetCount).toBe(56);
+    expect((await handle.collections.update(created.id, { isFiniteSet: true }))?.targetCount).toBe(56);
+    expect((await handle.collections.getById(created.id))?.targetCount).toBe(56);
+  });
+
+  it("clears the target with an explicit null", async () => {
+    const created = await handle.collections.create({ name: "Quarters", fields, isFiniteSet: true, targetCount: 50 });
+    const updated = await handle.collections.update(created.id, { targetCount: null });
+    expect(updated?.targetCount).toBeNull();
+    expect(updated?.isFiniteSet).toBe(true);
+    expect((await handle.collections.getById(created.id))?.targetCount).toBeNull();
+  });
+
+  it("clears the target when the collection stops being a finite set", async () => {
+    const created = await handle.collections.create({ name: "Quarters", fields, isFiniteSet: true, targetCount: 50 });
+    const updated = await handle.collections.update(created.id, { isFiniteSet: false });
+    expect(updated?.isFiniteSet).toBe(false);
+    expect(updated?.targetCount).toBeNull();
+    expect((await handle.collections.getById(created.id))?.targetCount).toBeNull();
+  });
+
+  it("refuses a patch that ends a finite set but keeps a target, writing nothing", async () => {
+    const created = await handle.collections.create({ name: "Quarters", fields, isFiniteSet: true, targetCount: 50 });
+    await expect(handle.collections.update(created.id, { isFiniteSet: false, targetCount: 40 })).rejects.toThrow(
+      "targetCount requires isFiniteSet",
+    );
+    expect(await handle.collections.getById(created.id)).toEqual(created);
+  });
+
+  it("refuses a target on a collection that is not a finite set, writing nothing", async () => {
+    const created = await handle.collections.create({ name: "Books", fields, isFiniteSet: false });
+    await expect(handle.collections.update(created.id, { name: "Novels", targetCount: 10 })).rejects.toThrow(
+      "targetCount requires isFiniteSet",
+    );
+    expect(await handle.collections.getById(created.id)).toEqual(created);
+  });
+
+  it("sets the flag and the target in one patch", async () => {
+    const created = await handle.collections.create({ name: "Wave", fields, isFiniteSet: false });
+    const updated = await handle.collections.update(created.id, { isFiniteSet: true, targetCount: 12 });
+    expect(updated?.isFiniteSet).toBe(true);
+    expect(updated?.targetCount).toBe(12);
+  });
+
+  it("keeps an imported collection's target", async () => {
+    const created = await handle.collections.create({ name: "Quarters", fields, isFiniteSet: true, targetCount: 50 });
+    const fresh = await openDatabase({ path: ":memory:" });
+    try {
+      expect(fresh.collections.insertImported(created)).toBe(true);
+      expect(await fresh.collections.getById(created.id)).toEqual(created);
+    } finally {
+      fresh.close();
+    }
+  });
+
+  // A row no current write path could produce — written by hand, by a future
+  // version, or by a bug — must not turn every list and export into a 500.
+  it.each([
+    ["a target on a collection that is not a finite set", 0, 5],
+    ["zero", 1, 0],
+    ["a negative number", 1, -4],
+    ["a fraction", 1, 2.5],
+    ["more than the maximum", 1, 100_001],
+    ["text", 1, "many"],
+  ])("reads %s stored in the row as no target", async (_label, isFiniteSet, stored) => {
+    const created = await handle.collections.create({ name: "Odd", fields, isFiniteSet: false });
+    handle.sqlite
+      .prepare("UPDATE collections SET is_finite_set = ?, target_count = ? WHERE id = ?")
+      .run(isFiniteSet, stored, created.id);
+
+    expect((await handle.collections.getById(created.id))?.targetCount).toBeNull();
+    expect((await handle.collections.list()).map((c) => c.targetCount)).toEqual([null]);
+    expect((await handle.collections.list({ includeDeleted: true })).map((c) => c.targetCount)).toEqual([null]);
+  });
+});

@@ -286,7 +286,7 @@ describe("ItemsRepository sort", () => {
 
 describe("upgrading a database that already holds items", () => {
   it("indexes the existing items when the search migration runs", async () => {
-    const { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } = await import("node:fs");
+    const { cpSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } = await import("node:fs");
     const { tmpdir } = await import("node:os");
     const { join } = await import("node:path");
     const { fileURLToPath } = await import("node:url");
@@ -301,16 +301,40 @@ describe("upgrading a database that already holds items", () => {
       journal.entries = journal.entries.filter((entry) => entry.tag === "0000_init");
       writeFileSync(journalPath, JSON.stringify(journal));
 
+      // Seeded with raw SQL, not the repositories: they write the columns of the
+      // latest schema (target_count, #42), which a 0000_init table does not have.
       const path = join(dir, "app.db");
       const before = await openDatabase({ path, migrationsFolder: initOnly });
-      const old = await before.collections.create({ name: "Books", fields, isFiniteSet: false });
-      await before.items.create({ collectionId: old.id, fields: { title: "Dune", tags: ["desert"] } });
+      const stamp = "2026-01-01T00:00:00.000Z";
+      const collectionId = "11111111-1111-4111-8111-111111111111";
+      before.sqlite
+        .prepare(
+          "INSERT INTO collections (id, name, fields, is_finite_set, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
+        )
+        .run(collectionId, "Books", JSON.stringify(fields), 0, stamp, stamp);
+      const insertItem = before.sqlite.prepare(
+        "INSERT INTO items (id, collection_id, status, fields, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
+      );
+      insertItem.run(
+        "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        collectionId,
+        "owned",
+        '{"title":"Dune","tags":["desert"]}',
+        stamp,
+        stamp,
+      );
+      insertItem.run("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", collectionId, "wanted", '{"title":"Emma"}', stamp, stamp);
       before.close();
 
       const after = await openDatabase({ path });
-      const found = await after.items.listByCollection(old.id, { q: "desert" });
+      const collection = await after.collections.getById(collectionId);
+      const all = await after.items.listByCollection(collectionId);
+      const found = await after.items.listByCollection(collectionId, { q: "desert" });
       after.close();
+      expect(collection?.targetCount).toBeNull();
+      expect(all.map((item) => item.fields.title)).toEqual(["Dune", "Emma"]);
       expect(found.map((item) => item.fields.title)).toEqual(["Dune"]);
+      expect(readdirSync(dir).filter((name) => name.endsWith(".bak"))).toHaveLength(1);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
