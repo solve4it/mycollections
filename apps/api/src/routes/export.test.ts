@@ -132,3 +132,47 @@ describe("POST /api/import", () => {
     expect(res.statusCode).toBe(401);
   });
 });
+
+describe("export and import of a finite set's target (#42)", () => {
+  it("round-trips a target through export and import", async () => {
+    const quarters = await handle.collections.create({
+      name: "Quarters",
+      fields: baseFields,
+      isFiniteSet: true,
+      targetCount: 50,
+    });
+    const sourceApp = await makeApp();
+    const exported = (await sourceApp.inject({ method: "GET", url: "/api/export", headers: auth })).json();
+    expect(exported.collections.map((c: { targetCount: unknown }) => c.targetCount)).toEqual([50]);
+
+    const fresh = await openDatabase({ path: ":memory:" });
+    try {
+      const app = await buildApp({ db: fresh, token: TOKEN });
+      const res = await app.inject({ method: "POST", url: "/api/import", headers: jsonAuth, payload: exported });
+      expect(res.statusCode).toBe(200);
+      expect(await fresh.collections.getById(quarters.id)).toEqual(quarters);
+    } finally {
+      fresh.close();
+    }
+  });
+
+  it("rejects the whole file when a collection has a target but is not a finite set", async () => {
+    await handle.collections.create({ name: "Quarters", fields: baseFields, isFiniteSet: true, targetCount: 50 });
+    const { collection } = await seed();
+    const sourceApp = await makeApp();
+    const exported = (await sourceApp.inject({ method: "GET", url: "/api/export", headers: auth })).json();
+    const bad = exported.collections.find((c: { id: string }) => c.id === collection.id);
+    bad.targetCount = 5;
+
+    const fresh = await openDatabase({ path: ":memory:" });
+    try {
+      const app = await buildApp({ db: fresh, token: TOKEN });
+      const res = await app.inject({ method: "POST", url: "/api/import", headers: jsonAuth, payload: exported });
+      expect(res.statusCode).toBe(400);
+      expect(res.json().message).toContain("targetCount requires isFiniteSet");
+      expect(await fresh.collections.list({ includeDeleted: true })).toEqual([]);
+    } finally {
+      fresh.close();
+    }
+  });
+});

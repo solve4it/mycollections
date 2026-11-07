@@ -2,6 +2,15 @@ import type { Collection, FieldDefinition } from "@mycollections/core";
 import type { DatabaseHandle, UpdateCollectionInput } from "@mycollections/db";
 import type { FastifyInstance } from "fastify";
 
+/**
+ * `targetCount` (#42) is declared with an empty schema so Zod alone decides it.
+ * Fastify's Ajv coerces types, so `{ type: "integer" }` would turn `"5"` into 5,
+ * `true` into 1 and `""` into 0 — accepting what the client never meant. Declared
+ * at all, it also survives `removeAdditional`, which would otherwise drop it
+ * without a word. The same idiom as `fields: { items: {} }`.
+ */
+const targetCountSchema = {} as const;
+
 const createBodySchema = {
   type: "object",
   required: ["name", "fields", "isFiniteSet"],
@@ -11,6 +20,7 @@ const createBodySchema = {
     description: { type: "string", maxLength: 2000 },
     fields: { type: "array", minItems: 1, items: {} },
     isFiniteSet: { type: "boolean" },
+    targetCount: targetCountSchema,
   },
 } as const;
 
@@ -21,6 +31,7 @@ const updateBodySchema = {
     name: { type: "string", minLength: 1, maxLength: 120 },
     description: { type: "string", maxLength: 2000 },
     isFiniteSet: { type: "boolean" },
+    targetCount: targetCountSchema,
     fields: { type: "array", minItems: 1, items: {} },
   },
 } as const;
@@ -57,6 +68,7 @@ export async function registerCollectionRoutes(app: FastifyInstance, db: Databas
       description?: string;
       fields: unknown[];
       isFiniteSet: boolean;
+      targetCount?: unknown;
     };
     try {
       const collection = await db.collections.create({
@@ -65,6 +77,8 @@ export async function registerCollectionRoutes(app: FastifyInstance, db: Databas
         // biome-ignore lint/suspicious/noExplicitAny: validated downstream by Zod in repository
         fields: body.fields as any,
         isFiniteSet: body.isFiniteSet,
+        // Validated downstream by Zod in the repository; absent stays absent.
+        targetCount: body.targetCount as number | null | undefined,
       });
       return reply.code(201).send(collection);
     } catch (err) {
@@ -85,6 +99,7 @@ export async function registerCollectionRoutes(app: FastifyInstance, db: Databas
       name?: string;
       description?: string;
       isFiniteSet?: boolean;
+      targetCount?: unknown;
       fields?: unknown[];
     };
 
@@ -106,7 +121,9 @@ export async function registerCollectionRoutes(app: FastifyInstance, db: Databas
     try {
       // Fastify has already dropped keys the client did not send, so casting the
       // body whole cannot introduce an explicit `undefined` that would clobber a
-      // stored value. Field definitions are validated downstream by Zod.
+      // stored value. Field definitions and targetCount are validated downstream by
+      // Zod, which also refuses a target on a collection that is not a finite set
+      // before anything is written.
       updated = await db.collections.update(id, body as UpdateCollectionInput);
     } catch (err) {
       throw app.httpErrors.badRequest(err instanceof Error ? err.message : "Invalid input");

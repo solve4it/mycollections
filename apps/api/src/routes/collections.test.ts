@@ -338,3 +338,228 @@ describe("POST /api/collections/:id/restore", () => {
     expect(res.statusCode).toBe(404);
   });
 });
+
+describe("a finite set's target count (#42)", () => {
+  const json = { ...auth, "Content-Type": "application/json" };
+
+  // The body schema leaves targetCount to Zod (`{}`), so Ajv's type coercion never
+  // turns "5" into 5 or false into 0 — each of these is a 400, nothing written.
+  const rejectedTargets: [string, unknown][] = [
+    ["true", true],
+    ["false", false],
+    ['"5"', "5"],
+    ['""', ""],
+    ["[5]", [5]],
+    ["0", 0],
+    ["-1", -1],
+    ["2.5", 2.5],
+    ["100001", 100_001],
+    ["an object", { value: 5 }],
+  ];
+
+  it("creates a finite set with a target", async () => {
+    const app = await makeApp();
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/collections",
+      headers: json,
+      payload: { name: "Quarters", fields: baseFields, isFiniteSet: true, targetCount: 50 },
+    });
+    expect(res.statusCode).toBe(201);
+    const body = res.json<Collection>();
+    expect(body.targetCount).toBe(50);
+    expect((await handle.collections.getById(body.id))?.targetCount).toBe(50);
+  });
+
+  it("creates a collection with no target when none is sent", async () => {
+    const app = await makeApp();
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/collections",
+      headers: json,
+      payload: { name: "Quarters", fields: baseFields, isFiniteSet: true },
+    });
+    expect(res.statusCode).toBe(201);
+    expect(res.json<Collection>().targetCount).toBeNull();
+  });
+
+  it("accepts an explicit null target", async () => {
+    const app = await makeApp();
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/collections",
+      headers: json,
+      payload: { name: "Books", fields: baseFields, isFiniteSet: false, targetCount: null },
+    });
+    expect(res.statusCode).toBe(201);
+    expect(res.json<Collection>().targetCount).toBeNull();
+  });
+
+  it("refuses to create a collection that has a target but is not a finite set", async () => {
+    const app = await makeApp();
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/collections",
+      headers: json,
+      payload: { name: "Books", fields: baseFields, isFiniteSet: false, targetCount: 5 },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().message).toContain("targetCount requires isFiniteSet");
+    expect(await handle.collections.list()).toEqual([]);
+  });
+
+  it.each(rejectedTargets)("refuses to create with targetCount %s", async (_label, targetCount) => {
+    const app = await makeApp();
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/collections",
+      headers: json,
+      payload: { name: "Quarters", fields: baseFields, isFiniteSet: true, targetCount },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(await handle.collections.list()).toEqual([]);
+  });
+
+  it("lists and gets the target", async () => {
+    const col = await handle.collections.create({
+      name: "Quarters",
+      fields: baseFields,
+      isFiniteSet: true,
+      targetCount: 50,
+    });
+    const app = await makeApp();
+    const list = await app.inject({ method: "GET", url: "/api/collections", headers: auth });
+    expect(list.json().map((c: Collection) => c.targetCount)).toEqual([50]);
+    const one = await app.inject({ method: "GET", url: `/api/collections/${col.id}`, headers: auth });
+    expect(one.json<Collection>().targetCount).toBe(50);
+  });
+
+  it("changes the target, and a patch without one keeps it", async () => {
+    const col = await handle.collections.create({
+      name: "Quarters",
+      fields: baseFields,
+      isFiniteSet: true,
+      targetCount: 50,
+    });
+    const app = await makeApp();
+    const changed = await app.inject({
+      method: "PATCH",
+      url: `/api/collections/${col.id}`,
+      headers: json,
+      payload: { targetCount: 56 },
+    });
+    expect(changed.statusCode).toBe(200);
+    expect(changed.json<Collection>().targetCount).toBe(56);
+
+    const renamed = await app.inject({
+      method: "PATCH",
+      url: `/api/collections/${col.id}`,
+      headers: json,
+      payload: { name: "State quarters" },
+    });
+    expect(renamed.json<Collection>().targetCount).toBe(56);
+    expect((await handle.collections.getById(col.id))?.targetCount).toBe(56);
+  });
+
+  it("clears the target with null", async () => {
+    const col = await handle.collections.create({
+      name: "Quarters",
+      fields: baseFields,
+      isFiniteSet: true,
+      targetCount: 50,
+    });
+    const app = await makeApp();
+    const res = await app.inject({
+      method: "PATCH",
+      url: `/api/collections/${col.id}`,
+      headers: json,
+      payload: { targetCount: null },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json<Collection>().targetCount).toBeNull();
+    expect((await handle.collections.getById(col.id))?.targetCount).toBeNull();
+  });
+
+  it("clears the target when the collection stops being a finite set", async () => {
+    const col = await handle.collections.create({
+      name: "Quarters",
+      fields: baseFields,
+      isFiniteSet: true,
+      targetCount: 50,
+    });
+    const app = await makeApp();
+    const res = await app.inject({
+      method: "PATCH",
+      url: `/api/collections/${col.id}`,
+      headers: json,
+      payload: { isFiniteSet: false },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json<Collection>()).toMatchObject({ isFiniteSet: false, targetCount: null });
+    expect((await handle.collections.getById(col.id))?.targetCount).toBeNull();
+  });
+
+  it("refuses a target on a collection that is not a finite set, leaving the row unchanged", async () => {
+    const col = await handle.collections.create({ name: "Books", fields: baseFields, isFiniteSet: false });
+    const app = await makeApp();
+    const res = await app.inject({
+      method: "PATCH",
+      url: `/api/collections/${col.id}`,
+      headers: json,
+      payload: { name: "Novels", targetCount: 5 },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().message).toContain("targetCount requires isFiniteSet");
+    expect(await handle.collections.getById(col.id)).toEqual(col);
+  });
+
+  it("refuses ending a finite set while naming a target, leaving the row unchanged", async () => {
+    const col = await handle.collections.create({
+      name: "Quarters",
+      fields: baseFields,
+      isFiniteSet: true,
+      targetCount: 50,
+    });
+    const app = await makeApp();
+    const res = await app.inject({
+      method: "PATCH",
+      url: `/api/collections/${col.id}`,
+      headers: json,
+      payload: { isFiniteSet: false, targetCount: 40 },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(await handle.collections.getById(col.id)).toEqual(col);
+  });
+
+  it.each(rejectedTargets)(
+    "refuses to patch targetCount %s, leaving the row unchanged",
+    async (_label, targetCount) => {
+      const col = await handle.collections.create({
+        name: "Quarters",
+        fields: baseFields,
+        isFiniteSet: true,
+        targetCount: 50,
+      });
+      const app = await makeApp();
+      const res = await app.inject({
+        method: "PATCH",
+        url: `/api/collections/${col.id}`,
+        headers: json,
+        payload: { name: "Renamed", targetCount },
+      });
+      expect(res.statusCode).toBe(400);
+      expect(await handle.collections.getById(col.id)).toEqual(col);
+    },
+  );
+
+  it("answers 404 for a target on an unknown collection", async () => {
+    const app = await makeApp();
+    const res = await app.inject({
+      method: "PATCH",
+      url: "/api/collections/00000000-0000-4000-8000-000000000000",
+      headers: json,
+      payload: { targetCount: 5 },
+    });
+    expect(res.statusCode).toBe(404);
+  });
+});

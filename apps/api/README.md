@@ -14,30 +14,30 @@ Local Fastify API server for MyCollections. Runs on `localhost` only and is inte
 
 All routes require `Authorization: Bearer <token>` except `GET /api/health`.
 
-| Method   | Path                                         | Description                                                                                            |
-| -------- | -------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
-| `GET`    | `/api/health`                                | Health check (no auth required)                                                                        |
-| `GET`    | `/api/collections`                           | List all collections (each includes `itemCount`, the number of non-deleted items)                      |
-| `POST`   | `/api/collections`                           | Create a collection                                                                                    |
-| `GET`    | `/api/collections/:id`                       | Get a collection                                                                                       |
-| `PATCH`  | `/api/collections/:id`                       | Update a collection, its field schema included (see [Editing a field schema](#editing-a-field-schema)) |
-| `DELETE` | `/api/collections/:id`                       | Soft-delete a collection                                                                               |
-| `POST`   | `/api/collections/:id/restore`               | Restore a soft-deleted collection                                                                      |
-| `GET`    | `/api/collections/:id/items`                 | List items (`?status=owned\|wanted\|ordered`, `?q=` search, `?sort=` — see below)                      |
-| `POST`   | `/api/collections/:id/items`                 | Create an item                                                                                         |
-| `POST`   | `/api/collections/:id/tags/rename`           | Rename or merge a tag across the collection's items (see below)                                        |
-| `POST`   | `/api/collections/:id/tags/remove`           | Remove a tag from the collection's items                                                               |
-| `GET`    | `/api/collections/:id/tag-values`            | Tags in use in a tags field (`?field=`), for suggestions                                               |
-| `GET`    | `/api/collections/:id/items/:itemId`         | Get an item                                                                                            |
-| `PATCH`  | `/api/collections/:id/items/:itemId`         | Update an item                                                                                         |
-| `DELETE` | `/api/collections/:id/items/:itemId`         | Soft-delete an item                                                                                    |
-| `POST`   | `/api/collections/:id/items/:itemId/restore` | Restore a soft-deleted item                                                                            |
-| `GET`    | `/api/trash`                                 | List what soft delete has hidden: `{ collections, items }`                                             |
-| `DELETE` | `/api/trash`                                 | Empty the trash — permanently delete everything in it; returns `{ items, collections }` counts         |
-| `DELETE` | `/api/trash/items/:itemId`                   | Permanently delete a trashed item                                                                      |
-| `DELETE` | `/api/trash/collections/:id`                 | Permanently delete a trashed collection and its items                                                  |
-| `GET`    | `/api/export`                                | Download a JSON backup of all collections and items                                                    |
-| `POST`   | `/api/import`                                | Restore a backup document (`?mode=skip`)                                                               |
+| Method   | Path                                         | Description                                                                                                   |
+| -------- | -------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `GET`    | `/api/health`                                | Health check (no auth required)                                                                               |
+| `GET`    | `/api/collections`                           | List all collections (each includes `itemCount`, the number of non-deleted items)                             |
+| `POST`   | `/api/collections`                           | Create a collection — a finite set may carry a target (see [A finite set's target](#a-finite-sets-target-42)) |
+| `GET`    | `/api/collections/:id`                       | Get a collection                                                                                              |
+| `PATCH`  | `/api/collections/:id`                       | Update a collection, its field schema included (see [Editing a field schema](#editing-a-field-schema))        |
+| `DELETE` | `/api/collections/:id`                       | Soft-delete a collection                                                                                      |
+| `POST`   | `/api/collections/:id/restore`               | Restore a soft-deleted collection                                                                             |
+| `GET`    | `/api/collections/:id/items`                 | List items (`?status=owned\|wanted\|ordered`, `?q=` search, `?sort=` — see below)                             |
+| `POST`   | `/api/collections/:id/items`                 | Create an item                                                                                                |
+| `POST`   | `/api/collections/:id/tags/rename`           | Rename or merge a tag across the collection's items (see below)                                               |
+| `POST`   | `/api/collections/:id/tags/remove`           | Remove a tag from the collection's items                                                                      |
+| `GET`    | `/api/collections/:id/tag-values`            | Tags in use in a tags field (`?field=`), for suggestions                                                      |
+| `GET`    | `/api/collections/:id/items/:itemId`         | Get an item                                                                                                   |
+| `PATCH`  | `/api/collections/:id/items/:itemId`         | Update an item                                                                                                |
+| `DELETE` | `/api/collections/:id/items/:itemId`         | Soft-delete an item                                                                                           |
+| `POST`   | `/api/collections/:id/items/:itemId/restore` | Restore a soft-deleted item                                                                                   |
+| `GET`    | `/api/trash`                                 | List what soft delete has hidden: `{ collections, items }`                                                    |
+| `DELETE` | `/api/trash`                                 | Empty the trash — permanently delete everything in it; returns `{ items, collections }` counts                |
+| `DELETE` | `/api/trash/items/:itemId`                   | Permanently delete a trashed item                                                                             |
+| `DELETE` | `/api/trash/collections/:id`                 | Permanently delete a trashed collection and its items                                                         |
+| `GET`    | `/api/export`                                | Download a JSON backup of all collections and items                                                           |
+| `POST`   | `/api/import`                                | Restore a backup document (`?mode=skip`)                                                                      |
 
 ### Searching and sorting items (#41)
 
@@ -105,6 +105,25 @@ field mints a new id, so it does not re-attach to the old values.
 The route reads the collection before it writes, so a rejected patch leaves nothing
 behind — a `400` or `404` never persists the rest of the body.
 
+### A finite set's target (#42)
+
+A collection with `isFiniteSet: true` may carry `targetCount`, how many items complete
+the set — a whole number from 1 to 100,000, or `null` when the size is not known yet.
+Every collection in a response has the key; it is `null` unless set.
+
+| Request                                                   | Result                                                               |
+| --------------------------------------------------------- | -------------------------------------------------------------------- |
+| `POST` with `isFiniteSet: true, targetCount: 50`          | `201`, `targetCount: 50`                                             |
+| `POST` or `PATCH` without `targetCount`                   | No target on create; on update the stored one is kept                |
+| `PATCH { "targetCount": null }`                           | Clears the target; the collection stays a finite set                 |
+| `PATCH { "isFiniteSet": false }`                          | Clears the target with the flag                                      |
+| A target on a collection that is not, or stops being, one | `400` "targetCount requires isFiniteSet"; nothing is written         |
+| `"5"`, `""`, `true`, `false`, `[5]`, `0`, `2.5`, `100001` | `400`; nothing is written — the value is never coerced into a number |
+
+The body schema declares `targetCount` with an empty schema on purpose: Fastify's Ajv
+coerces types, so `{ "type": "integer" }` would quietly turn `"5"` into 5 and `""` into
+0. Zod decides it instead, in the repository, before any write.
+
 ### Trash and soft delete
 
 `DELETE` on a collection or an item stamps `deletedAt` instead of removing the row.
@@ -150,6 +169,12 @@ transaction, so an invalid payload is rejected with `400` and leaves the databas
 untouched (no partial writes). The only `mode` today is `skip` (the default):
 records whose id already exists are left as-is, making imports idempotent and
 non-destructive. `replace` / `merge` modes are reserved for the future.
+
+The document embeds full collection records, so it carries each finite set's
+`targetCount`. Adding that field did not change `version`: a version 1 backup written
+before it existed imports with `targetCount: null`, and an older app reading a newer
+backup ignores the key. A backup in which any collection has a target but is not a
+finite set is rejected whole with `400`.
 
 ## Usage
 
