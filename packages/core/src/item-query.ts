@@ -12,15 +12,22 @@ export type ItemSortDirection = "asc" | "desc";
  * What a list of items is ordered by. `name` is the item's display name — the
  * first schema field holding a scalar value, the same rule the web uses to name
  * an item in a message — and `field` orders by one schema field's value.
+ *
+ * `status` (#42) ascending is collected first — owned, ordered, wanted — and
+ * descending is the exact reverse, still-to-get first: wanted, ordered, owned.
+ * As with every key, ties keep insertion order in the sort's own direction, so
+ * `-status` is the whole list of `status` read backwards.
  */
 export type ItemSort =
   | { key: "createdAt"; direction: ItemSortDirection }
   | { key: "updatedAt"; direction: ItemSortDirection }
   | { key: "name"; direction: ItemSortDirection }
+  | { key: "status"; direction: ItemSortDirection }
   | { key: "field"; fieldId: string; direction: ItemSortDirection };
 
 const FIELD_PREFIX = "field:";
-const PLAIN_KEYS = new Set(["createdAt", "updatedAt", "name"]);
+type PlainSortKey = "createdAt" | "updatedAt" | "name" | "status";
+const PLAIN_KEYS = new Set<string>(["createdAt", "updatedAt", "name", "status"] satisfies PlainSortKey[]);
 
 /**
  * Reads a sort key in the JSON:API style: one key, descending when prefixed with
@@ -31,7 +38,7 @@ export function parseItemSort(raw: string): ItemSort | null {
   const direction: ItemSortDirection = raw.startsWith("-") ? "desc" : "asc";
   const key = direction === "desc" ? raw.slice(1) : raw;
   if (PLAIN_KEYS.has(key)) {
-    return { key: key as "createdAt" | "updatedAt" | "name", direction };
+    return { key: key as PlainSortKey, direction };
   }
   if (key.startsWith(FIELD_PREFIX) && key.length > FIELD_PREFIX.length) {
     return { key: "field", fieldId: key.slice(FIELD_PREFIX.length), direction };
