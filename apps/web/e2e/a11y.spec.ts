@@ -478,9 +478,34 @@ test.describe("accessibility", () => {
       await expect(page.getByRole("heading", { level: 1, name: collection.name })).toBeVisible();
       const panel = page.getByRole("tabpanel", { name: "Remaining" });
       await expect(panel.locator(".empty-state-title")).toHaveText(title);
+      // The panel is described by its empty state, which axe cannot judge.
+      await expect(panel).toHaveAccessibleDescription(new RegExp(`^${title} `));
       await expect(page.getByText("No items yet")).toHaveCount(0);
       await expectNoAccessibilityViolations(page);
     }
+  });
+
+  /**
+   * A search whose matches are all in another tab (#42): the empty state says
+   * so and offers a button that selects All — a state with a control of its
+   * own, so it gets a scan, and the button is pressed to prove where it goes.
+   */
+  test("a search that matches only under another tab", async ({ page, api }) => {
+    await api.reset();
+    const collection = await api.createCollection({ name: "Vinyl records", fields: FIELDS });
+    await api.createItem(collection.id, { title: "Kind of Blue" }, "owned");
+    await api.createItem(collection.id, { title: "Blue Train" }, "wanted");
+
+    await page.goto(`/collections/${collection.id}?show=remaining&q=kind`);
+    const panel = page.getByRole("tabpanel", { name: "Remaining" });
+    await expect(panel.locator(".empty-state-title")).toHaveText("No remaining items match “kind”");
+    await expect(panel).toHaveAccessibleDescription("No remaining items match “kind” 1 item matches under All.");
+    await expectNoAccessibilityViolations(page);
+
+    await page.getByRole("button", { name: "Show them under All" }).press("Enter");
+    await expect(page).toHaveURL(`/collections/${collection.id}?q=kind`);
+    await expect(page.getByRole("tab", { name: "All", selected: true })).toBeFocused();
+    await expect(page.getByRole("tabpanel", { name: "All" }).getByRole("listitem")).toHaveCount(1);
   });
 
   test("a collection with no items", async ({ page, api }) => {
