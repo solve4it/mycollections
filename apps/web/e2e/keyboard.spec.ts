@@ -1802,6 +1802,65 @@ test.describe("marking an item collected (#42)", () => {
     });
   }
 
+  /**
+   * The mark lands but the list cannot be fetched again (#42 review). The query
+   * client retries the refetch (about seven seconds of backoff) before giving
+   * up; all that time the mutation is pending, so the button stays, marked busy,
+   * holding focus. Then the server's answer is written into the cached list, so
+   * the row says Owned and what is announced is true. Later, with the list
+   * reachable again and focus on <body>, nothing left waiting moves focus.
+   */
+  for (const pressed of ["by keyboard", "without focus"] as const) {
+    test(`a mark whose list refetch fails still shows the row as collected, and leaves nothing waiting (${pressed})`, async ({
+      page,
+      api,
+    }) => {
+      test.setTimeout(45_000);
+      const collection = await seed(api);
+      await page.goto(`/collections/${collection.id}`);
+      await expect(page.getByRole("listitem")).toHaveCount(3);
+      let failLists = true;
+      await page.route(
+        (url) => url.pathname.endsWith("/items"),
+        async (route) => {
+          if (failLists && route.request().method() === "GET")
+            return await route.fulfill({ status: 500, json: { message: "Internal Server Error" } });
+          return await route.fallback();
+        },
+      );
+
+      const mark = page.getByRole("button", { name: markName("Blue Train") });
+      if (pressed === "by keyboard") {
+        await mark.focus();
+        await page.keyboard.press("Enter");
+        await expectMarkedBusy(mark);
+        await expect(mark, "focus stays on the busy button while the refetch is retried").toBeFocused();
+      } else {
+        await pressWithoutFocus(mark);
+      }
+
+      const row = page
+        .getByRole("listitem")
+        .filter({ has: page.getByRole("button", { name: editName("Blue Train") }) });
+      await expect(row.locator(".item-status")).toHaveText("Owned", { timeout: 20_000 });
+      await expect(page.getByRole("button", { name: markName("Blue Train") })).toHaveCount(0);
+      await expect(page.getByRole("button", { name: editName("Blue Train") })).toBeFocused();
+      await expect(page.locator('.visually-hidden[aria-live="polite"]')).toContainText(
+        "Marked “Blue Train” as collected.",
+      );
+
+      // The user moves on; the list becomes reachable and is fetched again.
+      await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+      failLists = false;
+      await page.getByRole("tab", { name: "Collected" }).press("Enter");
+      await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+      await page.getByRole("searchbox", { name: "Search items" }).fill("blue");
+      await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+      await expect.poll(() => rows(page)).toEqual(["Kind of Blue", "Blue Train"]);
+      expect(await focusedControl(page), "nothing left waiting may take focus later").toBe(NOTHING_FOCUSED);
+    });
+  }
+
   test("a mark the server refuses leaves focus on the button, with the row's alert", async ({ page, api }) => {
     const collection = await seed(api);
     await page.route("**/api/collections/*/items/*", async (route) => {
