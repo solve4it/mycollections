@@ -94,6 +94,9 @@ export function DynamicItemForm({
   const idPrefix = useId();
   const statusId = scopedId(idPrefix, "status");
   const [status, setStatus] = useState<ItemStatus>(initialStatus ?? "owned");
+  // Whether the user has picked a status in this entry (#42). Until they do,
+  // the status follows `initialStatus`; once they have, it is theirs.
+  const [statusTouched, setStatusTouched] = useState(false);
   const [values, setValues] = useState<Record<string, DraftValue>>(() =>
     Object.fromEntries(fields.map((f) => [f.id, toDraft(f, initialValues[f.id])])),
   );
@@ -107,16 +110,19 @@ export function DynamicItemForm({
   if (lastReset !== resetSignal) {
     setLastReset(resetSignal);
     setStatus(initialStatus ?? "owned");
+    setStatusTouched(false);
     setValues(Object.fromEntries(fields.map((f) => [f.id, toDraft(f, initialValues[f.id])])));
   }
   // The add-item form starts on Wanted under the Remaining tab and on Owned
   // elsewhere (#42, R16), and the tab can change while the form is on screen.
-  // The status follows a *change* of the prop, the same way the reset above
-  // does, so a status the user picked stays theirs until the tab changes.
+  // The status follows a *change* of the prop only while the user has not
+  // picked one: a tab switch must not turn a half-typed Ordered item into an
+  // Owned one, and a row editor whose item is fetched again with another
+  // status must not overwrite the draft. A reset starts a fresh, untouched entry.
   const [lastInitialStatus, setLastInitialStatus] = useState(initialStatus);
   if (lastInitialStatus !== initialStatus) {
     setLastInitialStatus(initialStatus);
-    setStatus(initialStatus ?? "owned");
+    if (!statusTouched) setStatus(initialStatus ?? "owned");
   }
 
   const statusRef = useRef<HTMLSelectElement>(null);
@@ -147,7 +153,15 @@ export function DynamicItemForm({
     <form onSubmit={handleSubmit} className="dynamic-item-form" aria-label={label}>
       <div className="form-row">
         <label htmlFor={statusId}>{t("status_label")}</label>
-        <select id={statusId} ref={statusRef} value={status} onChange={(e) => setStatus(e.target.value as ItemStatus)}>
+        <select
+          id={statusId}
+          ref={statusRef}
+          value={status}
+          onChange={(e) => {
+            setStatus(e.target.value as ItemStatus);
+            setStatusTouched(true);
+          }}
+        >
           {ITEM_STATUSES.map((s) => (
             <option key={s} value={s}>
               {t(`status_${s}`)}

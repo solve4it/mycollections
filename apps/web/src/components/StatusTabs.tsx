@@ -19,6 +19,12 @@ interface StatusTabsProps {
   onSelect: (tab: StatusTab) => void;
   /** The panel, for a focus handoff that lands on whatever the panel now holds. */
   panelRef?: Ref<HTMLDivElement>;
+  /**
+   * Ids that describe the panel — the page passes its empty state's title and
+   * description while one shows, so focus arriving on the emptied panel reads
+   * why it is empty (#42). Undefined otherwise.
+   */
+  describedBy?: string;
   /** The panel's content: the count, the list and the empty states. */
   children: ReactNode;
 }
@@ -52,7 +58,7 @@ function isRightToLeft(element: Element): boolean {
  * No counts in the labels: a tab's name changing under a screen reader with
  * every edit is noise, and the panel says how many it holds.
  */
-export function StatusTabs({ value, onSelect, panelRef, children }: StatusTabsProps) {
+export function StatusTabs({ value, onSelect, panelRef, describedBy, children }: StatusTabsProps) {
   const { t } = useTranslation("items");
   const idPrefix = useId();
   const panelId = scopedId(idPrefix, "panel");
@@ -121,6 +127,7 @@ export function StatusTabs({ value, onSelect, panelRef, children }: StatusTabsPr
         role="tabpanel"
         id={panelId}
         aria-labelledby={scopedId(idPrefix, "tab", value)}
+        aria-describedby={describedBy}
         // biome-ignore lint/a11y/noNoninteractiveTabindex: the APG tabs pattern — a panel whose first content is not a control is a tab stop of its own.
         tabIndex={0}
       >

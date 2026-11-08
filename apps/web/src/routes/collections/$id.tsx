@@ -7,7 +7,7 @@ import {
 } from "@mycollections/core";
 import { type UseQueryResult, useQueryClient } from "@tanstack/react-query";
 import { createRoute, Link, redirect, useNavigate } from "@tanstack/react-router";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { CollectionProgress } from "../../components/CollectionProgress.js";
 import { DynamicItemForm } from "../../components/DynamicItemForm.js";
@@ -22,6 +22,7 @@ import { StatusTabs } from "../../components/StatusTabs.js";
 import { UndoToast } from "../../components/UndoToast.js";
 import { useAnnounce } from "../../lib/announcer.js";
 import { getToken } from "../../lib/api-client.js";
+import { scopedId } from "../../lib/dom-id.js";
 import { type FocusDestination, useFocusHandoff } from "../../lib/focus-handoff.js";
 import {
   effectiveFilters,
@@ -113,6 +114,16 @@ function itemLabel(collection: Collection, item: Item, untitled: string): string
     if (value != null && value !== "" && !Array.isArray(value)) return String(value);
   }
   return untitled;
+}
+
+/** What the item list says when it has nothing to show, and which ways out it offers (#41, #42). */
+interface EmptyView {
+  title: string;
+  description: string;
+  clearSearch?: boolean;
+  clearFilters?: boolean;
+  /** The search or filters match items in another tab: offer to show them under All. */
+  showAll?: boolean;
 }
 
 /**
@@ -223,28 +234,97 @@ function CollectionDetailPage() {
   // is narrowed the same way, so a tab never flashes rows from another.
   const visibleItems = itemsQuery.data?.filter((listed) => inStatusTab(listed.status, tab));
 
-  // What an empty tab says (#42, R7). Remaining has three answers, and only a
-  // finite set with a target can give the two that measure: "All collected"
-  // once owned reaches the target — wanted items or not, as the header's
-  // Complete badge counts it — and otherwise how many are still to find. The
-  // owned count is the header's, from the counts query, and until that lands
-  // the list's own: an empty tab is never shown under a search or filter, so
-  // the list in hand is then the whole collection.
-  let tabEmpty: { title: string; description: string } | null = null;
-  if (tab === "collected") {
-    tabEmpty = { title: t("empty_collected"), description: t("empty_collected_description") };
-  } else if (tab === "remaining") {
-    const owned = countsQuery.data?.owned ?? itemsQuery.data?.filter((listed) => listed.status === "owned").length;
-    const progress = collection && owned !== undefined ? collectionProgress(collection, owned) : null;
-    tabEmpty = !progress
-      ? { title: t("empty_remaining"), description: t("empty_remaining_description") }
-      : progress.complete
-        ? { title: t("empty_remaining_complete"), description: t("empty_remaining_complete_description") }
-        : {
-            title: t("empty_remaining_to_find", { count: progress.target - progress.owned }),
-            description: t("empty_remaining_to_find_description"),
-          };
+  const filtered = filters.length > 0;
+
+  // What the list says when it is empty, decided once here because three
+  // things need the same answer: the empty state itself, what the announcer
+  // says once the view settles, and the panel's accessible description (#42).
+  //
+  // Never from placeholder data: while the next view loads, the kept result is
+  // the *previous* search's, and an empty one would claim this view is empty
+  // too — "4 more to find" on a set whose wanted item is about to arrive. The
+  // list shows its loading state instead.
+  let empty: EmptyView | null = null;
+  if (visibleItems?.length === 0 && !itemsQuery.isPlaceholderData) {
+    const matchingAll = itemsQuery.data?.length ?? 0;
+    if ((q || filtered) && tab !== "all" && matchingAll > 0) {
+      // Matches exist, just not in this tab: say so, how many, and offer them.
+      // "Try fewer words" would send the user to fix a search that worked.
+      empty = {
+        title: q
+          ? t(tab === "collected" ? "no_matches_collected" : "no_matches_remaining", { q })
+          : t(tab === "collected" ? "no_matches_filtered_collected" : "no_matches_filtered_remaining"),
+        description: t("matches_under_all", { count: matchingAll }),
+        showAll: true,
+      };
+    } else if (q || filtered) {
+      // "Nothing matches" and "nothing here" are different news, with
+      // different ways out (#41).
+      empty = {
+        title: q ? t("no_matches", { q }) : t("no_matches_filtered"),
+        description:
+          q && filtered
+            ? t("no_matches_search_filtered_description")
+            : q
+              ? t("no_matches_description")
+              : t("no_matches_filtered_description"),
+        clearSearch: Boolean(q),
+        clearFilters: filtered,
+      };
+    } else if (tab === "collected") {
+      empty = { title: t("empty_collected"), description: t("empty_collected_description") };
+    } else if (tab === "remaining") {
+      // Three answers, and only a finite set with a target can give the two
+      // that measure (R7): "All collected" once owned reaches the target, and
+      // otherwise how many are still to find. Remaining is empty here, so
+      // owned >= target is exactly the header's Complete. The owned count is
+      // the header's, from the counts query, and until that lands the list's
+      // own — settled, not placeholder, and with no search or filter, so it is
+      // the whole collection.
+      const owned = countsQuery.data?.owned ?? itemsQuery.data?.filter((listed) => listed.status === "owned").length;
+      const progress = collection && owned !== undefined ? collectionProgress(collection, owned) : null;
+      empty = !progress
+        ? { title: t("empty_remaining"), description: t("empty_remaining_description") }
+        : progress.complete
+          ? { title: t("empty_remaining_complete"), description: t("empty_remaining_complete_description") }
+          : {
+              title: t("empty_remaining_to_find", { count: progress.target - progress.owned }),
+              description: t("empty_remaining_to_find_description"),
+            };
+    } else {
+      empty = { title: t("empty_items"), description: t("empty_items_description") };
+    }
   }
+  /**
+   * The count line over a narrowed list, naming the tab when one narrows it
+   * too: "2 remaining items match “e”" — "2 items match" would read as every
+   * match, when four match and two are shown (#42). Literal keys throughout.
+   */
+  function matchCountText(count: number): string {
+    if (tab === "collected") {
+      if (q && filtered) return t("items_match_search_filtered_collected", { count, q });
+      if (q) return t("items_match_collected", { count, q });
+      if (filtered) return t("items_match_filtered_collected", { count });
+      return t("items_collected", { count });
+    }
+    if (tab === "remaining") {
+      if (q && filtered) return t("items_match_search_filtered_remaining", { count, q });
+      if (q) return t("items_match_remaining", { count, q });
+      if (filtered) return t("items_match_filtered_remaining", { count });
+      return t("items_remaining", { count });
+    }
+    if (q && filtered) return t("items_match_search_filtered", { count, q });
+    if (q) return t("items_match", { count, q });
+    return t("items_match_filtered", { count });
+  }
+  // The panel is described by the empty state while one shows (#42): focus
+  // lands on the panel when the list empties under the user, and a tabpanel's
+  // content is not reliably read on focus — its description is.
+  const emptyIdPrefix = useId();
+  const emptyIds = {
+    title: scopedId(emptyIdPrefix, "empty-title"),
+    description: scopedId(emptyIdPrefix, "empty-description"),
+  };
 
   // A row's Delete removes the row, and the toast's Undo and Dismiss remove the
   // toast, so all three orphaned focus to <body> (#367). The handoff is held
@@ -309,27 +389,26 @@ function CollectionDetailPage() {
   // as the user filtering — announcing the count of the view the page opened on.
   const narrowing = JSON.stringify([q, search.filter ?? "", tab]);
   const settledQ = settled ? narrowing : null;
-  const settledCount = settled ? (visibleItems?.length ?? 0) : null;
-  // An empty tab speaks its empty state's title — "All collected", "3 more to
-  // find" — which is the news; "0 items remaining" would only be half of it.
-  const tabEmptyTitle = tabEmpty?.title ?? "";
+  // What is spoken is what is shown: the count line's words, or for an empty
+  // view its empty state — "All collected", "3 more to find", which are the
+  // news where "0 items remaining" would be half of it. Where the matches are
+  // in another tab, the description is half the news too, so it is spoken.
+  let settledMessage = "";
+  if (settled) {
+    const count = visibleItems?.length ?? 0;
+    if (!q && !filtered && tab === "all") settledMessage = t("showing_all", { count });
+    else if (empty) settledMessage = empty.showAll ? `${empty.title}. ${empty.description}` : empty.title;
+    else settledMessage = matchCountText(count);
+  }
   const announcedSearch = useRef(narrowing);
   useEffect(() => {
-    if (settledQ === null || settledCount === null || settledQ === announcedSearch.current) return;
+    if (settledQ === null || !settledMessage || settledQ === announcedSearch.current) return;
     const timer = setTimeout(() => {
       announcedSearch.current = settledQ;
-      const [settledText, settledFilter, settledTab] = JSON.parse(settledQ) as [string, string, StatusTab];
-      if (!settledText && !settledFilter) {
-        if (settledTab === "all") announce(t("showing_all", { count: settledCount }));
-        else if (settledCount === 0) announce(tabEmptyTitle);
-        else announce(t(settledTab === "collected" ? "items_collected" : "items_remaining", { count: settledCount }));
-      } else if (settledCount === 0)
-        announce(settledText ? t("no_matches", { q: settledText }) : t("no_matches_filtered"));
-      else if (settledText) announce(t("items_match", { count: settledCount, q: settledText }));
-      else announce(t("items_match_filtered", { count: settledCount }));
+      announce(settledMessage);
     }, RESULT_ANNOUNCE_DELAY_MS);
     return () => clearTimeout(timer);
-  }, [settledQ, settledCount, tabEmptyTitle, announce, t]);
+  }, [settledQ, settledMessage, announce]);
 
   /**
    * Where focus goes when the row at `index` is removed.
@@ -441,15 +520,29 @@ function CollectionDetailPage() {
           collection can hold wanted and ordered items. The panel wraps the
           whole list area — the count, the rows, and every empty and failure
           state — so whichever is showing is what the selected tab names. */}
-      <StatusTabs value={tab} onSelect={setTab} panelRef={panelRef}>
+      <StatusTabs
+        value={tab}
+        onSelect={setTab}
+        panelRef={panelRef}
+        describedBy={empty ? `${emptyIds.title} ${emptyIds.description}` : undefined}
+      >
         <ItemList
           collection={collection}
           query={itemsQuery}
           items={visibleItems}
-          tab={tab}
-          tabEmpty={tabEmpty}
-          q={q}
-          filtered={filters.length > 0}
+          empty={empty}
+          emptyIds={emptyIds}
+          countText={visibleItems && (q || filtered || tab !== "all") ? matchCountText(visibleItems.length) : null}
+          onShowAll={(trigger) => {
+            // The button goes with the empty state; focus goes to the tab it
+            // selected, the control that now says what the panel shows. The
+            // empty state only goes once the router has moved, so the handoff
+            // waits for the button to leave.
+            handOffFocus(() => document.querySelector<HTMLElement>('.status-tab[aria-selected="true"]'), {
+              removing: trigger,
+            });
+            setTab("all");
+          }}
           onClearFilters={() => {
             handOffFocus(filtersToggle);
             setFilters([]);
@@ -601,15 +694,16 @@ interface ItemListProps {
   query: UseQueryResult<Item[]>;
   /** What the selected tab shows of the fetched list; undefined until it loads (#42). */
   items: Item[] | undefined;
-  tab: StatusTab;
-  /** What the tab says when nothing is in it; null for All, whose emptiness is the collection's own. */
-  tabEmpty: { title: string; description: string } | null;
-  /** The search in force, trimmed; empty when none (#41). */
-  q: string;
+  /** What to say when there is nothing to show — decided by the page, which also speaks it. */
+  empty: EmptyView | null;
+  /** The empty state's title and description ids, which describe the tab panel while it shows. */
+  emptyIds: { title: string; description: string };
+  /** The count line over a narrowed list; null when nothing narrows it. */
+  countText: string | null;
   onClearSearch: () => void;
-  /** Whether filters narrow the list (#41). */
-  filtered: boolean;
   onClearFilters: () => void;
+  /** The search or filters match only in another tab: select All (`trigger` is the button, which goes). */
+  onShowAll: (trigger: HTMLElement) => void;
   /** After a row's Save has landed and the list has been fetched again. */
   onSaved: (item: Item, index: number) => void;
   /** Asked for as a delete starts, while the row and its Delete (`trigger`) are still on screen. */
@@ -626,12 +720,12 @@ function ItemList({
   collection,
   query,
   items,
-  tab,
-  tabEmpty,
-  q,
-  filtered,
+  empty,
+  emptyIds,
+  countText,
   onClearSearch,
   onClearFilters,
+  onShowAll,
   onSaved,
   onDeleting,
   onDeleted,
@@ -649,52 +743,48 @@ function ItemList({
     return <ItemListSkeleton label={t("loading_items")} />;
   }
 
-  // "Nothing matches" and "nothing here" are different news, with different
-  // ways out (#41).
-  if (items.length === 0 && (q || filtered))
+  // Nothing to show *yet*: the empty result is the previous view's, kept while
+  // this one loads, and is no answer about this one (#42). Rows kept that way
+  // stay on screen marked busy, below; an empty kept result shows the wait.
+  if (items.length === 0 && query.isPlaceholderData) return <ItemListSkeleton label={t("loading_items")} />;
+
+  // "Nothing matches", "nothing in this tab" and "nothing here" are different
+  // news with different ways out (#41, #42); the page says which.
+  if (items.length === 0 && empty)
     return (
       <EmptyState
-        title={q ? t("no_matches", { q }) : t("no_matches_filtered")}
-        description={
-          q && filtered
-            ? t("no_matches_search_filtered_description")
-            : q
-              ? t("no_matches_description")
-              : t("no_matches_filtered_description")
-        }
+        title={empty.title}
+        description={empty.description}
+        titleId={emptyIds.title}
+        descriptionId={emptyIds.description}
       >
-        {q && (
+        {empty.showAll && (
+          <button
+            type="button"
+            className="touch-target button-quiet"
+            onClick={(event) => onShowAll(event.currentTarget)}
+          >
+            {t("show_under_all")}
+          </button>
+        )}
+        {empty.clearSearch && (
           <button type="button" className="touch-target button-quiet" onClick={onClearSearch}>
             {t("clear_search")}
           </button>
         )}
-        {filtered && (
+        {empty.clearFilters && (
           <button type="button" className="touch-target button-quiet" onClick={onClearFilters}>
             {t("filters_clear")}
           </button>
         )}
       </EmptyState>
     );
-  // A tab with nothing in it says what the tab is for, never "No items yet":
-  // the collection may be full of items the tab does not show (R7).
-  if (items.length === 0 && tabEmpty) return <EmptyState title={tabEmpty.title} description={tabEmpty.description} />;
-  if (items.length === 0) return <EmptyState title={t("empty_items")} description={t("empty_items_description")} />;
 
   return (
     <>
       {query.error && <p role="alert">{t("items_reload_error")}</p>}
       {/* Visible, not live: the announcer speaks it once the search settles. */}
-      {(q || filtered || tab !== "all") && (
-        <p className="item-count">
-          {q && filtered
-            ? t("items_match_search_filtered", { count: items.length, q })
-            : q
-              ? t("items_match", { count: items.length, q })
-              : filtered
-                ? t("items_match_filtered", { count: items.length })
-                : t(tab === "collected" ? "items_collected" : "items_remaining", { count: items.length })}
-        </p>
-      )}
+      {countText && <p className="item-count">{countText}</p>}
       <ul className="item-list" aria-busy={query.isPlaceholderData || undefined}>
         {items.map((item, index) => (
           <ItemRow
