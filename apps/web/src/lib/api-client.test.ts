@@ -13,6 +13,7 @@ import {
   purgeItem,
   restoreCollection,
   restoreItem,
+  setItemStatus,
 } from "./api-client.js";
 
 function mockFetch(status = 200, body: unknown = []) {
@@ -194,5 +195,21 @@ describe("api-client collection counts (#42)", () => {
   it("rejects rather than resolving to zeros when the counts cannot be read", async () => {
     mockFetch(404, { message: "Collection not found" });
     await expect(getCollectionCounts("c1")).rejects.toEqual(new ApiError(404));
+  });
+});
+
+describe("api-client status-only update (#42, R14)", () => {
+  it("sends the status alone, never the item's fields, so a mark cannot overwrite an edit made elsewhere", async () => {
+    const fetchMock = mockFetch(200, { id: "i1", status: "owned" });
+    await setItemStatus("c1", "i1", "owned");
+    expect(new URL(String(fetchMock.mock.calls[0]?.[0])).pathname).toBe("/api/collections/c1/items/i1");
+    const init = initOf(fetchMock);
+    expect(init.method).toBe("PATCH");
+    expect(init.body).toBe('{"status":"owned"}');
+  });
+
+  it("rejects when the server refuses the change", async () => {
+    mockFetch(404, { message: "Item not found" });
+    await expect(setItemStatus("c1", "i1", "owned")).rejects.toEqual(new ApiError(404));
   });
 });
