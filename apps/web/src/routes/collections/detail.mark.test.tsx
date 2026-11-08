@@ -469,3 +469,144 @@ describe("Mark collected beside the row's other actions (#42)", () => {
     expect(await screen.findByRole("button", { name: "Undo" })).toBeInTheDocument();
   });
 });
+
+describe("a row's failure alerts once the item has changed another way (#42 review)", () => {
+  function rowAlert(it: Item): HTMLElement | null {
+    return within(row(it)).queryByRole("alert");
+  }
+
+  it("a failed mark's alert does not come back after the item is saved as Owned through Edit", async () => {
+    vi.mocked(setItemStatus).mockRejectedValue(new Error("offline"));
+    renderAt(BASE);
+    await waitFor(() => expect(rowTitles()).toContain("Nickel"));
+    fireEvent.click(markButton("Nickel"));
+    await waitFor(() => expect(rowAlert(NICKEL)).toHaveTextContent("Could not mark this item as collected."));
+
+    const owned = { ...NICKEL, status: "owned" as const };
+    vi.mocked(updateItem).mockImplementation(async () => {
+      stored = stored.map((it) => (it.id === NICKEL.id ? owned : it));
+      return owned;
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Edit “Nickel”" }));
+    const editor = await screen.findByRole("form", { name: "Editing “Nickel”" });
+    fireEvent.change(within(editor).getByRole("combobox", { name: "Status" }), { target: { value: "owned" } });
+    fireEvent.click(within(editor).getByRole("button", { name: "Save" }));
+
+    await waitFor(() => expect(within(row(NICKEL)).getByText("Owned")).toBeInTheDocument());
+    expect(rowAlert(NICKEL)).toBeNull();
+  });
+
+  it("a failed mark's alert does not come back when the editor is cancelled", async () => {
+    vi.mocked(setItemStatus).mockRejectedValue(new Error("offline"));
+    renderAt(BASE);
+    await waitFor(() => expect(rowTitles()).toContain("Nickel"));
+    fireEvent.click(markButton("Nickel"));
+    await waitFor(() => expect(rowAlert(NICKEL)).not.toBeNull());
+
+    fireEvent.click(screen.getByRole("button", { name: "Edit “Nickel”" }));
+    const editor = await screen.findByRole("form", { name: "Editing “Nickel”" });
+    fireEvent.click(within(editor).getByRole("button", { name: "Cancel" }));
+
+    await waitFor(() => expect(screen.getByRole("button", { name: "Edit “Nickel”" })).toBeInTheDocument());
+    expect(rowAlert(NICKEL)).toBeNull();
+  });
+
+  it("a failed delete's alert does not come back when the editor is cancelled", async () => {
+    vi.mocked(deleteItem).mockRejectedValue(new Error("offline"));
+    renderAt(BASE);
+    await waitFor(() => expect(rowTitles()).toContain("Nickel"));
+    fireEvent.click(screen.getByRole("button", { name: "Delete “Nickel”" }));
+    await waitFor(() => expect(rowAlert(NICKEL)).toHaveTextContent("Could not delete this item."));
+
+    fireEvent.click(screen.getByRole("button", { name: "Edit “Nickel”" }));
+    const editor = await screen.findByRole("form", { name: "Editing “Nickel”" });
+    fireEvent.click(within(editor).getByRole("button", { name: "Cancel" }));
+
+    await waitFor(() => expect(screen.getByRole("button", { name: "Edit “Nickel”" })).toBeInTheDocument());
+    expect(rowAlert(NICKEL)).toBeNull();
+  });
+
+  it("a failed delete's alert does not come back after the item is saved through Edit", async () => {
+    vi.mocked(deleteItem).mockRejectedValue(new Error("offline"));
+    renderAt(BASE);
+    await waitFor(() => expect(rowTitles()).toContain("Nickel"));
+    fireEvent.click(screen.getByRole("button", { name: "Delete “Nickel”" }));
+    await waitFor(() => expect(rowAlert(NICKEL)).not.toBeNull());
+
+    const ordered = { ...NICKEL, status: "ordered" as const };
+    vi.mocked(updateItem).mockImplementation(async () => {
+      stored = stored.map((it) => (it.id === NICKEL.id ? ordered : it));
+      return ordered;
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Edit “Nickel”" }));
+    const editor = await screen.findByRole("form", { name: "Editing “Nickel”" });
+    fireEvent.change(within(editor).getByRole("combobox", { name: "Status" }), { target: { value: "ordered" } });
+    fireEvent.click(within(editor).getByRole("button", { name: "Save" }));
+
+    await waitFor(() => expect(within(row(NICKEL)).getByText("Ordered")).toBeInTheDocument());
+    expect(rowAlert(NICKEL)).toBeNull();
+  });
+
+  it("a new action on the row clears the other action's failure: a mark after a failed delete, a delete after a failed mark", async () => {
+    vi.mocked(deleteItem).mockRejectedValueOnce(new Error("offline"));
+    acceptMarks();
+    renderAt(BASE);
+    await waitFor(() => expect(rowTitles()).toContain("Nickel"));
+    fireEvent.click(screen.getByRole("button", { name: "Delete “Nickel”" }));
+    await waitFor(() => expect(rowAlert(NICKEL)).toHaveTextContent("Could not delete this item."));
+
+    fireEvent.click(markButton("Nickel"));
+    await waitFor(() => expect(screen.queryByRole("button", { name: markName("Nickel") })).toBeNull());
+    expect(rowAlert(NICKEL)).toBeNull();
+
+    vi.mocked(setItemStatus).mockRejectedValueOnce(new Error("offline"));
+    fireEvent.click(markButton("Dime"));
+    await waitFor(() => expect(rowAlert(DIME)).toHaveTextContent("Could not mark this item as collected."));
+    let finish: () => void = () => {};
+    vi.mocked(deleteItem).mockImplementation(
+      () =>
+        new Promise<void>((resolve) => {
+          finish = resolve;
+        }),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Delete “Dime”" }));
+    await waitFor(() => expect(rowAlert(DIME)).toBeNull());
+    stored = stored.filter((it) => it.id !== DIME.id);
+    await act(async () => finish());
+  });
+});
+
+describe("a mark that lands while the list cannot be fetched again (#42 review)", () => {
+  it("shows the row as Owned from the server's answer, drops the button, and the announcement is true", async () => {
+    acceptMarks();
+    renderAt(BASE);
+    await waitFor(() => expect(rowTitles()).toEqual(["Penny", "Nickel", "Dime", "Quarter"]));
+    vi.mocked(listItems).mockRejectedValue(new Error("offline"));
+
+    const mark = markButton("Nickel");
+    mark.focus();
+    fireEvent.click(mark);
+
+    await waitFor(() => expect(screen.queryByRole("button", { name: markName("Nickel") })).toBeNull());
+    expect(within(row(NICKEL)).getByText("Owned")).toBeInTheDocument();
+    expect(row(NICKEL).querySelector(".item-row")?.className).toBe("item-row");
+    await waitFor(() => expect(screen.getByRole("button", { name: "Edit “Nickel”" })).toHaveFocus());
+    await waitFor(() => expect(announcer()).toHaveTextContent("Marked “Nickel” as collected."));
+  });
+
+  it("under Remaining, the row leaves on the server's answer even though the list was not fetched again", async () => {
+    acceptMarks();
+    renderAt(`${BASE}?show=remaining`);
+    await waitFor(() => expect(rowTitles()).toEqual(["Nickel", "Dime"]));
+    vi.mocked(listItems).mockRejectedValue(new Error("offline"));
+
+    (document.activeElement as HTMLElement | null)?.blur();
+    fireEvent.click(markButton("Nickel"));
+
+    await waitFor(() => expect(rowTitles()).toEqual(["Dime"]));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Edit “Dime”" })).toHaveFocus());
+    await waitFor(() =>
+      expect(announcer()).toHaveTextContent("Marked “Nickel” as collected. It is no longer in this list."),
+    );
+  });
+});
