@@ -522,7 +522,15 @@ Train” as collected.", because the button that went is the only thing on scree
 Under Remaining the row leaves: focus goes to the row in its place, or to the panel when the last
 remaining item was marked (R19), and the message adds "It is no longer in this list." Only the tab
 can hide a mark, because a status change touches no field a search or filter reads, so that message
-names no other reason. `detail.mark.test.tsx` and the "marking an item collected" block in
+names no other reason. When the list cannot be fetched again (the refetch fails after its retries),
+`useSetItemStatus` writes the server's answer into the cached lists, so the row says Owned before
+the page reads it. The announcement is then true and the destination exists. Until that point the
+mutation is pending, so the button stays, marked busy, and keeps focus.
+
+A row's failure alert (`mark_error`, `delete_error`) is about one attempt. Opening the editor
+resets both mutations, and starting a mark resets the delete's error and the reverse. Otherwise the
+error state outlived the editor, and the alert was inserted and announced again when it closed,
+even when the save had made it false: "its status has not changed" over an Owned badge. `detail.mark.test.tsx` and the "marking an item collected" block in
 `keyboard.spec.ts` pin each case.
 
 **A row-owned mutation whose follow-up belongs to the page chains it on the promise:**
@@ -560,17 +568,26 @@ header's counts query can supply that early commit even without the scheduled on
 
 The callers that need `removing` are the ones whose removal lands after the request:
 - a row's Delete, which removes the row once the server answers;
-- a row's Mark collected, whose button goes once the list fetched again commits, whether the row
-  stays (it is owned now) or leaves the tab. Its follow-up runs on the promise, and the promise can
-  resolve before that commit. Waiting for the button also covers the status sort, where the row
-  moves and a browser drops focus inside it to `<body>`;
 - a trash row's confirmed Delete forever, where `ConfirmButton` passes its confirm button to
   `onConfirm`;
 - a filter chip, which goes once the router has moved.
 
 A request made in the same handler as a synchronous removal does not need it, because React commits
 both together: Cancel, Dismiss, Remove field and Clear filters are examples. Nor does a request made
-after the removal, such as the hidden Save, which is the case "already on `<body>`" is right for. The
+after the removal, such as the hidden Save, which is the case "already on `<body>`" is right for.
+A row's Mark collected is another (#42 review). Its follow-up runs once the cache holds the marked
+item, and the commit the request schedules renders from that cache, so the effect sees the button
+already gone. Naming the button there added nothing. It was also harmful: when the list could not
+be fetched again, the button never left, and the request waited on it.
+
+**A wait for a named control is bounded too**, by `REMOVAL_DEADLINE_MS` (ten seconds), checked on
+each commit (#42 review). It is longer than the three-second destination deadline because it spans
+a server round trip, and it is not counted in commits because the page may not commit while the
+request is out. Without a bound, a control that never left kept a request alive. That happened to a
+delete whose list could not be fetched again: whatever refetch finally removed the row moved focus,
+long after the user had moved on. Ten seconds is where a press that has not finished has, for the
+user, failed. A delete slower than that still completes, and focus falls to `<body>` as it did before
+#367. That is the lesser harm. `focus-handoff.test.tsx` pins both sides of the bound. The
 tag manager's `successor()` waits by its own guard instead, returning `null` while the removed tag is
 listed. `keyboard.spec.ts` presses each of the first three without focus ("focus when the removed
 control never held it").
