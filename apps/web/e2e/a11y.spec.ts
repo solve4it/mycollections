@@ -508,6 +508,63 @@ test.describe("accessibility", () => {
     await expect(page.getByRole("tabpanel", { name: "All" }).getByRole("listitem")).toHaveCount(1);
   });
 
+  /**
+   * Wanted and ordered rows (#42, D8): a dashed and a dotted border in the
+   * status colors, muted values, and Mark collected beside Edit and Delete.
+   * Both projects scan it, so both color schemes and the phone width where the
+   * row wraps. The computed styles are asserted too: axe judges the text, not
+   * whether the line pattern is there or whether the row was faded.
+   */
+  test("wanted and ordered rows, with Mark collected", async ({ page, api }) => {
+    await api.reset();
+    const collection = await api.createCollection({ name: "Vinyl records", fields: FIELDS });
+    await api.createItem(collection.id, { title: "Kind of Blue", year: 1959 }, "owned");
+    await api.createItem(collection.id, { title: "Blue Train", year: 1958 }, "wanted");
+    await api.createItem(collection.id, { title: "Giant Steps", year: 1960 }, "ordered");
+
+    await page.goto(`/collections/${collection.id}`);
+    await expect(page.getByRole("button", { name: "Mark collected “Blue Train”" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Mark collected “Giant Steps”" })).toBeVisible();
+    await expect(page.getByRole("button", { name: /Mark collected “Kind of Blue”/ })).toHaveCount(0);
+
+    const style = (title: string) =>
+      page.locator(".item-row", { has: page.getByRole("button", { name: `Edit “${title}”` }) }).evaluate((row) => {
+        const computed = getComputedStyle(row);
+        return { border: computed.borderTopStyle, opacity: computed.opacity, filter: computed.filter };
+      });
+    expect(await style("Blue Train")).toEqual({ border: "dashed", opacity: "1", filter: "none" });
+    expect(await style("Giant Steps")).toEqual({ border: "dotted", opacity: "1", filter: "none" });
+    expect(await style("Kind of Blue")).toEqual({ border: "solid", opacity: "1", filter: "none" });
+
+    await expectNoAccessibilityViolations(page);
+  });
+
+  /**
+   * A mark the server refuses (#42, D9): the row's own alert, inserted with its
+   * message inside, and focus left on the button for the retry.
+   */
+  test("a failed Mark collected", async ({ page, api }) => {
+    await api.reset();
+    const collection = await api.createCollection({ name: "Vinyl records", fields: FIELDS });
+    await api.createItem(collection.id, { title: "Blue Train", year: 1958 }, "wanted");
+    await page.route("**/api/collections/*/items/*", async (route) => {
+      if (route.request().method() !== "PATCH") return await route.fallback();
+      await route.fulfill({ status: 500, json: { message: "Internal Server Error" } });
+    });
+
+    await page.goto(`/collections/${collection.id}`);
+    const mark = page.getByRole("button", { name: "Mark collected “Blue Train”" });
+    await mark.focus();
+    await page.keyboard.press("Enter");
+
+    const alert = page.getByRole("listitem").getByRole("alert");
+    await expect(alert).toHaveText(
+      "Could not mark this item as collected. Its status has not changed — check that the app's server is running, then try again.",
+    );
+    await expect(mark).toBeFocused();
+    await expectNoAccessibilityViolations(page);
+  });
+
   test("a collection with no items", async ({ page, api }) => {
     await api.reset();
     const collection = await api.createCollection({ name: "Board games", fields: FIELDS });

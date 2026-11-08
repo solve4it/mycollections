@@ -52,6 +52,7 @@ const editName = (item: string) => `Edit “${item}”`;
 const deleteName = (item: string) => `Delete “${item}”`;
 const restoreName = (row: string) => `Restore “${row}”`;
 const purgeName = (row: string) => `Delete forever “${row}”`;
+const markName = (item: string) => `Mark collected “${item}”`;
 
 /**
  * The same controls as tab stops, which carry one more thing than a selector
@@ -68,6 +69,7 @@ const editStop = (item: string) => `button "${editName(item)}": Edit`;
 const deleteStop = (item: string) => `button "${deleteName(item)}": Delete`;
 const restoreStop = (row: string) => `button "${restoreName(row)}": Restore`;
 const purgeStop = (row: string) => `button "${purgeName(row)}": Delete forever`;
+const markStop = (item: string) => `button "${markName(item)}": Mark collected`;
 
 const SKIP_LINK = 'link "Skip to main content"';
 const NAV = ['link "Collections"', 'link "Settings"'];
@@ -1542,8 +1544,10 @@ test.describe("the status tabs (#42)", () => {
     expect(await tabOrder(page), "the stops after the selected tab").toEqual(
       restOfSequence([
         'tabpanel "Remaining"',
+        markStop("Blue Train"),
         editStop("Blue Train"),
         deleteStop("Blue Train"),
+        markStop("Giant Steps"),
         editStop("Giant Steps"),
         deleteStop("Giant Steps"),
         'combobox "Status"',
@@ -1616,5 +1620,235 @@ test.describe("the status tabs (#42)", () => {
 
     await expect.poll(() => rows(page)).toEqual(["Blue Train", "Giant Steps", "Round Midnight"]);
     await expect(page.locator(".add-item-live")).toHaveText("Added “Round Midnight”");
+  });
+});
+
+/**
+ * A remaining row's Mark collected (#42, D9 and D10). The button goes with the
+ * press — the row is owned now — so every spec here asserts where focus is
+ * left: the row's own Edit while the row is still listed, wherever it moved;
+ * the row in its place, or the panel, when the tab drops it. And the button
+ * marks itself busy, never `disabled`, while the change is in flight.
+ */
+test.describe("marking an item collected (#42)", () => {
+  async function seed(api: import("./fixtures.js").ApiFixture, target?: number) {
+    await api.reset();
+    const collection = await api.createCollection(
+      target === undefined
+        ? { name: "Vinyl records", fields: FIELDS }
+        : { name: "Vinyl records", fields: FIELDS, isFiniteSet: true, targetCount: target },
+    );
+    await api.createItem(collection.id, { title: "Kind of Blue", year: 1959 }, "owned");
+    await api.createItem(collection.id, { title: "Blue Train", year: 1957 }, "wanted");
+    await api.createItem(collection.id, { title: "Giant Steps", year: 1960 }, "ordered");
+    return collection;
+  }
+
+  async function rows(page: import("@playwright/test").Page): Promise<string[]> {
+    return (
+      await page.locator("[data-row-edit]").evaluateAll((edits) => edits.map((e) => e.getAttribute("aria-label")))
+    ).map((label) => (label ?? "").replace(/^Edit “(.*)”$/, "$1"));
+  }
+
+  const announcer = (page: import("@playwright/test").Page) => page.locator('.visually-hidden[aria-live="polite"]');
+
+  test("each remaining row has a Mark collected stop before its Edit; an owned row has none", async ({ page, api }) => {
+    const collection = await seed(api);
+    await page.goto(`/collections/${collection.id}`);
+    await expect(page.getByRole("listitem")).toHaveCount(3);
+
+    await expectTabOrder(page, "a collection with remaining items", [
+      'link "All collections"',
+      'link "Edit collection"',
+      'searchbox "Search items"',
+      'combobox "Sort by"',
+      'button "Filters"',
+      'tab "All" [selected]',
+      'tabpanel "All"',
+      editStop("Kind of Blue"),
+      deleteStop("Kind of Blue"),
+      markStop("Blue Train"),
+      editStop("Blue Train"),
+      deleteStop("Blue Train"),
+      markStop("Giant Steps"),
+      editStop("Giant Steps"),
+      deleteStop("Giant Steps"),
+      'combobox "Status"',
+      'textbox "Title"',
+      'spinbutton "Year"',
+      'button "Save"',
+    ]);
+  });
+
+  test("Mark collected keeps focus while it is in flight, then hands it to the row's Edit", async ({ page, api }) => {
+    const collection = await seed(api);
+    await page.goto(`/collections/${collection.id}`);
+    await expect(page.getByRole("listitem")).toHaveCount(3);
+
+    const held = await holdRequest(page, "**/api/collections/*/items/*", "PATCH");
+    const mark = page.getByRole("button", { name: markName("Blue Train") });
+    await mark.focus();
+    await page.keyboard.press("Enter");
+
+    await held.arrived;
+    await expectMarkedBusy(mark);
+    expect(await focusedControl(page), "focus must stay on Mark collected while it is in flight").toBe(
+      `button "${markName("Blue Train")}" [disabled]: Mark collected`,
+    );
+    // A second press is refused, not sent.
+    await page.keyboard.press("Enter");
+
+    held.release();
+    await expect(page.getByRole("button", { name: markName("Blue Train") })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: editName("Blue Train") })).toBeFocused();
+  });
+
+  for (const pressed of ["by keyboard", "without focus"] as const) {
+    test(`under All the row stays, and focus goes to its Edit (${pressed})`, async ({ page, api }) => {
+      const collection = await seed(api, 5);
+      await page.goto(`/collections/${collection.id}`);
+      const progress = page.locator(".collection-detail .collection-progress");
+      await expect(progress).toHaveText("1 of 5 collected");
+
+      const mark = page.getByRole("button", { name: markName("Blue Train") });
+      if (pressed === "by keyboard") {
+        await mark.focus();
+        await page.keyboard.press("Enter");
+      } else {
+        await pressWithoutFocus(mark);
+      }
+
+      await expect(page.getByRole("button", { name: markName("Blue Train") })).toHaveCount(0);
+      await expect(
+        page.getByRole("button", { name: editName("Blue Train") }),
+        "the marked row's Edit, not <body>",
+      ).toBeFocused();
+      await expect.poll(() => rows(page)).toEqual(["Kind of Blue", "Blue Train", "Giant Steps"]);
+      await expect(announcer(page)).toContainText("Marked “Blue Train” as collected.");
+      await expect(progress).toHaveText("2 of 5 collected");
+    });
+
+    test(`under Remaining the row goes, and focus goes to the row in its place (${pressed})`, async ({ page, api }) => {
+      const collection = await seed(api);
+      await page.goto(`/collections/${collection.id}?show=remaining`);
+      await expect.poll(() => rows(page)).toEqual(["Blue Train", "Giant Steps"]);
+
+      const mark = page.getByRole("button", { name: markName("Blue Train") });
+      if (pressed === "by keyboard") {
+        await mark.focus();
+        await page.keyboard.press("Enter");
+      } else {
+        await pressWithoutFocus(mark);
+      }
+
+      await expect.poll(() => rows(page)).toEqual(["Giant Steps"]);
+      await expect(
+        page.getByRole("button", { name: editName("Giant Steps") }),
+        "the successor rule, as for a delete — not <body>",
+      ).toBeFocused();
+      await expect(announcer(page)).toContainText("Marked “Blue Train” as collected. It is no longer in this list.");
+    });
+  }
+
+  test("marking the last remaining item hands focus to the panel, which says the set is complete", async ({
+    page,
+    api,
+  }) => {
+    await api.reset();
+    const collection = await api.createCollection({
+      name: "Coin set",
+      fields: FIELDS,
+      isFiniteSet: true,
+      targetCount: 2,
+    });
+    await api.createItem(collection.id, { title: "Penny", year: 1909 }, "owned");
+    await api.createItem(collection.id, { title: "Nickel", year: 1913 }, "wanted");
+
+    await page.goto(`/collections/${collection.id}?show=remaining`);
+    await expect.poll(() => rows(page)).toEqual(["Nickel"]);
+    await page.getByRole("button", { name: markName("Nickel") }).focus();
+    await page.keyboard.press("Enter");
+
+    const panel = page.getByRole("tabpanel", { name: "Remaining" });
+    await expect(panel.locator(".empty-state-title")).toHaveText("All collected");
+    await expect(panel, "focus lands on the panel that now says the set is complete").toBeFocused();
+    await expect(panel).toHaveAccessibleDescription("All collected You own every item in this set.");
+    await expect(page.locator(".collection-detail .collection-progress")).toContainText("2 of 2 collected");
+  });
+
+  for (const pressed of ["by keyboard", "without focus"] as const) {
+    test(`under the status sort the row moves up but stays listed, and focus follows it (${pressed})`, async ({
+      page,
+      api,
+    }) => {
+      const collection = await seed(api);
+      await page.goto(`/collections/${collection.id}?sort=status`);
+      // Owned, then ordered, then wanted.
+      await expect.poll(() => rows(page)).toEqual(["Kind of Blue", "Giant Steps", "Blue Train"]);
+
+      // Moving a keyed row is an insertBefore, which takes the node out of the
+      // document for a moment and sends focus inside it to <body>; the page's
+      // handoff has to put it back on the row's Edit in its new place.
+      const mark = page.getByRole("button", { name: markName("Blue Train") });
+      if (pressed === "by keyboard") {
+        await mark.focus();
+        await page.keyboard.press("Enter");
+      } else {
+        await pressWithoutFocus(mark);
+      }
+
+      await expect.poll(() => rows(page)).toEqual(["Kind of Blue", "Blue Train", "Giant Steps"]);
+      await expect(page.getByRole("button", { name: editName("Blue Train") })).toBeFocused();
+    });
+  }
+
+  test("a mark the server refuses leaves focus on the button, with the row's alert", async ({ page, api }) => {
+    const collection = await seed(api);
+    await page.route("**/api/collections/*/items/*", async (route) => {
+      if (route.request().method() !== "PATCH") return await route.fallback();
+      await route.fulfill({ status: 500, json: { message: "Internal Server Error" } });
+    });
+    await page.goto(`/collections/${collection.id}?show=remaining`);
+    await expect.poll(() => rows(page)).toEqual(["Blue Train", "Giant Steps"]);
+
+    const mark = page.getByRole("button", { name: markName("Blue Train") });
+    await mark.focus();
+    await page.keyboard.press("Enter");
+
+    await expect(page.getByRole("listitem").filter({ has: mark }).getByRole("alert")).toContainText(
+      "Could not mark this item as collected.",
+    );
+    await expect(mark).toBeFocused();
+    expect(await focusedControl(page)).toBe(`${markStop("Blue Train")}`);
+  });
+
+  /**
+   * R13: three buttons beside a long name must not push a phone-width page
+   * sideways. Set to 390px in both projects, so the desktop run checks it too.
+   */
+  test("a row with a long name and three actions fits a 390px screen", async ({ page, api }) => {
+    await api.reset();
+    const collection = await api.createCollection({ name: "Vinyl records", fields: FIELDS });
+    await api.createItem(
+      collection.id,
+      {
+        title: "The Complete Columbia Studio Recordings of the Miles Davis Quintet, January 1965 to June 1968",
+        year: 1998,
+      },
+      "wanted",
+    );
+    await api.createItem(collection.id, { title: "Characteristically".repeat(4) }, "ordered");
+    await page.setViewportSize({ width: 390, height: 844 });
+
+    await page.goto(`/collections/${collection.id}`);
+    await expect(page.getByRole("button", { name: /^Mark collected/ })).toHaveCount(2);
+
+    const widths = await page.evaluate(() => ({
+      scroll: document.documentElement.scrollWidth,
+      inner: window.innerWidth,
+      rows: Array.from(document.querySelectorAll(".item-row"), (row) => row.scrollWidth - row.clientWidth),
+    }));
+    expect(widths.scroll, "the page must not scroll sideways").toBeLessThanOrEqual(widths.inner);
+    expect(widths.rows, "no row overflows its own box").toEqual([0, 0]);
   });
 });
