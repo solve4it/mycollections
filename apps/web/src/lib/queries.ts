@@ -1,3 +1,4 @@
+import type { ItemStatus } from "@mycollections/core";
 import { keepPreviousData, type QueryClient, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   createCollection,
@@ -19,6 +20,7 @@ import {
   renameTag,
   restoreCollection,
   restoreItem,
+  setItemStatus,
   type UpdateCollectionInput,
   updateCollection,
   updateItem,
@@ -188,6 +190,24 @@ export function useUpdateItem(collectionId: string) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: ({ itemId, input }: { itemId: string; input: ItemInput }) => updateItem(collectionId, itemId, input),
+    onSuccess: () => {
+      refreshDashboard(queryClient);
+      return queryClient.invalidateQueries({ queryKey: ["collections", collectionId, "items"] });
+    },
+  });
+}
+
+/**
+ * A row's Mark collected (#42): the status alone, through the status-only
+ * update, so the item's fields are never sent back (R14). Invalidates what an
+ * edit does — the list, the header's counts under the same prefix, and the
+ * dashboard's owned counts.
+ */
+export function useSetItemStatus(collectionId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ itemId, status }: { itemId: string; status: ItemStatus }) =>
+      setItemStatus(collectionId, itemId, status),
     onSuccess: () => {
       refreshDashboard(queryClient);
       return queryClient.invalidateQueries({ queryKey: ["collections", collectionId, "items"] });

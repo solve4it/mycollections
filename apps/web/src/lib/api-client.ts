@@ -194,6 +194,22 @@ export async function updateItem(collectionId: string, itemId: string, input: It
 }
 
 /**
+ * Changes an item's status and nothing else (#42, R14) — a row's Mark
+ * collected. The body is `{ status }` alone, never the item's fields: the row
+ * holds the fields as last fetched, and sending them back would overwrite an
+ * edit made since in another tab or device with a stale copy. The server
+ * leaves whatever is not in the body as it is stored.
+ */
+export async function setItemStatus(collectionId: string, itemId: string, status: ItemStatus): Promise<Item> {
+  const res = await request(`/api/collections/${collectionId}/items/${itemId}`, {
+    method: "PATCH",
+    body: JSON.stringify({ status }),
+  });
+  if (!res.ok) throw new ApiError(res.status);
+  return res.json() as Promise<Item>;
+}
+
+/**
  * Undoes a soft delete. Sends no body, so `request` leaves the JSON Content-Type
  * off — the server rejects a declared-but-empty JSON body (#202).
  */
