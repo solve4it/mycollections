@@ -112,6 +112,12 @@ describe("api-client ↔ Fastify (real HTTP)", () => {
     expect(updated.status).toBe("wanted");
     expect(updated.fields.title).toBe("Dune Messiah");
 
+    // A status-only PATCH (#42, R14): the status changes and the fields stay as
+    // stored, because none were sent.
+    const marked = await client.setItemStatus(collection.id, item.id, "owned");
+    expect(marked.status).toBe("owned");
+    expect(marked.fields).toEqual({ title: "Dune Messiah" });
+
     // DELETE — the #202 regression guard: a DELETE with no body must not be
     // rejected by the server. It resolves (no throw) and the item is gone.
     await expect(client.deleteItem(collection.id, item.id)).resolves.toBeUndefined();

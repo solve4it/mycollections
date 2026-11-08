@@ -54,6 +54,12 @@ const PAIRS: Array<[string, string, number, string]> = [
   ["owned", "line", NON_TEXT, "complete fill against its track"],
   ["owned", "card", NON_TEXT, "complete fill on cards"],
   ["owned", "paper", NON_TEXT, "complete fill on the collection header's paper"],
+  // A wanted row's dashed border and an ordered row's dotted one (#42, D8)
+  // sit between the card and the page.
+  ["wanted", "card", NON_TEXT, "wanted row's dashed border against its card"],
+  ["wanted", "paper", NON_TEXT, "wanted row's dashed border against the page"],
+  ["ordered", "card", NON_TEXT, "ordered row's dotted border against its card"],
+  ["ordered", "paper", NON_TEXT, "ordered row's dotted border against the page"],
   ["danger", "paper", TEXT, "error text on page background"],
   ["danger", "card", TEXT, "error text on cards"],
   ["danger", "danger-surface", TEXT, "error text on its own tinted strip"],

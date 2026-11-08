@@ -377,6 +377,28 @@ in it. A search or filter whose matches are all in another tab says so — "No r
 “penny”", how many match under All — with a quiet **Show them under All** button, rather than the
 "try fewer words" advice for a search that matched nothing.
 
+## Remaining rows and Mark collected (#42)
+
+A wanted or ordered item is a catalog entry still to be filled in, so its row looks unfinished
+rather than disabled. In view mode `.item-row-wanted` turns the card's border **dashed** in
+`--wanted` and steps the field values back to `--ink-muted`; `.item-row-ordered` turns it
+**dotted** in `--ordered`. An owned row keeps the plain `--line` border. The badge still names the
+status, so the line is a second cue and never the only one. The editor drops the treatment,
+because it is a form, not a view of the item.
+
+**No opacity, no filter.** Either would fade the badge and the values together under the 4.5:1
+floor, and would read as a control that cannot be used. Measured (light / dark): the `--wanted`
+border on `--card` 4.87 / 7.22 and on `--paper` 4.53 / 8.09; `--ordered` on `--card` 6.89 / 6.69
+and on `--paper` 6.41 / 7.50; the muted values on `--card` 5.84 / 6.16. All are enforced by
+`tokens.integration.test.ts` and `rows.integration.test.ts`. **Forced colors** repaints both borders
+`CanvasText`, so the dash and the dot still tell the two apart once the hues are gone.
+
+A remaining row's first action is **Mark collected**, a quiet button with a check icon, before
+Edit and Delete. Three buttons beside the fields do not fit a phone, so `.item-row` wraps. The
+fields ask for `16rem` (`flex: 1 1 16rem`) before the actions move under them, the actions wrap
+among themselves, and a value with no spaces breaks (`overflow-wrap: anywhere`). The keyboard sweep
+checks that a long-named wanted row at 390px never makes the page scroll sideways.
+
 ## Waiting and emptiness (#225)
 
 **Empty states** are the cabinet with a drawer pulled open and nothing in it: the mark, a title

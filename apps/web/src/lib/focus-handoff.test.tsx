@@ -1,9 +1,12 @@
 import { act, cleanup, render, screen } from "@testing-library/react";
 import { useState } from "react";
-import { afterEach, describe, expect, it } from "vitest";
-import { useFocusHandoff } from "./focus-handoff.js";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { REMOVAL_DEADLINE_MS, useFocusHandoff } from "./focus-handoff.js";
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.restoreAllMocks();
+});
 
 /**
  * A host whose control is removed *before* the handoff is asked for — what a
@@ -98,7 +101,71 @@ function ListHost() {
   );
 }
 
+/**
+ * A control whose removal was asked for but never comes: a delete that landed
+ * while the list could not be fetched again, so the row stays. The request must
+ * not linger and move focus whenever the control finally goes, long after the
+ * user stopped waiting on it (#42 review).
+ */
+function StuckHost() {
+  const handOffFocus = useFocusHandoff();
+  const [present, setPresent] = useState(true);
+  const [tick, setTick] = useState(0);
+  return (
+    <>
+      <button type="button" data-testid="destination">
+        Destination
+      </button>
+      {present && (
+        <button
+          type="button"
+          data-testid="stuck"
+          onClick={(event) => handOffFocus(() => screen.getByTestId("destination"), { removing: event.currentTarget })}
+        >
+          Stuck
+        </button>
+      )}
+      <button type="button" data-testid="commit" onClick={() => setTick(tick + 1)}>
+        Commit {tick}
+      </button>
+      <button type="button" data-testid="remove" onClick={() => setPresent(false)}>
+        Remove
+      </button>
+    </>
+  );
+}
+
 describe("useFocusHandoff", () => {
+  it("drops a request whose named control is still there once REMOVAL_DEADLINE_MS has passed", () => {
+    const start = Date.now();
+    const now = vi.spyOn(Date, "now").mockReturnValue(start);
+    render(<StuckHost />);
+    (document.activeElement as HTMLElement | null)?.blur();
+    act(() => screen.getByTestId("stuck").click());
+
+    // Just inside the bound a commit keeps it waiting: a slow delete keeps its handoff.
+    now.mockReturnValue(start + REMOVAL_DEADLINE_MS - 1);
+    act(() => screen.getByTestId("commit").click());
+    expect(document.activeElement).toBe(document.body);
+    // Past it, the next commit drops the request…
+    now.mockReturnValue(start + REMOVAL_DEADLINE_MS + 1);
+    act(() => screen.getByTestId("commit").click());
+    // …so the control going later moves nothing.
+    act(() => screen.getByTestId("remove").click());
+    expect(document.activeElement).toBe(document.body);
+  });
+
+  it("still completes a request whose control goes just inside REMOVAL_DEADLINE_MS", () => {
+    const start = Date.now();
+    const now = vi.spyOn(Date, "now").mockReturnValue(start);
+    render(<StuckHost />);
+    (document.activeElement as HTMLElement | null)?.blur();
+    act(() => screen.getByTestId("stuck").click());
+    now.mockReturnValue(start + REMOVAL_DEADLINE_MS - 1);
+    act(() => screen.getByTestId("remove").click());
+    expect(document.activeElement).toBe(screen.getByTestId("destination"));
+  });
+
   it("waits for the named control to leave, even when focus was never on it", async () => {
     render(<ListHost />);
     (document.activeElement as HTMLElement | null)?.blur();
