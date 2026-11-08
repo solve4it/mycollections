@@ -343,15 +343,25 @@ describe("what does not celebrate (#42, R8)", () => {
 
   it("an action taken before the counts arrived: not knowing it was incomplete, it never claims a completion", async () => {
     acceptMarks();
-    // The first counts request never answers; the one after the mark does.
+    // The first counts request is slow: it answers only after the mark has
+    // landed, so when the mark was sent the page could not know where the set
+    // stood. (The mark's refetch joins that request rather than racing it.)
+    let answer: () => void = () => {};
     vi.mocked(getCollectionCounts)
-      .mockImplementationOnce(() => new Promise<ItemCounts>(() => {}))
+      .mockImplementationOnce(
+        () =>
+          new Promise<ItemCounts>((resolve) => {
+            answer = () => resolve(countsOf(stored));
+          }),
+      )
       .mockImplementation(async () => countsOf(stored));
     renderAt(BASE);
     await waitFor(() => expect(rowTitles()).toContain("Nickel"));
     expect(progress()).toBeNull();
 
     fireEvent.click(markButton("Nickel"));
+    await waitFor(() => expect(setItemStatus).toHaveBeenCalledTimes(1));
+    await act(async () => answer());
 
     await waitFor(() => expect(announcer()).toHaveTextContent("Marked “Nickel” as collected."));
     await waitFor(() => expect(progress()).toHaveTextContent("3 of 3 collected"));
