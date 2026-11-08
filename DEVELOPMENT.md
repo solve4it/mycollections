@@ -437,8 +437,12 @@ to `<body>` the moment the focused element becomes `disabled`, so a button that 
 the duration of its own mutation throws a keyboard user out of the page by reporting progress —
 nothing unmounts, and focus is gone anyway. Use `aria-disabled={pending || undefined}` and refuse
 the second send with an early return in the handler. The control keeps its place in the tab order,
-keeps its accessible name, and gains an announced busy state it did not have; the mutation hooks in
-`lib/queries.ts` already guard double submission, so `disabled` was never carrying that weight. The
+keeps its accessible name, and gains an announced busy state it did not have. The early return is
+what stops a second send: the mutation hooks in `lib/queries.ts` do not guard against one, and a row's
+Delete, which had neither, sent a second DELETE for a row already going (#42). While a mark or a
+delete is in flight, an item row's Mark collected, Edit and Delete all refuse this way, so a mark
+cannot race a delete for the same item and an editor opened mid-mark is not unmounted with its draft
+when the tab drops the row. The
 same applies to a control disabled for a _rule_ rather than a request — a locked field type in
 `FieldSchemaBuilder` — where `disabled` also took the `aria-describedby` hint explaining the rule
 out of the tab order, hiding it from exactly the user who cannot see the grey.
@@ -456,24 +460,27 @@ it, bounded by both a commit count and a deadline.
 The destinations are not this repo's invention — each follows an ARIA APG rule, and says which in
 its comment:
 
-| Action                                        | Destination                                                                    | Rule                              |
-| --------------------------------------------- | ------------------------------------------------------------------------------ | --------------------------------- |
-| A row's Edit (opens the editor)               | the editor's first control                                                     | disclosure: enter what you opened |
-| The editor's Cancel, or a successful Save     | the Edit that opened it                                                        | dialog: return to the invoker     |
-| A row's Delete                                | the row that takes its place, else the one before, else the tab panel          | successor element                 |
-| The toast's Undo                              | the restored row's Edit, once it is back                                       | successor element                 |
-| The toast's Dismiss                           | wherever the delete handed focus                                               | — same answer as the delete       |
-| Remove field                                  | the next field's **label**, else Add field                                     | successor element                 |
-| A confirmed trash purge                       | the next row in the **same** list, else the one before, else the trash section | successor element                 |
-| Save, when a search or tab no longer shows it | the row that takes its place — as for a Delete (#41, #42)                      | successor element                 |
-| Undo, when a search or tab does not show it   | wherever the delete handed focus — as for Dismiss (#41, #42)                   | successor element                 |
-| Clear search (in the no-match state)          | the search box                                                                 | return to where the input began   |
-| Remove a filter chip                          | the chip now in its place, else the one before, else the Filters toggle        | successor element                 |
-| Clear filters                                 | the Filters toggle                                                             | return to where the filters began |
-| A tag's Rename (opens its box)                | the rename box                                                                 | disclosure: enter what you opened |
-| A tag rename's Save, Cancel or Escape         | the renamed tag's Rename — or, after a merge, the Rename of the tag it joined  | dialog: return to the invoker     |
-| …when the new name is not in the list         | the tag search box — a search it no longer matches, or past the fifty shown    | where the tag can be found again  |
-| A confirmed tag removal                       | the next tag's Rename, else the one before, else the section heading           | successor element                 |
+| Action                                          | Destination                                                                    | Rule                              |
+| ----------------------------------------------- | ------------------------------------------------------------------------------ | --------------------------------- |
+| A row's Edit (opens the editor)                 | the editor's first control                                                     | disclosure: enter what you opened |
+| The editor's Cancel, or a successful Save       | the Edit that opened it                                                        | dialog: return to the invoker     |
+| A row's Delete                                  | the row that takes its place, else the one before, else the tab panel          | successor element                 |
+| The toast's Undo                                | the restored row's Edit, once it is back                                       | successor element                 |
+| The toast's Dismiss                             | wherever the delete handed focus                                               | — same answer as the delete       |
+| Remove field                                    | the next field's **label**, else Add field                                     | successor element                 |
+| A confirmed trash purge                         | the next row in the **same** list, else the one before, else the trash section | successor element                 |
+| Save, when a search or tab no longer shows it   | the row that takes its place — as for a Delete (#41, #42)                      | successor element                 |
+| A row's Mark collected, while the row is listed | the row's own Edit, wherever the row now is (#42)                              | return to the row acted on        |
+| Mark collected, when the tab no longer shows it | the row in its place, else the one before, else the tab panel (#42)            | successor element                 |
+| Mark collected on the last remaining item       | the tab panel, now described by "All collected" or "N more to find" (#42, R19) | successor element                 |
+| Undo, when a search or tab does not show it     | wherever the delete handed focus — as for Dismiss (#41, #42)                   | successor element                 |
+| Clear search (in the no-match state)            | the search box                                                                 | return to where the input began   |
+| Remove a filter chip                            | the chip now in its place, else the one before, else the Filters toggle        | successor element                 |
+| Clear filters                                   | the Filters toggle                                                             | return to where the filters began |
+| A tag's Rename (opens its box)                  | the rename box                                                                 | disclosure: enter what you opened |
+| A tag rename's Save, Cancel or Escape           | the renamed tag's Rename — or, after a merge, the Rename of the tag it joined  | dialog: return to the invoker     |
+| …when the new name is not in the list           | the tag search box — a search it no longer matches, or past the fifty shown    | where the tag can be found again  |
+| A confirmed tag removal                         | the next tag's Rename, else the one before, else the section heading           | successor element                 |
 
 Two things that look like details and are not. A destination has to be a control whose name says
 where the user now is, which is why Remove field goes to the next field's label rather than to its
@@ -509,6 +516,15 @@ when nothing is left) and a message that names "search, filters or tab" as the r
 last row in a tab lands on the panel and its empty state. `detail.tabs.test.tsx` and the status-tabs
 block in `keyboard.spec.ts` pin each case.
 
+A row's **Mark collected** takes the same path through the same `isListed`. Under All, or a status
+sort that only moves the row, focus goes to the row's own Edit and the announcer says "Marked “Blue
+Train” as collected.", because the button that went is the only thing on screen that changed.
+Under Remaining the row leaves: focus goes to the row in its place, or to the panel when the last
+remaining item was marked (R19), and the message adds "It is no longer in this list." Only the tab
+can hide a mark, because a status change touches no field a search or filter reads, so that message
+names no other reason. `detail.mark.test.tsx` and the "marking an item collected" block in
+`keyboard.spec.ts` pin each case.
+
 **A row-owned mutation whose follow-up belongs to the page chains it on the promise:**
 `mutateAsync(input).then(pageCallback, ignoreRejection)`, never a `mutate`-level `onSuccess` (#42).
 A `mutate`-level callback belongs to the calling component's `MutationObserver`, and the observer
@@ -518,8 +534,8 @@ focus handoff after a Save that a search hides. The promise is not tied to any c
 resolves after the hook-level `onSuccess`, which awaits the invalidation, so the list is still fresh
 when the page reads it. The rejection handler is empty on purpose: the mutation's error state already
 drives the row's alert, and the query client's mutation cache reports it. This applies to an item
-row's Save (`onSaved`) and Delete (`onDeleted`), and to any later row action whose result the page
-acts on. A finite set's header made this visible. Its counts query is a second refetch under the
+row's Save (`onSaved`), Delete (`onDeleted`) and Mark collected (`onMarked`), and to any later row
+action whose result the page acts on. A finite set's header made this visible. Its counts query is a second refetch under the
 items prefix, and that gave the browser time to commit the new list first. Before it, the race was
 there but always won. `keyboard.spec.ts` pins both cases on a finite set with a target.
 
@@ -544,6 +560,10 @@ header's counts query can supply that early commit even without the scheduled on
 
 The callers that need `removing` are the ones whose removal lands after the request:
 - a row's Delete, which removes the row once the server answers;
+- a row's Mark collected, whose button goes once the list fetched again commits, whether the row
+  stays (it is owned now) or leaves the tab. Its follow-up runs on the promise, and the promise can
+  resolve before that commit. Waiting for the button also covers the status sort, where the row
+  moves and a browser drops focus inside it to `<body>`;
 - a trash row's confirmed Delete forever, where `ConfirmButton` passes its confirm button to
   `onConfirm`;
 - a filter chip, which goes once the router has moved.
@@ -568,8 +588,8 @@ focus ring is and is not drawn (`focus.integration.test.ts`).
 
 A control that appears once per row has to say which row it acts on, or a screen-reader user hears
 the same word once per item with nothing tying a press to a record — and a focus destination
-arriving on it says nothing about what just happened. The four in the app are an item's Edit and
-Delete and a trash row's Restore and Delete forever.
+arriving on it says nothing about what just happened. The five in the app are an item's Mark
+collected, Edit and Delete, and a trash row's Restore and Delete forever.
 
 The pattern, which every interpolated-name string in the app already follows (`deleted_toast`,
 `editing_item`, `added_status`, the trash prompts): **the visible verb first, then the row's name in
@@ -588,7 +608,7 @@ not speak `“ ”`, so they read as a short pause between the verb and the name
 see them, which is what makes a verb-shaped item name parseable. A colon would be spoken by some
 configurations; this is the reason the separator is quotes and not punctuation.
 
-In the keyboard sweep these names are built by four helpers at the top of `keyboard.spec.ts`, said
+In the keyboard sweep these names are built by five helpers at the top of `keyboard.spec.ts`, said
 once because each appears in both a selector and a tab-order expectation. The expectations carry one
 more thing than the selectors: Playwright appends an element's text content to a stop when the
 accessible name differs from it, so a stop reads `button "Edit “Kind of Blue”": Edit` — the 2.5.3
