@@ -377,9 +377,14 @@ describe("focus after Mark collected (#42, D10)", () => {
     await waitFor(() => expect(panel()).toHaveFocus());
     expect(panel()).toHaveAccessibleDescription("All collected You own every item in this set.");
     await waitFor(() => expect(document.querySelector(".collection-progress")).toHaveTextContent("2 of 2 collected"));
+    // Completing the set says it once, in the celebration's own region, which
+    // carries the mark's message too — the announcer is not also told (#42, R8).
     await waitFor(() =>
-      expect(announcer()).toHaveTextContent("Marked “Nickel” as collected. It is no longer in this list."),
+      expect(document.querySelector(".celebration-live")).toHaveTextContent(
+        "Marked “Nickel” as collected. It is no longer in this list. Coins is complete!",
+      ),
     );
+    expect(announcer()).not.toHaveTextContent("Marked");
   });
 
   it("marking the last remaining item short of the target says how many are left to find", async () => {
