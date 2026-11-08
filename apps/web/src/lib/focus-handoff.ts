@@ -43,6 +43,26 @@ export interface FocusHandoffOptions {
 const MAX_COMMITS = 20;
 const DEADLINE_MS = 3_000;
 
+/**
+ * How long a request waits for the control it named (`removing`) to leave.
+ *
+ * Longer than `DEADLINE_MS`, because this wait spans a server round trip: a
+ * Delete asks for its handoff before the request is sent, and its row only goes
+ * once the answer lands. Not counted in commits, because the screen may not
+ * commit at all while the request is out. But bounded, because the control may
+ * never leave: a delete that landed while the list could not be fetched again
+ * leaves its row on screen, and an unbounded request then moved focus whenever
+ * some later refetch finally removed it, long after the user stopped waiting
+ * (#42 review).
+ *
+ * Ten seconds is where a press that has not finished has, for the user,
+ * failed. A delete slower than that still completes. Its row goes and focus
+ * falls to <body>, which is what happened before #367. That is the lesser harm
+ * than focus moving on its own under a user who has moved on. Expiry is noticed
+ * on the next commit, which is when a stale request could otherwise act.
+ */
+export const REMOVAL_DEADLINE_MS = 10_000;
+
 interface Handoff {
   destination: FocusDestination;
   /** What held focus when the handoff was asked for. */
@@ -107,8 +127,13 @@ export function useFocusHandoff(): (destination: FocusDestination, options?: Foc
     }
 
     // The control the caller named is still in the document: the removal has
-    // not happened yet, wherever focus is. Keep waiting.
-    if (handoff.removing?.isConnected) return;
+    // not happened yet, wherever focus is. Keep waiting, but not past
+    // REMOVAL_DEADLINE_MS: a control that never leaves must not leave a request
+    // behind that acts whenever it eventually does.
+    if (handoff.removing?.isConnected) {
+      if (Date.now() - handoff.requestedAt > REMOVAL_DEADLINE_MS) pending.current = null;
+      return;
+    }
 
     // The control is still in the document and still has focus: nothing has
     // been taken away yet, so there is nothing to rescue. Keep waiting.

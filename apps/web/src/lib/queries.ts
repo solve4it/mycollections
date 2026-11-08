@@ -1,4 +1,4 @@
-import type { ItemStatus } from "@mycollections/core";
+import type { Item, ItemStatus } from "@mycollections/core";
 import { keepPreviousData, type QueryClient, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   createCollection,
@@ -208,9 +208,29 @@ export function useSetItemStatus(collectionId: string) {
   return useMutation({
     mutationFn: ({ itemId, status }: { itemId: string; status: ItemStatus }) =>
       setItemStatus(collectionId, itemId, status),
-    onSuccess: () => {
+    onSuccess: async (marked) => {
       refreshDashboard(queryClient);
-      return queryClient.invalidateQueries({ queryKey: ["collections", collectionId, "items"] });
+      await queryClient.invalidateQueries({ queryKey: ["collections", collectionId, "items"] });
+      // Then the server's answer goes into any cached list the refetch did not
+      // bring up to date (#42 review). `invalidateQueries` swallows a failed
+      // refetch, and without this the row kept saying Wanted, with its button,
+      // under an announcement that it had been marked: the page decides where
+      // focus goes and what to say from this cache.
+      //
+      // After the refetch, not before it, so the usual path is untouched: the
+      // fresh list (in a status sort's new order) lands while the mutation is
+      // still pending, the button stays marked busy and keeps focus, and only
+      // then does the page hand focus on. A status change moves no item in or
+      // out of a search or filter, so the patch replaces the item in place.
+      // Only an older copy is replaced (ISO times compare as strings), so a
+      // list the refetch did update is left alone. Item lists are the arrays
+      // under the prefix; the counts and the tag values are objects.
+      queryClient.setQueriesData<unknown>({ queryKey: ["collections", collectionId, "items"] }, (cached: unknown) => {
+        if (!Array.isArray(cached)) return cached;
+        const list = cached as Item[];
+        const stale = list.some((listed) => listed.id === marked.id && listed.updatedAt < marked.updatedAt);
+        return stale ? list.map((listed) => (listed.id === marked.id ? marked : listed)) : cached;
+      });
     },
   });
 }

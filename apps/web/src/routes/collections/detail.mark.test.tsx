@@ -83,7 +83,7 @@ function acceptMarks() {
     let marked: Item | undefined;
     stored = stored.map((it) => {
       if (it.id !== itemId) return it;
-      marked = { ...it, status };
+      marked = { ...it, status, updatedAt: "2024-01-03T00:00:00.000Z" };
       return marked;
     });
     if (!marked) throw new Error("no such item");
