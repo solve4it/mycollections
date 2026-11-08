@@ -3,6 +3,7 @@ import {
   collectionProgress,
   formatItemFilters,
   type Item,
+  type ItemCounts,
   type ItemFilter,
 } from "@mycollections/core";
 import { type UseQueryResult, useQueryClient } from "@tanstack/react-query";
@@ -36,6 +37,7 @@ import {
 import { CONTENT_LINK_ACTIVE_OPTIONS } from "../../lib/links.js";
 import { type PageName, usePageTitle } from "../../lib/page-title.js";
 import {
+  collectionCountsQueryKey,
   itemsQueryKey,
   useCollection,
   useCollectionCounts,
@@ -90,6 +92,15 @@ export const ADD_CONFIRMATION_MS = 10_000;
 export const RESULT_ANNOUNCE_DELAY_MS = 1_000;
 
 /**
+ * How long "… is complete!" stays up after an action completes a finite set
+ * (#42), and how long the header's Complete badge may stamp. The same window as
+ * the add confirmation, by the same reasoning: it restates an outcome whose
+ * durable record — the Complete badge and the full bar — stays on screen, and
+ * it holds no control to reach in time.
+ */
+export const CELEBRATION_MS = 10_000;
+
+/**
  * Renders a stored field value. Booleans become a labelled icon rather than the
  * check/cross glyphs used before: the icon is the whole value, so it carries its
  * own accessible name instead of leaving screen readers to announce a unicode
@@ -134,6 +145,14 @@ interface EmptyView {
  * only needs its rejection handled, not handled again.
  */
 function ignoreRejection(): void {}
+
+/**
+ * Asked once an item change has landed and the list and counts have been
+ * fetched again: did this change complete the set? True at most once per
+ * completion (#42). Started before the change is sent, because only then can
+ * it read the counts the change started from.
+ */
+type CompletionCheck = () => boolean;
 
 /**
  * What this page calls itself (#309). A collection that failed to load is as
@@ -229,6 +248,65 @@ function CollectionDetailPage() {
   // bar, because a zero would claim the set is empty.
   const measurable = collection?.isFiniteSet === true && collection.targetCount !== null;
   const countsQuery = useCollectionCounts(id, measurable);
+
+  // Completing a finite set (#42). What the page says when an action of the
+  // user's — Mark collected, a row's Save, Add item — takes owned from below
+  // the target to it. Held in local state with a life span of its own, as the
+  // add confirmation is; each celebration is a new object, so a second one
+  // restarts the window.
+  const [celebration, setCelebration] = useState<{ message: string } | null>(null);
+  // Whether the completion on screen has been celebrated. Two changes in
+  // flight together can both have started below the target and both find it
+  // reached; only the first says so.
+  const celebratedRef = useRef(false);
+
+  useEffect(() => {
+    if (!celebration) return;
+    const timer = setTimeout(() => setCelebration(null), CELEBRATION_MS);
+    return () => clearTimeout(timer);
+  }, [celebration]);
+
+  // Below the target again — an edit back to wanted, a delete — the next
+  // completion is news again, and a "… is complete!" still up would be false.
+  const completeOnScreen =
+    collection && countsQuery.data ? collectionProgress(collection, countsQuery.data.owned)?.complete : undefined;
+  useEffect(() => {
+    if (completeOnScreen !== false) return;
+    celebratedRef.current = false;
+    setCelebration(null);
+  }, [completeOnScreen]);
+
+  /**
+   * Whether the cached counts say the set is complete; null when they cannot
+   * say — not a measurable set, counts not loaded, or the last fetch failed.
+   * Read from the cache rather than the render, because a check runs in a
+   * promise callback that closes over the render in which the change began.
+   */
+  function completeInCache(): boolean | null {
+    if (!collection) return null;
+    const state = queryClient.getQueryState<ItemCounts>(collectionCountsQueryKey(id));
+    if (state?.status !== "success" || state.data === undefined) return null;
+    return collectionProgress(collection, state.data.owned)?.complete ?? null;
+  }
+
+  /**
+   * Started as a change is sent; asked once it has landed (R8). Celebrates
+   * only a transition the page saw both ends of: incomplete before, complete
+   * after. Counts unknown before — still loading, or failed — mean the set may
+   * already have been complete, and claiming a completion that is not one is
+   * worse than missing one, so the answer is no. "After" is the counts as
+   * fetched again by the mutation's hook, which awaits the refetch before the
+   * promise this rides resolves; a failed refetch leaves the error status, and
+   * the answer is no again.
+   */
+  function watchCompletion(): CompletionCheck {
+    const was = completeInCache();
+    return () => {
+      if (was !== false || completeInCache() !== true || celebratedRef.current) return false;
+      celebratedRef.current = true;
+      return true;
+    };
+  }
 
   // What the tab on screen shows: the list fetched for the search, narrowed by
   // status. Placeholder data (the previous search, kept while the next loads)
@@ -480,7 +558,11 @@ function CollectionDetailPage() {
         </Link>
       </div>
       {measurable && countsQuery.data && (
-        <CollectionProgress collection={collection} ownedCount={countsQuery.data.owned} />
+        <CollectionProgress
+          collection={collection}
+          ownedCount={countsQuery.data.owned}
+          celebrating={celebration !== null}
+        />
       )}
       {/* Finite, but the size is not known yet: say how to get a bar. A plain
           paragraph, not a live region: it is decided once, with the
@@ -554,21 +636,31 @@ function CollectionDetailPage() {
             handOffFocus(() => searchInputRef.current);
             setSearch("");
           }}
-          onSaved={(saved, index) => {
+          watchCompletion={watchCompletion}
+          onSaved={(saved, index, completed) => {
             // The row's own Edit if the saved item is still listed (return to
             // invoker); if the search no longer matches it, the row that took its
             // place (successor, as for a delete). Decided here, at the page,
             // because the row may be the thing that disappears (#41).
+            //
+            // A save that completed the set says so instead of what it would
+            // have said, in one message (R8): focus goes exactly where it would
+            // have, and only the words change.
+            const name = itemLabel(collection, saved, t("untitled"));
+            const celebrate = completed();
             if (isListed(saved.id)) {
               handOffFocus(
                 () => document.querySelector<HTMLElement>(`[data-item-id="${saved.id}"] [data-row-edit]`) ?? null,
               );
+              if (celebrate) setCelebration({ message: t("celebration_saved", { name, collection: collection.name }) });
             } else {
               handOffFocus(rowDestination(index));
-              announce(t("saved_hidden", { name: itemLabel(collection, saved, t("untitled")) }));
+              if (celebrate)
+                setCelebration({ message: t("celebration_saved_hidden", { name, collection: collection.name }) });
+              else announce(t("saved_hidden", { name }));
             }
           }}
-          onMarked={(marked, index) => {
+          onMarked={(marked, index, completed) => {
             // The same two answers as a Save, chosen here for the same reason:
             // the row may be what disappears (#42, D10). Still listed — under
             // All, or a sort that only moves it — focus goes to the row's own
@@ -589,14 +681,21 @@ function CollectionDetailPage() {
             // (#42 review).
             //
             // Spoken either way: the button that said what the row was waiting
-            // for is gone, and nothing on screen says why.
+            // for is gone, and nothing on screen says why. A mark that completed
+            // the set is spoken once, by the celebration, whose words carry the
+            // mark's own (R8); focus is not touched by that choice.
             const name = itemLabel(collection, marked, t("untitled"));
+            const celebrate = completed();
             if (isListed(marked.id)) {
               handOffFocus(() => document.querySelector<HTMLElement>(`[data-item-id="${marked.id}"] [data-row-edit]`));
-              announce(t("marked_collected", { name }));
+              if (celebrate)
+                setCelebration({ message: t("celebration_marked", { name, collection: collection.name }) });
+              else announce(t("marked_collected", { name }));
             } else {
               handOffFocus(rowDestination(index));
-              announce(t("marked_collected_hidden", { name }));
+              if (celebrate)
+                setCelebration({ message: t("celebration_marked_hidden", { name, collection: collection.name }) });
+              else announce(t("marked_collected_hidden", { name }));
             }
           }}
           // Names the Delete being removed: the row goes only once the server
@@ -635,6 +734,21 @@ function CollectionDetailPage() {
           second delete, and atomic would re-read the whole toast instead of the
           name that changed. */}
       <div className="undo-toast-region">
+        {/* Completing a finite set (#42): the fourth region the announcer cannot
+            carry, because the words are seen as well as heard. The same
+            mechanism as the toast's, beside it rather than inside it — a
+            celebration can land while a toast is open, and each region owns
+            only what arrives in it. Rendered from the first commit, empty, and
+            filled once an action has completed the set; emptied in place when
+            the window closes. It holds no control, so it takes no pointer. */}
+        <div className="celebration-live" aria-live="polite">
+          {celebration && (
+            <p className="celebration">
+              <Icon name="check" />
+              {celebration.message}
+            </p>
+          )}
+        </div>
         <div className="undo-toast-live" aria-live="polite">
           {undo && (
             <UndoToast
@@ -687,16 +801,31 @@ function CollectionDetailPage() {
           initialStatus={tab === "remaining" ? "wanted" : undefined}
           pending={createItem.isPending}
           resetSignal={addedCount}
-          onSubmit={(payload) =>
-            createItem.mutate(payload, {
-              onSuccess: (item) => {
-                // Runs after the list has been fetched again, so whether the
-                // search shows the new item is known now and said once (#41).
-                setAdded({ name: itemLabel(collection, item, t("untitled")), hidden: !isListed(item.id) });
-                setAddedCount((count) => count + 1);
-              },
-            })
-          }
+          onSubmit={(payload) => {
+            const completed = watchCompletion();
+            // On the promise, like the rows' follow-ups (R1): it resolves after
+            // the hook's onSuccess has fetched the list and the counts again,
+            // so whether the search shows the new item, and whether it
+            // completed the set, are known now and said once (#41, #42).
+            createItem.mutateAsync(payload).then((item) => {
+              const name = itemLabel(collection, item, t("untitled"));
+              const hidden = !isListed(item.id);
+              if (completed()) {
+                // One message (R8): the celebration carries the add, and an
+                // earlier add's confirmation goes rather than sit beside it.
+                setAdded(null);
+                setCelebration({
+                  message: t(hidden ? "celebration_added_hidden" : "celebration_added", {
+                    name,
+                    collection: collection.name,
+                  }),
+                });
+              } else {
+                setAdded({ name, hidden });
+              }
+              setAddedCount((count) => count + 1);
+            }, ignoreRejection);
+          }}
         />
         {/* Always rendered, never conditional (#308, #326, and #368 is what
             made this screen need one at all). A keyboard user adding an item
@@ -736,10 +865,12 @@ interface ItemListProps {
   onClearFilters: () => void;
   /** The search or filters match only in another tab: select All (`trigger` is the button, which goes). */
   onShowAll: (trigger: HTMLElement) => void;
+  /** Started as a row sends a Save or a Mark collected, and handed back with its result (#42). */
+  watchCompletion: () => CompletionCheck;
   /** After a row's Save has landed and the list has been fetched again. */
-  onSaved: (item: Item, index: number) => void;
+  onSaved: (item: Item, index: number, completed: CompletionCheck) => void;
   /** After a row's Mark collected has landed and the list has been fetched again. */
-  onMarked: (item: Item, index: number) => void;
+  onMarked: (item: Item, index: number, completed: CompletionCheck) => void;
   /** Asked for as a delete starts, while the row and its Delete (`trigger`) are still on screen. */
   onDeleting: (index: number, trigger: HTMLElement) => void;
   onDeleted: (item: Item, index: number) => void;
@@ -760,6 +891,7 @@ function ItemList({
   onClearSearch,
   onClearFilters,
   onShowAll,
+  watchCompletion,
   onSaved,
   onMarked,
   onDeleting,
@@ -828,8 +960,9 @@ function ItemList({
             item={item}
             onDeleting={(trigger) => onDeleting(index, trigger)}
             onDeleted={() => onDeleted(item, index)}
-            onSaved={(saved) => onSaved(saved, index)}
-            onMarked={(marked) => onMarked(marked, index)}
+            watchCompletion={watchCompletion}
+            onSaved={(saved, completed) => onSaved(saved, index, completed)}
+            onMarked={(marked, completed) => onMarked(marked, index, completed)}
           />
         ))}
       </ul>
@@ -840,13 +973,14 @@ function ItemList({
 interface ItemRowProps {
   collection: Collection;
   item: Item;
-  onSaved: (item: Item) => void;
-  onMarked: (item: Item) => void;
+  watchCompletion: () => CompletionCheck;
+  onSaved: (item: Item, completed: CompletionCheck) => void;
+  onMarked: (item: Item, completed: CompletionCheck) => void;
   onDeleting: (trigger: HTMLElement) => void;
   onDeleted: () => void;
 }
 
-function ItemRow({ collection, item, onDeleting, onDeleted, onSaved, onMarked }: ItemRowProps) {
+function ItemRow({ collection, item, watchCompletion, onDeleting, onDeleted, onSaved, onMarked }: ItemRowProps) {
   const { t } = useTranslation("items");
   const updateItem = useUpdateItem(collection.id);
   // Its own mutation, not the editor's: a failed mark and a failed save are
@@ -902,7 +1036,10 @@ function ItemRow({ collection, item, onDeleting, onDeleted, onSaved, onMarked }:
               updateItem.reset();
               setEditing(false);
             }}
-            onSubmit={(payload) =>
+            onSubmit={(payload) => {
+              // Whether this save completes the set is the page's question,
+              // asked of the counts as they stand before it is sent (#42).
+              const completed = watchCompletion();
               // The page picks the destination: a search may have taken this
               // row off the list, and this row's handoff would die with it
               // (#41). Chained on the promise rather than passed as a
@@ -914,10 +1051,10 @@ function ItemRow({ collection, item, onDeleting, onDeleted, onSaved, onMarked }:
               // alert below; the empty handler only keeps it from surfacing
               // as an unhandled rejection.
               updateItem.mutateAsync({ itemId: item.id, input: payload }).then((saved) => {
-                onSaved(saved);
+                onSaved(saved, completed);
                 setEditing(false);
-              }, ignoreRejection)
-            }
+              }, ignoreRejection);
+            }}
           />
         </div>
         {updateItem.isError && <p role="alert">{t("update_error")}</p>}
@@ -963,7 +1100,10 @@ function ItemRow({ collection, item, onDeleting, onDeleted, onSaved, onMarked }:
                 // The follow-up is the page's and rides the promise (R1): the
                 // row may be gone, or this button with it, when the mutation
                 // settles. Only the status is sent (R14).
-                markItem.mutateAsync({ itemId: item.id, status: "owned" }).then(onMarked, ignoreRejection);
+                const completed = watchCompletion();
+                markItem
+                  .mutateAsync({ itemId: item.id, status: "owned" })
+                  .then((marked) => onMarked(marked, completed), ignoreRejection);
               }}
             >
               <Icon name="check" />

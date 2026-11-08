@@ -6,6 +6,12 @@ interface CollectionProgressProps {
   collection: Pick<Collection, "isFiniteSet" | "targetCount">;
   /** Live owned items — the dashboard list's `ownedCount`, or the counts route's `owned`. */
   ownedCount: number;
+  /**
+   * The collection page has just watched an action complete the set (#42): the
+   * Complete badge stamps once. Never on the card, and never on landing on a
+   * set that was already complete — only the transition is news.
+   */
+  celebrating?: boolean;
 }
 
 /**
@@ -28,13 +34,18 @@ interface CollectionProgressProps {
  * whose size is not known yet. The collection header explains the latter
  * itself; the card stays silent rather than nag from the dashboard.
  */
-export function CollectionProgress({ collection, ownedCount }: CollectionProgressProps) {
+export function CollectionProgress({ collection, ownedCount, celebrating = false }: CollectionProgressProps) {
   const { t } = useTranslation("collections");
   const progress = collectionProgress(collection, ownedCount);
   if (!progress) return null;
 
+  let className = "collection-progress";
+  if (progress.complete) className += " collection-progress-complete";
+  // Only a complete set has a badge to stamp.
+  if (progress.complete && celebrating) className += " collection-progress-celebrating";
+
   return (
-    <p className={progress.complete ? "collection-progress collection-progress-complete" : "collection-progress"}>
+    <p className={className}>
       <span className="collection-progress-count">
         {t("progress_count", { count: progress.target, owned: progress.owned })}
       </span>
