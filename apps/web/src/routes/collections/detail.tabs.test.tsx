@@ -217,12 +217,27 @@ describe("the status tabs (#42)", () => {
     await waitFor(() => expect(router.state.location.search).toEqual({ q: "nick" }));
   });
 
+  it("rewrites ?show=all, or a tab it does not know, as the bare address on arrival, keeping the rest", async () => {
+    const { router } = renderAt(`${BASE}?show=all&q=nick`);
+    await waitFor(() => expect(rowTitles()).toEqual(["Nickel"]));
+    expect(router.history.location.href).toBe(`${BASE}?q=nick`);
+    const entries = router.history.length;
+
+    cleanup();
+    const second = renderAt(`${BASE}?show=owned`);
+    await waitFor(() => expect(rowTitles()).toHaveLength(4));
+    expect(second.router.history.location.href).toBe(BASE);
+    // Replaced, so Back does not land on the address that was rewritten.
+    expect(second.router.history.length).toBe(entries);
+  });
+
   it("composes with a search and with filters, and keeps the tab when either changes", async () => {
     const filter = encodeURIComponent('[{"field":"year","op":"gte","value":1914}]');
     const { router } = renderAt(`${BASE}?show=remaining&filter=${filter}`);
     // Remaining is Nickel (1913) and Dime (1916); the filter keeps 1914 on.
     await waitFor(() => expect(rowTitles()).toEqual(["Dime"]));
-    expect(document.querySelector(".item-count")).toHaveTextContent("1 item matches");
+    // The count names the tab: the filter alone matches Dime and Quarter.
+    expect(document.querySelector(".item-count")).toHaveTextContent("1 remaining item matches");
 
     fireEvent.click(screen.getByRole("button", { name: "Remove filter Year: from 1914" }));
     await waitFor(() => expect(rowTitles()).toEqual(["Nickel", "Dime"]));
@@ -232,18 +247,104 @@ describe("the status tabs (#42)", () => {
     // "e" matches Penny, Nickel, Dime and Quarter; the tab keeps the two remaining.
     await waitFor(() => expect(router.state.location.search).toEqual({ show: "remaining", q: "e" }));
     await waitFor(() => expect(rowTitles()).toEqual(["Nickel", "Dime"]));
-    expect(document.querySelector(".item-count")).toHaveTextContent("2 items match “e”");
+    // Four items match "e"; two of them are remaining, and the line says which two it counts.
+    expect(document.querySelector(".item-count")).toHaveTextContent("2 remaining items match “e”");
 
     fireEvent.click(tab("Collected"));
     await waitFor(() => expect(rowTitles()).toEqual(["Penny", "Quarter"]));
     expect(router.state.location.search).toEqual({ show: "collected", q: "e" });
+    expect(document.querySelector(".item-count")).toHaveTextContent("2 collected items match “e”");
+
+    fireEvent.click(screen.getByRole("button", { name: "Filters" }));
+    fireEvent.change(screen.getByRole("spinbutton", { name: "Minimum" }), { target: { value: "1920" } });
+    fireEvent.click(screen.getByRole("button", { name: "Apply filters" }));
+    await waitFor(() => expect(rowTitles()).toEqual(["Quarter"]));
+    expect(document.querySelector(".item-count")).toHaveTextContent("1 collected item matches “e” with these filters");
   });
 
-  it("says a search matches nothing in this tab — never that the collection is empty", async () => {
-    renderAt(`${BASE}?show=remaining&q=penny`);
-    expect(await screen.findByText("No items match “penny”")).toBeInTheDocument();
+  it("a search that matches only in another tab says so, how many match under All, and offers to show them", async () => {
+    renderAt(`${BASE}?show=remaining`);
+    await waitFor(() => expect(rowTitles()).toEqual(["Nickel", "Dime"]));
+    fireEvent.change(screen.getByRole("searchbox", { name: "Search items" }), { target: { value: "penny" } });
+
+    await waitFor(() =>
+      expect(emptyState()).toEqual(["No remaining items match “penny”", "1 item matches under All."]),
+    );
     expect(screen.queryByText("No items yet")).not.toBeInTheDocument();
-    expect(panel()).toContainElement(screen.getByText("No items match “penny”"));
+    expect(screen.queryByText(/Try fewer or shorter words/)).not.toBeInTheDocument();
+    await waitFor(
+      () => expect(announcer()).toHaveTextContent("No remaining items match “penny”. 1 item matches under All."),
+      { timeout: 3000 },
+    );
+
+    const show = screen.getByRole("button", { name: "Show them under All" });
+    show.focus();
+    fireEvent.click(show);
+    await waitFor(() => expect(rowTitles()).toEqual(["Penny"]));
+    expect(tab("All")).toHaveAttribute("aria-selected", "true");
+    // The button went with the empty state; focus goes to the tab it selected.
+    await waitFor(() => expect(tab("All")).toHaveFocus());
+  });
+
+  it("filters that match only in another tab say so too, and a search that matches nothing anywhere keeps its own advice", async () => {
+    const filter = encodeURIComponent('[{"field":"year","op":"gte","value":1930}]');
+    renderAt(`${BASE}?show=remaining&filter=${filter}`);
+    await waitFor(() =>
+      expect(emptyState()).toEqual(["No remaining items match these filters", "1 item matches under All."]),
+    );
+
+    cleanup();
+    renderAt(`${BASE}?show=remaining&q=zzz`);
+    await waitFor(() =>
+      expect(emptyState()).toEqual([
+        "No items match “zzz”",
+        "Try fewer or shorter words. Search looks at text, choices, tags and numbers.",
+      ]),
+    );
+    expect(screen.queryByRole("button", { name: "Show them under All" })).not.toBeInTheDocument();
+  });
+
+  it("shows no empty state built from the previous search while the next one loads", async () => {
+    stored = [PENNY, NICKEL];
+    let release: () => void = () => {};
+    vi.mocked(listItems).mockImplementation((collectionId, query = {}) => {
+      if (query.q) return serve(collectionId, query);
+      return new Promise<Item[]>((resolve) => {
+        release = () => void serve(collectionId, query).then(resolve);
+      });
+    });
+    const { router } = renderAt(`${BASE}?show=remaining&q=zzz`, FINITE(5));
+    await waitFor(() => expect(emptyState()?.[0]).toBe("No items match “zzz”"));
+
+    fireEvent.change(screen.getByRole("searchbox", { name: "Search items" }), { target: { value: "" } });
+    await waitFor(() => expect(router.state.location.search.q).toBeUndefined());
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    // The kept "zzz" result is empty, but it is not this view's answer: no
+    // "4 more to find" while Nickel is wanted, only the list's loading state.
+    expect(emptyState()).toBeNull();
+    expect(panel()).toHaveTextContent("Loading items…");
+    expect(panel()).not.toHaveAttribute("aria-describedby");
+
+    release();
+    await waitFor(() => expect(rowTitles()).toEqual(["Nickel"]));
+  });
+
+  it("describes the panel by its empty state while one shows, and by nothing otherwise", async () => {
+    stored = [PENNY];
+    renderAt(BASE);
+    await waitFor(() => expect(rowTitles()).toEqual(["Penny"]));
+    expect(panel()).not.toHaveAttribute("aria-describedby");
+
+    fireEvent.click(tab("Remaining"));
+    await waitFor(() =>
+      expect(panel()).toHaveAccessibleDescription(
+        "Nothing on your wanted list Items whose status is Wanted or Ordered appear here.",
+      ),
+    );
+
+    fireEvent.click(tab("Collected"));
+    await waitFor(() => expect(rowTitles()).toEqual(["Penny"]));
+    expect(panel()).not.toHaveAttribute("aria-describedby");
   });
 
   it("speaks the count of a tab once it settles, and the empty state's title when there is nothing in it", async () => {
@@ -340,7 +441,7 @@ describe("a tab with nothing in it (#42, R7)", () => {
     await waitFor(() => expect(emptyState()).toEqual(["No items yet", "Add your first item using the form below."]));
   });
 
-  it("counts a set complete once owned reaches the target, even with wanted items still listed", async () => {
+  it("the header counts a set complete once owned reaches the target, while Remaining still lists its wanted items", async () => {
     stored = [PENNY, QUARTER, NICKEL];
     renderAt(`${BASE}?show=remaining`, FINITE(2));
     await waitFor(() => expect(rowTitles()).toEqual(["Nickel"]));
@@ -375,6 +476,39 @@ describe("adding an item from a tab (#42, R16)", () => {
 
     fireEvent.click(tab("Collected"));
     await waitFor(() => expect(status).toHaveValue("owned"));
+  });
+
+  it("keeps a status the user picked when the tab changes under it", async () => {
+    renderAt(`${BASE}?show=remaining`);
+    await waitFor(() => expect(rowTitles()).toEqual(["Nickel", "Dime"]));
+    const status = within(addForm()).getByRole("combobox", { name: "Status" });
+    fireEvent.change(status, { target: { value: "ordered" } });
+    fireEvent.change(within(addForm()).getByRole("textbox", { name: "Title" }), { target: { value: "Half dollar" } });
+
+    fireEvent.click(tab("All"));
+    await waitFor(() => expect(tab("All")).toHaveAttribute("aria-selected", "true"));
+    expect(status).toHaveValue("ordered");
+    expect(within(addForm()).getByRole("textbox", { name: "Title" })).toHaveValue("Half dollar");
+  });
+
+  it("a row editor keeps the status the user picked when the list is fetched again underneath it", async () => {
+    renderAt(BASE);
+    await waitFor(() => expect(rowTitles()).toEqual(["Penny", "Nickel", "Dime", "Quarter"]));
+    fireEvent.click(screen.getByRole("button", { name: "Edit “Nickel”" }));
+    const editor = screen.getByRole("form", { name: "Editing “Nickel”" });
+    const status = within(editor).getByRole("combobox", { name: "Status" });
+    fireEvent.change(status, { target: { value: "ordered" } });
+
+    // Meanwhile Nickel is marked owned elsewhere, and a delete of another row
+    // fetches the list again with that status in it.
+    stored = stored.map((it) => (it.id === NICKEL.id ? { ...it, status: "owned" as const } : it));
+    vi.mocked(deleteItem).mockImplementation(async () => {
+      stored = stored.filter((it) => it.id !== QUARTER.id);
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Delete “Quarter”" }));
+    await waitFor(() => expect(screen.queryByRole("button", { name: "Edit “Quarter”" })).not.toBeInTheDocument());
+
+    expect(status).toHaveValue("ordered");
   });
 
   it("an add the tab hides says so, naming the tab among the reasons", async () => {

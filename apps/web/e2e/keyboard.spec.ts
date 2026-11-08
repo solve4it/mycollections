@@ -942,7 +942,8 @@ test.describe("focus when the control holding it goes away", () => {
     // it is empty (#42; the Items heading before the tabs).
     const panel = page.getByRole("tabpanel", { name: "All" });
     await expect(panel, "an emptied list must hand focus to its panel").toBeFocused();
-    await expect(panel).toContainText("No items yet");
+    // Described by the empty state, so arriving on the panel reads why it is empty.
+    await expect(panel).toHaveAccessibleDescription("No items yet Add your first item using the form below.");
   });
 
   test("opening a row's editor puts focus in the editor, which says which item it is", async ({ page, api }) => {
@@ -1596,6 +1597,9 @@ test.describe("the status tabs (#42)", () => {
     const panel = page.getByRole("tabpanel", { name: "Remaining" });
     await expect(panel.locator(".empty-state-title")).toHaveText("2 more to find");
     await expect(panel, "focus lands on the panel that now says what is left").toBeFocused();
+    await expect(panel).toHaveAccessibleDescription(
+      "2 more to find Nothing is on your wanted list. Add the items you are looking for as Wanted or Ordered.",
+    );
     await expect(page.getByRole("button", { name: "Undo" })).toBeVisible();
   });
 

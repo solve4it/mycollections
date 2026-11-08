@@ -105,19 +105,32 @@ describe("DynamicItemForm", () => {
     rerender(<DynamicItemForm fields={title} onSubmit={onSubmit} initialStatus="wanted" resetSignal={0} />);
     expect(screen.getByLabelText(/status/i)).toHaveValue("wanted");
 
-    // A status the user chose themselves is theirs until the tab changes again.
+    // A status the user chose themselves is theirs: a later change of the prop
+    // (the tab switched, or a refetch gave the edited item a new status) does
+    // not overwrite it.
     fireEvent.change(screen.getByLabelText(/status/i), { target: { value: "ordered" } });
-    rerender(<DynamicItemForm fields={title} onSubmit={onSubmit} initialStatus="wanted" resetSignal={0} />);
+    rerender(<DynamicItemForm fields={title} onSubmit={onSubmit} resetSignal={0} />);
     expect(screen.getByLabelText(/status/i)).toHaveValue("ordered");
     fireEvent.change(screen.getByLabelText("Title"), { target: { value: "Penny" } });
     fireEvent.click(screen.getByRole("button", { name: /save/i }));
     expect(onSubmit).toHaveBeenLastCalledWith({ status: "ordered", fields: { title: "Penny" } });
 
+    // A reset starts a new entry, which is untouched again.
     rerender(<DynamicItemForm fields={title} onSubmit={onSubmit} initialStatus="wanted" resetSignal={1} />);
     expect(screen.getByLabelText(/status/i)).toHaveValue("wanted");
 
     rerender(<DynamicItemForm fields={title} onSubmit={onSubmit} resetSignal={1} />);
     expect(screen.getByLabelText(/status/i)).toHaveValue("owned");
+  });
+
+  it("an editor whose item changes status underneath it keeps the status the user picked", () => {
+    const title = [FIELDS[0] as FieldDefinition];
+    const { rerender } = render(<DynamicItemForm fields={title} onSubmit={vi.fn()} initialStatus="wanted" />);
+    rerender(<DynamicItemForm fields={title} onSubmit={vi.fn()} initialStatus="ordered" />);
+    expect(screen.getByLabelText(/status/i), "untouched, it follows").toHaveValue("ordered");
+    fireEvent.change(screen.getByLabelText(/status/i), { target: { value: "wanted" } });
+    rerender(<DynamicItemForm fields={title} onSubmit={vi.fn()} initialStatus="owned" />);
+    expect(screen.getByLabelText(/status/i), "picked, it stays").toHaveValue("wanted");
   });
 
   // #369: the collection screen renders two of these at once — the add-item
