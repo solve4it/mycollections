@@ -92,6 +92,47 @@ describe("DynamicItemForm", () => {
     expect(screen.getByLabelText(/status/i)).toHaveValue("wanted");
   });
 
+  // R16 (#42): the add-item form under the Remaining tab starts on Wanted, so
+  // the item a user adds there lands in the tab they are looking at. The page
+  // changes the prop when the tab changes; the form follows it, and so does a
+  // reset after a save.
+  it("follows a change of initialStatus, and resets back to it after a save", () => {
+    const onSubmit = vi.fn();
+    const title = [FIELDS[0] as FieldDefinition];
+    const { rerender } = render(<DynamicItemForm fields={title} onSubmit={onSubmit} resetSignal={0} />);
+    expect(screen.getByLabelText(/status/i)).toHaveValue("owned");
+
+    rerender(<DynamicItemForm fields={title} onSubmit={onSubmit} initialStatus="wanted" resetSignal={0} />);
+    expect(screen.getByLabelText(/status/i)).toHaveValue("wanted");
+
+    // A status the user chose themselves is theirs: a later change of the prop
+    // (the tab switched, or a refetch gave the edited item a new status) does
+    // not overwrite it.
+    fireEvent.change(screen.getByLabelText(/status/i), { target: { value: "ordered" } });
+    rerender(<DynamicItemForm fields={title} onSubmit={onSubmit} resetSignal={0} />);
+    expect(screen.getByLabelText(/status/i)).toHaveValue("ordered");
+    fireEvent.change(screen.getByLabelText("Title"), { target: { value: "Penny" } });
+    fireEvent.click(screen.getByRole("button", { name: /save/i }));
+    expect(onSubmit).toHaveBeenLastCalledWith({ status: "ordered", fields: { title: "Penny" } });
+
+    // A reset starts a new entry, which is untouched again.
+    rerender(<DynamicItemForm fields={title} onSubmit={onSubmit} initialStatus="wanted" resetSignal={1} />);
+    expect(screen.getByLabelText(/status/i)).toHaveValue("wanted");
+
+    rerender(<DynamicItemForm fields={title} onSubmit={onSubmit} resetSignal={1} />);
+    expect(screen.getByLabelText(/status/i)).toHaveValue("owned");
+  });
+
+  it("an editor whose item changes status underneath it keeps the status the user picked", () => {
+    const title = [FIELDS[0] as FieldDefinition];
+    const { rerender } = render(<DynamicItemForm fields={title} onSubmit={vi.fn()} initialStatus="wanted" />);
+    rerender(<DynamicItemForm fields={title} onSubmit={vi.fn()} initialStatus="ordered" />);
+    expect(screen.getByLabelText(/status/i), "untouched, it follows").toHaveValue("ordered");
+    fireEvent.change(screen.getByLabelText(/status/i), { target: { value: "wanted" } });
+    rerender(<DynamicItemForm fields={title} onSubmit={vi.fn()} initialStatus="owned" />);
+    expect(screen.getByLabelText(/status/i), "picked, it stays").toHaveValue("wanted");
+  });
+
   // #369: the collection screen renders two of these at once — the add-item
   // form and a row's editor — built from the same fields. With hardcoded ids,
   // `<label for>` resolved both labels to the first instance in tree order, so

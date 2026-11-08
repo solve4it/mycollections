@@ -45,14 +45,30 @@ interface EmptyStateProps {
   titleAs?: "h1" | "p";
   /** The action that fills the cabinet, where the screen has one. */
   children?: ReactNode;
+  /**
+   * Ids for the title and the description, for a container that is described
+   * by them — the collection's tab panel, which focus lands on when its list
+   * empties (#42). The caller takes them from `useId()`.
+   */
+  titleId?: string;
+  descriptionId?: string;
 }
 
-export function EmptyState({ title, description, titleAs: Title = "p", children }: EmptyStateProps) {
+export function EmptyState({
+  title,
+  description,
+  titleAs: Title = "p",
+  children,
+  titleId,
+  descriptionId,
+}: EmptyStateProps) {
   return (
     <div className="empty-state">
       <EmptyMark />
-      <Title className="empty-state-title">{title}</Title>
-      <p>{description}</p>
+      <Title className="empty-state-title" id={titleId}>
+        {title}
+      </Title>
+      <p id={descriptionId}>{description}</p>
       {children}
     </div>
   );

@@ -304,6 +304,10 @@ test.describe("keyboard traversal of every screen", () => {
    * and the add-item form is last. The undo-toast region sits between them and
    * contributes nothing while it is empty, which is the point of it being
    * mounted empty rather than conditionally (#308).
+   *
+   * The status tabs (#42) are one stop, the selected tab — the others are a
+   * roving tabindex away, on the arrow keys — and then the panel, which is a
+   * stop of its own because what it opens on is text, not a control.
    */
   test("a collection with items", async ({ page, api }) => {
     await api.reset();
@@ -320,6 +324,8 @@ test.describe("keyboard traversal of every screen", () => {
       'searchbox "Search items"',
       'combobox "Sort by"',
       'button "Filters"',
+      'tab "All" [selected]',
+      'tabpanel "All"',
       editStop("Kind of Blue"),
       deleteStop("Kind of Blue"),
       editStop("Blue Train"),
@@ -918,7 +924,7 @@ test.describe("focus when the control holding it goes away", () => {
     ).toBeFocused();
   });
 
-  test("deleting the last row hands focus to the Items heading", async ({ page, api }) => {
+  test("deleting the last row hands focus to the tab panel, which now holds the empty state", async ({ page, api }) => {
     await api.reset();
     const collection = await api.createCollection({ name: "Vinyl records", fields: FIELDS });
     await api.createItem(collection.id, { title: "Kind of Blue", year: 1959 });
@@ -932,11 +938,12 @@ test.describe("focus when the control holding it goes away", () => {
 
     // No row left to go to, and the add-item form is the wrong answer: dropping
     // a user into "add an item" because they deleted their last one is a worse
-    // surprise than landing on the heading of the list they were in.
-    await expect(
-      page.getByRole("heading", { level: 2, name: "Items" }),
-      "an emptied list must hand focus to its heading",
-    ).toBeFocused();
+    // surprise than landing where the list was — the panel, which now says why
+    // it is empty (#42; the Items heading before the tabs).
+    const panel = page.getByRole("tabpanel", { name: "All" });
+    await expect(panel, "an emptied list must hand focus to its panel").toBeFocused();
+    // Described by the empty state, so arriving on the panel reads why it is empty.
+    await expect(panel).toHaveAccessibleDescription("No items yet Add your first item using the form below.");
   });
 
   test("opening a row's editor puts focus in the editor, which says which item it is", async ({ page, api }) => {
@@ -1215,7 +1222,7 @@ test.describe("searching a collection (#41)", () => {
       "the successor rule, as for a delete — not <body>",
     ).toBeFocused();
     await expect(page.locator('.visually-hidden[aria-live="polite"]')).toContainText(
-      "Saved “Giant Steps”. It no longer matches the current search or filters, so it isn’t shown.",
+      "Saved “Giant Steps”. It no longer matches the current search, filters or tab, so it isn’t shown.",
     );
   });
 
@@ -1396,7 +1403,7 @@ test.describe("a finite set with a target (#42)", () => {
       "the successor rule, as for a delete — not <body>",
     ).toBeFocused();
     await expect(page.locator('.visually-hidden[aria-live="polite"]')).toContainText(
-      "Saved “Indian Head cent”. It no longer matches the current search or filters, so it isn’t shown.",
+      "Saved “Indian Head cent”. It no longer matches the current search, filters or tab, so it isn’t shown.",
     );
   });
 });
@@ -1474,5 +1481,140 @@ test.describe("managing tags (#41)", () => {
     await page.getByRole("button", { name: "Remove “autographed”" }).last().press("Enter");
     await expect(page.getByRole("button", { name: "Rename “autographed”" })).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Rename “mono”" }), "the successor row").toBeFocused();
+  });
+});
+
+/**
+ * The status tabs (#42): the APG tabs pattern with automatic activation. The
+ * arrow keys move focus *and* select, which is only acceptable because the
+ * panel is instant — the tabs narrow the list already fetched (R4) — so each
+ * keypress here asserts the rows of the tab it lands on, not just the focus.
+ */
+test.describe("the status tabs (#42)", () => {
+  async function seed(api: import("./fixtures.js").ApiFixture) {
+    await api.reset();
+    const collection = await api.createCollection({ name: "Vinyl records", fields: FIELDS });
+    await api.createItem(collection.id, { title: "Kind of Blue", year: 1959 }, "owned");
+    await api.createItem(collection.id, { title: "Blue Train", year: 1957 }, "wanted");
+    await api.createItem(collection.id, { title: "Giant Steps", year: 1960 }, "ordered");
+    await api.createItem(collection.id, { title: "Mingus Ah Um", year: 1959 }, "owned");
+    return collection;
+  }
+
+  /** The rows on screen, by the names their Edit buttons carry. */
+  async function rows(page: import("@playwright/test").Page): Promise<string[]> {
+    return (
+      await page.locator("[data-row-edit]").evaluateAll((edits) => edits.map((e) => e.getAttribute("aria-label")))
+    ).map((label) => (label ?? "").replace(/^Edit “(.*)”$/, "$1"));
+  }
+
+  test("the arrow keys, Home and End move between tabs and select as they go; Tab enters the panel", async ({
+    page,
+    api,
+  }) => {
+    const collection = await seed(api);
+    await page.goto(`/collections/${collection.id}`);
+    const all = page.getByRole("tab", { name: "All" });
+    await expect(page.getByRole("listitem")).toHaveCount(4);
+
+    await all.focus();
+    await page.keyboard.press("ArrowRight");
+    await expect(page.getByRole("tab", { name: "Collected", selected: true })).toBeFocused();
+    await expect(page).toHaveURL(`/collections/${collection.id}?show=collected`);
+    await expect.poll(() => rows(page)).toEqual(["Kind of Blue", "Mingus Ah Um"]);
+
+    await page.keyboard.press("ArrowRight");
+    await expect(page.getByRole("tab", { name: "Remaining", selected: true })).toBeFocused();
+    await expect.poll(() => rows(page)).toEqual(["Blue Train", "Giant Steps"]);
+
+    await page.keyboard.press("ArrowRight");
+    await expect(page.getByRole("tab", { name: "All", selected: true }), "Right wraps to the first tab").toBeFocused();
+    await expect(page).toHaveURL(`/collections/${collection.id}`);
+
+    await page.keyboard.press("ArrowLeft");
+    await expect(page.getByRole("tab", { name: "Remaining", selected: true }), "Left wraps to the last").toBeFocused();
+    await page.keyboard.press("Home");
+    await expect(page.getByRole("tab", { name: "All", selected: true })).toBeFocused();
+    await page.keyboard.press("End");
+    await expect(page.getByRole("tab", { name: "Remaining", selected: true })).toBeFocused();
+
+    // The tablist is one stop: Tab leaves it for the panel, then the first row.
+    expect(await tabOrder(page), "the stops after the selected tab").toEqual(
+      restOfSequence([
+        'tabpanel "Remaining"',
+        editStop("Blue Train"),
+        deleteStop("Blue Train"),
+        editStop("Giant Steps"),
+        deleteStop("Giant Steps"),
+        'combobox "Status"',
+        'textbox "Title"',
+        'spinbutton "Year"',
+        'button "Save"',
+      ]),
+    );
+  });
+
+  test("saving an owned item as wanted under Collected hands focus to the row in its place, and says why", async ({
+    page,
+    api,
+  }) => {
+    const collection = await seed(api);
+    await page.goto(`/collections/${collection.id}?show=collected`);
+    await expect.poll(() => rows(page)).toEqual(["Kind of Blue", "Mingus Ah Um"]);
+
+    await page.getByRole("button", { name: editName("Kind of Blue") }).click();
+    const editor = page.getByRole("form", { name: "Editing “Kind of Blue”" });
+    await editor.getByRole("combobox", { name: "Status" }).selectOption("wanted");
+    await editor.getByRole("button", { name: "Save" }).focus();
+    await page.keyboard.press("Enter");
+
+    await expect.poll(() => rows(page)).toEqual(["Mingus Ah Um"]);
+    await expect(
+      page.getByRole("button", { name: editName("Mingus Ah Um") }),
+      "the successor rule, as for a delete — not <body>",
+    ).toBeFocused();
+    await expect(page.locator('.visually-hidden[aria-live="polite"]')).toContainText(
+      "Saved “Kind of Blue”. It no longer matches the current search, filters or tab, so it isn’t shown.",
+    );
+  });
+
+  test("deleting the last item in a tab hands focus to the panel and its empty state", async ({ page, api }) => {
+    await api.reset();
+    const collection = await api.createCollection({
+      name: "Coin set",
+      fields: FIELDS,
+      isFiniteSet: true,
+      targetCount: 3,
+    });
+    await api.createItem(collection.id, { title: "Penny", year: 1909 }, "owned");
+    await api.createItem(collection.id, { title: "Nickel", year: 1913 }, "wanted");
+
+    await page.goto(`/collections/${collection.id}?show=remaining`);
+    await expect.poll(() => rows(page)).toEqual(["Nickel"]);
+    await page.getByRole("button", { name: deleteName("Nickel") }).focus();
+    await page.keyboard.press("Enter");
+
+    const panel = page.getByRole("tabpanel", { name: "Remaining" });
+    await expect(panel.locator(".empty-state-title")).toHaveText("2 more to find");
+    await expect(panel, "focus lands on the panel that now says what is left").toBeFocused();
+    await expect(panel).toHaveAccessibleDescription(
+      "2 more to find Nothing is on your wanted list. Add the items you are looking for as Wanted or Ordered.",
+    );
+    await expect(page.getByRole("button", { name: "Undo" })).toBeVisible();
+  });
+
+  test("adding under Remaining starts as Wanted and lands in the tab on screen", async ({ page, api }) => {
+    const collection = await seed(api);
+    await page.goto(`/collections/${collection.id}?show=remaining`);
+    await expect.poll(() => rows(page)).toEqual(["Blue Train", "Giant Steps"]);
+
+    const form = page.locator(".add-item");
+    await expect(form.getByRole("combobox", { name: "Status" })).toHaveValue("wanted");
+    await form.getByRole("textbox", { name: "Title" }).fill("Round Midnight");
+    await form.getByRole("button", { name: "Save" }).focus();
+    await page.keyboard.press("Enter");
+
+    await expect.poll(() => rows(page)).toEqual(["Blue Train", "Giant Steps", "Round Midnight"]);
+    await expect(page.locator(".add-item-live")).toHaveText("Added “Round Midnight”");
   });
 });

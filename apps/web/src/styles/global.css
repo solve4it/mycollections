@@ -1274,6 +1274,47 @@ p[role="alert"] {
   color: var(--ink);
 }
 
+/* All / Collected / Remaining (#42). A drawer's index tabs on paper: a hairline
+   under the row, and the selected tab sits on it with a 3px underline and a
+   heavier weight — never color alone. Every tab reserves the underline as a
+   transparent border, so selecting one moves nothing. The 44px height comes
+   from .touch-target. */
+.status-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 var(--space-1);
+  margin: 0 0 var(--space-3);
+  border-bottom: 1px solid var(--line);
+}
+
+.status-tab {
+  margin-bottom: -1px;
+  padding: 0 var(--space-3);
+  border: 0;
+  border-bottom: 3px solid transparent;
+  background: none;
+  color: var(--ink-muted);
+  font: inherit;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.status-tab:hover {
+  color: var(--ink);
+}
+
+.status-tab[aria-selected="true"] {
+  border-bottom-color: var(--accent-text);
+  color: var(--ink);
+  font-weight: 600;
+}
+
+/* The panel is a tab stop of its own (APG), so its ring needs room round the
+   rows it holds rather than sitting on their borders. */
+.status-panel {
+  border-radius: var(--radius-sm);
+}
+
 /* How many items a search matched (#41). Plain text, not a live region — the
    shell's announcer speaks it once the search settles. */
 .item-count {
@@ -1620,6 +1661,17 @@ p[role="alert"] {
   .collection-progress-complete .collection-progress-fill {
     forced-color-adjust: none;
     background: Highlight;
+  }
+
+  /* The status tabs (#42): a transparent border is painted in forced colors,
+     which would underline every tab alike. Unselected tabs hide theirs in the
+     background color; the selected one takes the system highlight. */
+  .status-tab {
+    border-bottom-color: Canvas;
+  }
+
+  .status-tab[aria-selected="true"] {
+    border-bottom-color: Highlight;
   }
 }
 

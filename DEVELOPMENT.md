@@ -456,33 +456,41 @@ it, bounded by both a commit count and a deadline.
 The destinations are not this repo's invention — each follows an ARIA APG rule, and says which in
 its comment:
 
-| Action                                    | Destination                                                                    | Rule                              |
-| ----------------------------------------- | ------------------------------------------------------------------------------ | --------------------------------- |
-| A row's Edit (opens the editor)           | the editor's first control                                                     | disclosure: enter what you opened |
-| The editor's Cancel, or a successful Save | the Edit that opened it                                                        | dialog: return to the invoker     |
-| A row's Delete                            | the row that takes its place, else the one before, else the Items heading      | successor element                 |
-| The toast's Undo                          | the restored row's Edit, once it is back                                       | successor element                 |
-| The toast's Dismiss                       | wherever the delete handed focus                                               | — same answer as the delete       |
-| Remove field                              | the next field's **label**, else Add field                                     | successor element                 |
-| A confirmed trash purge                   | the next row in the **same** list, else the one before, else the trash section | successor element                 |
-| Save, when a search no longer matches it  | the row that takes its place — as for a Delete (#41)                           | successor element                 |
-| Undo, when a search does not match it     | wherever the delete handed focus — as for Dismiss (#41)                        | successor element                 |
-| Clear search (in the no-match state)      | the search box                                                                 | return to where the input began   |
-| Remove a filter chip                      | the chip now in its place, else the one before, else the Filters toggle        | successor element                 |
-| Clear filters                             | the Filters toggle                                                             | return to where the filters began |
-| A tag's Rename (opens its box)            | the rename box                                                                 | disclosure: enter what you opened |
-| A tag rename's Save, Cancel or Escape     | the renamed tag's Rename — or, after a merge, the Rename of the tag it joined  | dialog: return to the invoker     |
-| …when the new name is not in the list     | the tag search box — a search it no longer matches, or past the fifty shown    | where the tag can be found again  |
-| A confirmed tag removal                   | the next tag's Rename, else the one before, else the section heading           | successor element                 |
+| Action                                        | Destination                                                                    | Rule                              |
+| --------------------------------------------- | ------------------------------------------------------------------------------ | --------------------------------- |
+| A row's Edit (opens the editor)               | the editor's first control                                                     | disclosure: enter what you opened |
+| The editor's Cancel, or a successful Save     | the Edit that opened it                                                        | dialog: return to the invoker     |
+| A row's Delete                                | the row that takes its place, else the one before, else the tab panel          | successor element                 |
+| The toast's Undo                              | the restored row's Edit, once it is back                                       | successor element                 |
+| The toast's Dismiss                           | wherever the delete handed focus                                               | — same answer as the delete       |
+| Remove field                                  | the next field's **label**, else Add field                                     | successor element                 |
+| A confirmed trash purge                       | the next row in the **same** list, else the one before, else the trash section | successor element                 |
+| Save, when a search or tab no longer shows it | the row that takes its place — as for a Delete (#41, #42)                      | successor element                 |
+| Undo, when a search or tab does not show it   | wherever the delete handed focus — as for Dismiss (#41, #42)                   | successor element                 |
+| Clear search (in the no-match state)          | the search box                                                                 | return to where the input began   |
+| Remove a filter chip                          | the chip now in its place, else the one before, else the Filters toggle        | successor element                 |
+| Clear filters                                 | the Filters toggle                                                             | return to where the filters began |
+| A tag's Rename (opens its box)                | the rename box                                                                 | disclosure: enter what you opened |
+| A tag rename's Save, Cancel or Escape         | the renamed tag's Rename — or, after a merge, the Rename of the tag it joined  | dialog: return to the invoker     |
+| …when the new name is not in the list         | the tag search box — a search it no longer matches, or past the fifty shown    | where the tag can be found again  |
+| A confirmed tag removal                       | the next tag's Rename, else the one before, else the section heading           | successor element                 |
 
 Two things that look like details and are not. A destination has to be a control whose name says
 where the user now is, which is why Remove field goes to the next field's label rather than to its
 Remove button: "Field label, edit, Year" places you, "Remove field, button" does not, and parks you
 on a destructive control. And when a list empties there is no control left worth landing on, so the
-destination is a container made focusable with `tabIndex={-1}` — the Items heading, or the trash
-`<section>` with `aria-labelledby` pointing at its heading, which is the pattern `ErrorScreen.tsx`
-already uses. Focus arriving there is the only thing that tells a screen-reader user the list is
-now empty, because "The trash is empty." is a plain paragraph, not a live region.
+destination is a focusable container — the collection's tab panel, which is already a tab stop
+(`tabIndex={0}`, see below) and now holds the empty state that replaced the list, or the trash
+`<section>` with `tabIndex={-1}` and `aria-labelledby` pointing at its heading, which is the pattern
+`ErrorScreen.tsx` already uses. Focus arriving there is the only thing that tells a screen-reader
+user the list is now empty, because "The trash is empty." and "Nothing on your wanted list" are
+plain paragraphs, not live regions. Before the tabs (#42) the item list's container was the Items
+heading; the panel is better, because it is where the list was and it says what the list emptied into.
+A screen reader does not reliably read a focused container's content, though, so while an empty
+state shows the panel is `aria-describedby` its title and description (ids from `useId`, passed to
+`EmptyState` as `titleId`/`descriptionId`), and the attribute is absent while rows show. Focus
+landing on the emptied panel then announces "Remaining, tab panel, Nothing on your wanted list, Items
+whose status is Wanted or Ordered appear here." Unit and e2e tests assert that accessible description.
 
 A search (#41) can take a row off the list as a side effect of an edit — and a sort can move it,
 which in a browser loses focus too: React moves a keyed row with `insertBefore`, which takes the
@@ -491,6 +499,15 @@ handoff is chosen by the **page**, not the row, and why it runs even when the ro
 it. The page asks whether the item is still listed once the list has been fetched again, and the
 hidden cases also say why the item went, through the announcer. An add the search hides says so in
 the add form's own region.
+
+The status tab (#42) hides rows the same way, so `isListed` asks both questions: is the item in the
+list fetched for the search on screen, **and** does its status belong to the tab on screen (read
+through a ref, like the search, because the user may switch tabs while a mutation is in flight). An
+owned item saved as Wanted under Collected, an add whose status the tab does not show, and an Undo
+pressed after switching to another tab all take the hidden path: the successor's Edit (or the panel
+when nothing is left) and a message that names "search, filters or tab" as the reasons. Deleting the
+last row in a tab lands on the panel and its empty state. `detail.tabs.test.tsx` and the status-tabs
+block in `keyboard.spec.ts` pin each case.
 
 **A row-owned mutation whose follow-up belongs to the page chains it on the promise:**
 `mutateAsync(input).then(pageCallback, ignoreRejection)`, never a `mutate`-level `onSuccess` (#42).
@@ -577,6 +594,66 @@ more thing than the selectors: Playwright appends an element's text content to a
 accessible name differs from it, so a stop reads `button "Edit “Kind of Blue”": Edit` — the 2.5.3
 relationship written out, failing both if a row stops naming itself and if the visible label drifts
 out of the name.
+
+### Tabs over a list
+
+The collection page's **All / Collected / Remaining** tabs (`components/StatusTabs.tsx`, #42) are the
+WAI-ARIA APG tabs pattern, written in the repo rather than taken from a library: three fixed tabs
+are a short component, and no dependency was worth adding for them. What the pattern asks, and
+where each part lives:
+
+- A `role="tablist"` with an `aria-label` ("Items by status"), holding `<button role="tab">`s. A
+  real button answers Enter and Space and keeps the global focus ring without any handler.
+- **Roving `tabIndex`**: the selected tab is `0`, the others `-1`, so the tablist is one stop and
+  the arrow keys move inside it. Left/Right move and wrap, Home/End go to the first and last, and
+  Left/Right swap when the nearest `[dir]` is `rtl` (R12) — Home and End stay logical.
+- **Automatic activation**: an arrow key selects as it moves focus. APG allows that only when a
+  panel appears without a wait, which is why the tabs never fetch: they narrow the one list the page
+  already holds, on the client (R4). A tab that triggered a request per arrow would need manual
+  activation instead.
+- Each tab has `aria-selected` and `aria-controls` pointing at the one `role="tabpanel"`, which is
+  `aria-labelledby` the selected tab and has `tabIndex={0}` because what it opens on is text, not a
+  control. The panel wraps the **whole** list area — count line, rows, empty and failure states — so
+  whatever is showing is named by the tab. Biome's `noNoninteractiveTabindex` is suppressed on that
+  one attribute, with the reason.
+- Ids come from `useId()` through `scopedId` (see "Ids belong to the instance").
+- Labels use literal locale keys (`tab_all`, `tab_collected`, `tab_remaining`) from a lookup
+  object, never a template built from the value, so the keys can be found by search. No counts in
+  the labels: a tab renamed by every edit is noise, and the panel's count line says how many.
+
+The selected tab lives in the URL as `?show=collected|remaining`; All is the bare URL. Switching
+navigates with `replace: true` and `resetScroll: false`, like a search keystroke: the arrows select
+as they move, so pushing would make Back step through every tab passed over.
+`validateItemSearch` drops an unknown value and treats `show=all` as no param (R17). It
+names every key it drops as `undefined` rather than leaving it out, because TanStack Router lays the
+validated search over the raw URL's: a key left out lets the raw value show through, and
+`?show=owned` reached the screen as a tab that was none of the three. Naming it also makes the
+address canonical on arrival: the router sees that the validated search stringifies differently
+from the address and replaces it, so `?show=all&q=x` becomes `?q=x` in the address bar at once, with
+no extra history entry, and no redirect of our own is needed. That was checked in Chrome, and
+`detail.tabs.test.tsx` pins it against `router.history`.
+
+A switch is announced like a search that settles, after `RESULT_ANNOUNCE_DELAY_MS`. What is spoken
+is what is shown:
+- the count line, which names the tab once one narrows the list: "2 items collected", or "2
+  remaining items match “e”" when a search narrows it too, even though four items match under All;
+- for an empty view, its empty state's title: "All collected", "3 more to find".
+
+A search or filter whose matches all sit in another tab gets its own empty state. It says "No
+remaining items match “penny”" and "1 item matches under All.", and both are spoken. Its **Show
+them under All** button selects All and hands focus to that tab, passing `removing`, because the
+button only goes once the router has moved. "Try fewer or shorter words" is kept for a search that
+matched nothing anywhere. No empty state is ever built from placeholder data. While the next view
+loads, the kept result belongs to the previous search, so an empty one shows the list's loading
+state rather than claiming this view is empty ("4 more to find" on a set whose wanted item is
+arriving). Kept rows stay on screen, marked `aria-busy`.
+
+The tab is part of what `isListed` checks (see "Focus has to survive the action"). Under Remaining
+the add form starts on Wanted, through `DynamicItemForm`'s `initialStatus` (R16). The form follows a
+change of that prop only until the user picks a status; a reset clears the pick. That stops a tab
+switch from turning a half-typed Ordered item into an Owned one, and a refetch from overwriting a
+row editor's draft. `keyboard.spec.ts` walks the stops and the arrow keys; `a11y.spec.ts` scans each
+tab, the three empty Remaining states, and the "matches only under another tab" state.
 
 ### Page titles and route announcements
 

@@ -80,7 +80,8 @@
     "NOCASE",
     "bm25",
     "UNINDEXED",
-    "diacritics"
+    "diacritics",
+    "Noninteractive"
   ],
   "ignoreRegExpList": ["/PVT_[a-zA-Z0-9]+/g", "/PVTSSF_[a-zA-Z0-9]+/g", "/[a-f0-9]{8,}/g"],
   "enableGlobDot": false,

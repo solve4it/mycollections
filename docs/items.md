@@ -6,7 +6,7 @@ description: Adding, editing, and organizing items inside a collection.
 
 # Items
 
-> **Placeholder.** This page will be filled in when item CRUD and scanning features land.
+> **Being written.** Adding, statuses, the status tabs and deleting are covered; scanning, editing details and bulk operations are not yet.
 
 ## Adding items
 
@@ -18,9 +18,22 @@ MyCollections supports three ways to add an item to a collection:
 
 Details for each flow will land with their respective feature issues.
 
+Every item has a **status**: **Owned**, **Wanted** or **Ordered**. A new item starts as Owned — or as Wanted if you add it while the **Remaining** tab is selected, so it appears in the tab you are looking at. You can change the status before saving, and at any time afterwards by editing the item.
+
+## Collected and remaining
+
+The app groups the three statuses into two words, used by the tabs above the list, the status sort, and a finite set's progress:
+
+- **Collected** means **Owned**.
+- **Remaining** means **Wanted** and **Ordered** together — what you are looking for and what is on its way.
+
+Each row's badge still names the exact status (Owned, Wanted or Ordered). The **All**, **Collected** and **Remaining** tabs above the list show every item, the collected ones, or the remaining ones; they are on every collection. See [All, Collected and Remaining](./search.md#all-collected-and-remaining) for how the tabs work with search and filters, and what an empty tab says.
+
 ## Editing an item
 
 _How to edit fields, attach images, add notes, and so on._
+
+If an edit means the item no longer belongs in the list you are looking at — you change an owned item to Wanted while on the **Collected** tab, say, or a search no longer matches its new name — it is saved and leaves the list, and the app says why it is not shown.
 
 ## Deleting an item
 

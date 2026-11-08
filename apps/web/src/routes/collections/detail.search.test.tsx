@@ -206,7 +206,7 @@ describe("when a search hides the row the user was on (#41)", () => {
     await waitFor(() => expect(screen.getByRole("button", { name: "Edit “Zelda II”" })).toHaveFocus());
     await waitFor(() =>
       expect(announcer()).toHaveTextContent(
-        "Saved “Link”. It no longer matches the current search or filters, so it isn’t shown.",
+        "Saved “Link”. It no longer matches the current search, filters or tab, so it isn’t shown.",
       ),
     );
   });
@@ -246,7 +246,7 @@ describe("when a search hides the row the user was on (#41)", () => {
 
     await waitFor(() =>
       expect(document.querySelector(".add-item-live")).toHaveTextContent(
-        "Added “Sonic”. It doesn’t match the current search or filters, so it isn’t shown.",
+        "Added “Sonic”. It doesn’t match the current search, filters or tab, so it isn’t shown.",
       ),
     );
   });
@@ -279,7 +279,7 @@ describe("when a search hides the row the user was on (#41)", () => {
     await waitFor(() => expect(screen.getByRole("button", { name: "Edit “Zelda II”" })).toHaveFocus());
     await waitFor(() =>
       expect(announcer()).toHaveTextContent(
-        "Restored “Link”. It doesn’t match the current search or filters, so it isn’t shown.",
+        "Restored “Link”. It doesn’t match the current search, filters or tab, so it isn’t shown.",
       ),
     );
   });
@@ -465,7 +465,7 @@ describe("filters and what the page says (#41 review)", () => {
     fireEvent.click(within(form).getByRole("button", { name: "Save" }));
     await waitFor(() =>
       expect(document.querySelector(".add-item-live")).toHaveTextContent(
-        "Added “Pong”. It doesn’t match the current search or filters, so it isn’t shown.",
+        "Added “Pong”. It doesn’t match the current search, filters or tab, so it isn’t shown.",
       ),
     );
   });
