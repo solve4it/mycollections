@@ -43,6 +43,7 @@ import {
   useDeleteItem,
   useItems,
   useRestoreItem,
+  useSetItemStatus,
   useUpdateItem,
 } from "../../lib/queries.js";
 import { rootRoute } from "../__root.js";
@@ -567,6 +568,35 @@ function CollectionDetailPage() {
               announce(t("saved_hidden", { name: itemLabel(collection, saved, t("untitled")) }));
             }
           }}
+          onMarked={(marked, index, trigger) => {
+            // The same two answers as a Save, chosen here for the same reason:
+            // the row may be what disappears (#42, D10). Still listed — under
+            // All, or a sort that only moves it — focus goes to the row's own
+            // Edit, wherever the row now is. Under Remaining the row leaves, and
+            // focus goes where a delete would have left it: the row in its
+            // place, the one before, or the panel and the empty state that
+            // replaced the list ("All collected", R19).
+            //
+            // Both name the button being removed. The promise can resolve
+            // before the list fetched again has committed, and a press that
+            // never took focus (a Safari click, an iOS tap) leaves focus on
+            // <body> meanwhile; without `removing`, the handoff would resolve at
+            // once — to the row about to go, or to an Edit about to be moved
+            // out of the document by a re-sort.
+            //
+            // Spoken either way: the button that said what the row was waiting
+            // for is gone, and nothing on screen says why.
+            const name = itemLabel(collection, marked, t("untitled"));
+            if (isListed(marked.id)) {
+              handOffFocus(() => document.querySelector<HTMLElement>(`[data-item-id="${marked.id}"] [data-row-edit]`), {
+                removing: trigger,
+              });
+              announce(t("marked_collected", { name }));
+            } else {
+              handOffFocus(rowDestination(index), { removing: trigger });
+              announce(t("marked_collected_hidden", { name }));
+            }
+          }}
           // Names the Delete being removed: the row goes only once the server
           // answers, and a Delete pressed without taking focus (a Safari click,
           // an iOS tap) leaves focus on <body> meanwhile, which alone would read
@@ -706,6 +736,8 @@ interface ItemListProps {
   onShowAll: (trigger: HTMLElement) => void;
   /** After a row's Save has landed and the list has been fetched again. */
   onSaved: (item: Item, index: number) => void;
+  /** After a row's Mark collected has landed and the list has been fetched again (`trigger` is the button, which goes). */
+  onMarked: (item: Item, index: number, trigger: HTMLElement) => void;
   /** Asked for as a delete starts, while the row and its Delete (`trigger`) are still on screen. */
   onDeleting: (index: number, trigger: HTMLElement) => void;
   onDeleted: (item: Item, index: number) => void;
@@ -727,6 +759,7 @@ function ItemList({
   onClearFilters,
   onShowAll,
   onSaved,
+  onMarked,
   onDeleting,
   onDeleted,
 }: ItemListProps) {
@@ -794,6 +827,7 @@ function ItemList({
             onDeleting={(trigger) => onDeleting(index, trigger)}
             onDeleted={() => onDeleted(item, index)}
             onSaved={(saved) => onSaved(saved, index)}
+            onMarked={(marked, trigger) => onMarked(marked, index, trigger)}
           />
         ))}
       </ul>
@@ -805,14 +839,25 @@ interface ItemRowProps {
   collection: Collection;
   item: Item;
   onSaved: (item: Item) => void;
+  onMarked: (item: Item, trigger: HTMLElement) => void;
   onDeleting: (trigger: HTMLElement) => void;
   onDeleted: () => void;
 }
 
-function ItemRow({ collection, item, onDeleting, onDeleted, onSaved }: ItemRowProps) {
+function ItemRow({ collection, item, onDeleting, onDeleted, onSaved, onMarked }: ItemRowProps) {
   const { t } = useTranslation("items");
   const updateItem = useUpdateItem(collection.id);
+  // Its own mutation, not the editor's: a failed mark and a failed save are
+  // different news, and each alert says which (#42).
+  const markItem = useSetItemStatus(collection.id);
   const deleteItem = useDeleteItem(collection.id);
+  // While a mark or a delete is in flight the row's actions refuse (#42). A
+  // second Delete would send a second request for a row already going, a mark
+  // would race a delete for the same item, and an editor opened mid-mark would
+  // be unmounted with its draft when the tab drops the row. Refused with
+  // aria-disabled and an early return, never `disabled`, which drops focus to
+  // <body> (see "Focus has to survive the action" in DEVELOPMENT.md).
+  const busy = markItem.isPending || deleteItem.isPending;
   const [editing, setEditing] = useState(false);
 
   // Opening and closing the editor both remove the control that was pressed, so
@@ -878,9 +923,13 @@ function ItemRow({ collection, item, onDeleting, onDeleted, onSaved }: ItemRowPr
     );
   }
 
+  // Wanted and ordered rows look unfinished in view mode (#42, D8): a dashed or
+  // dotted border in the status color, and muted values. The badge still says
+  // which status it is; the line is a second cue, never the only one.
+  const remaining = item.status !== "owned";
   return (
     <li data-item-id={item.id}>
-      <div className="item-row">
+      <div className={remaining ? `item-row item-row-${item.status}` : "item-row"}>
         <div className="item-fields">
           <span className={`item-status item-status-${item.status}`}>
             {/* The dot is redundant with the label beside it, so it is hidden
@@ -895,6 +944,30 @@ function ItemRow({ collection, item, onDeleting, onDeleted, onSaved }: ItemRowPr
           ))}
         </div>
         <div className="item-actions">
+          {/* The action a remaining row exists for, first (#42, D9): an instant
+              flip to Owned, with no prompt and no undo (owner's call) — Edit
+              puts it back. Named for its row, verb first (#375). */}
+          {remaining && (
+            <button
+              type="button"
+              aria-label={t("mark_collected_item", { name })}
+              aria-disabled={busy || undefined}
+              className="touch-target button-quiet"
+              onClick={(event) => {
+                if (busy) return;
+                const trigger = event.currentTarget;
+                // The follow-up is the page's and rides the promise (R1): the
+                // row may be gone, or this button with it, when the mutation
+                // settles. Only the status is sent (R14).
+                markItem
+                  .mutateAsync({ itemId: item.id, status: "owned" })
+                  .then((marked) => onMarked(marked, trigger), ignoreRejection);
+              }}
+            >
+              <Icon name="check" />
+              {t("mark_collected")}
+            </button>
+          )}
           {/* `data-row-edit` is how the page addresses this button as a focus
               destination from outside the row: the row a delete hands focus to
               is a sibling this component holds no reference to, and the row an
@@ -909,8 +982,12 @@ function ItemRow({ collection, item, onDeleting, onDeleted, onSaved }: ItemRowPr
             // delete, an undo and a cancelled editor all hand focus, where
             // arriving on an unnamed "Edit" says nothing about what happened.
             aria-label={t("edit_item", { name })}
+            aria-disabled={busy || undefined}
             className="touch-target button-quiet"
-            onClick={() => setEditing(true)}
+            onClick={() => {
+              if (busy) return;
+              setEditing(true);
+            }}
           >
             <Icon name="edit" />
             {t("edit")}
@@ -918,8 +995,10 @@ function ItemRow({ collection, item, onDeleting, onDeleted, onSaved }: ItemRowPr
           <button
             type="button"
             aria-label={t("delete_item", { name })}
+            aria-disabled={busy || undefined}
             className="touch-target button-quiet"
             onClick={(event) => {
+              if (busy) return;
               // Asked for before the mutation, while the row is still on screen.
               onDeleting(event.currentTarget);
               // The toast is the page's, and this row is exactly what the
@@ -933,6 +1012,7 @@ function ItemRow({ collection, item, onDeleting, onDeleted, onSaved }: ItemRowPr
           </button>
         </div>
       </div>
+      {markItem.isError && <p role="alert">{t("mark_error")}</p>}
       {deleteItem.isError && <p role="alert">{t("delete_error")}</p>}
     </li>
   );

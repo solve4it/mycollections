@@ -1332,8 +1332,13 @@ p[role="alert"] {
   gap: var(--space-2);
 }
 
+/* Wraps (#42, R13): with Mark collected beside Edit and Delete, the actions no
+   longer fit beside the fields at phone width, and a row that will not wrap
+   crushes its fields to a word per line or pushes the page sideways. The fields
+   ask for 16rem before the actions are moved under them. */
 .item-row {
   display: flex;
+  flex-wrap: wrap;
   align-items: flex-start;
   justify-content: space-between;
   gap: var(--space-3);
@@ -1344,11 +1349,39 @@ p[role="alert"] {
 }
 
 .item-fields {
+  flex: 1 1 16rem;
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
   gap: var(--space-1) var(--space-4);
   min-width: 0;
+}
+
+/* A value with no space in it — a long catalog number, a URL — breaks rather
+   than widening the row past the screen. */
+.item-field {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* A remaining row (#42, D8): unfinished, not disabled. The border turns the
+   status color and breaks — dashed for wanted, dotted for ordered — and the
+   values step back to muted ink. Never opacity or a filter: either would take
+   the row's text, badge included, under the contrast floor, and fade it like a
+   control that cannot be used. The badge still names the status; the line is
+   a second cue. */
+.item-row-wanted {
+  border-style: dashed;
+  border-color: var(--wanted);
+}
+
+.item-row-ordered {
+  border-style: dotted;
+  border-color: var(--ordered);
+}
+
+.item-row-wanted .item-field {
+  color: var(--ink-muted);
 }
 
 /* A boolean value is an icon standing in for text, so it sits on the text
@@ -1401,10 +1434,13 @@ p[role="alert"] {
   color: var(--ordered);
 }
 
+/* Shrinks and wraps among its own buttons once it has a line of its own, so
+   three of them never run past a phone's edge (#42, R13). */
 .item-actions {
   display: flex;
+  flex-wrap: wrap;
   gap: var(--space-2);
-  flex-shrink: 0;
+  min-width: 0;
 }
 
 /* Settings: file picker row */
@@ -1672,6 +1708,14 @@ p[role="alert"] {
 
   .status-tab[aria-selected="true"] {
     border-bottom-color: Highlight;
+  }
+
+  /* A remaining row (#42): the system repaints the status color anyway; said
+     here so the dash and the dot, which carry the difference once the hues
+     are gone, are drawn in the text color rather than a faint one. */
+  .item-row-wanted,
+  .item-row-ordered {
+    border-color: CanvasText;
   }
 }
 
