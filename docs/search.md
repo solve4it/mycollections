@@ -81,7 +81,9 @@ The tabs are on every collection, not just finite sets. A tab only changes what 
 
 With a keyboard, the tabs are one stop: Tab reaches the selected tab, the Left and Right arrow keys move to the others and show them straight away, and Home and End go to the first and last. In a right-to-left language the arrows follow the direction the tabs run. The next Tab moves into the list.
 
-Under **Collected** and **Remaining** a line above the list says how many items are in the tab, for example **2 items remaining**. Search, sort and filters still apply inside a tab.
+Under **Collected** and **Remaining** a line above the list says how many items are in the tab, for example **2 items remaining**. Search, sort and filters still apply inside a tab, and the line then counts only the tab's matches and says so — **2 remaining items match “blue”** — even when more items match under All.
+
+If a search or filters match items, but none in the tab you are on, the tab says so — **No remaining items match “penny”** — with how many match under All, and a **Show them under All** button that switches to the All tab. When nothing matches anywhere, it suggests changing the search or filters instead.
 
 **When a tab is empty**, it says why rather than calling the collection empty:
 
@@ -92,9 +94,9 @@ Under **Collected** and **Remaining** a line above the list says how many items 
 | Remaining | A finite set that is not complete yet         | How many are left, for example **3 more to find** |
 | Remaining | A finite set that is complete                 | **All collected**                                 |
 
-A finite set counts as complete once you own as many items as the set has — the same rule as its **Complete** badge — even if some wanted or ordered items are still listed. See [Seeing your progress](./collections.md#seeing-your-progress).
+The **Complete** badge at the top of a finite set counts the set complete once you own as many items as it has, whether or not some wanted or ordered items are still listed. **All collected** appears when the Remaining tab is empty and you own at least as many items as the set has. See [Seeing your progress](./collections.md#seeing-your-progress).
 
-**Adding an item from the Remaining tab** starts its status on **Wanted**, so it appears in the tab you are looking at. You can still change it before saving.
+**Adding an item from the Remaining tab** starts its status on **Wanted**, so it appears in the tab you are looking at. You can still change it before saving, and a status you pick stays as you set it if you switch tabs before saving.
 
 If you save an item so it no longer belongs in the list you are looking at — for example you change an owned item to wanted while on **Collected**, or a search no longer matches it — the item is saved and leaves the list, and the app tells you why it is not shown.
 

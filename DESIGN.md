@@ -370,9 +370,12 @@ selected one `Highlight`.
 The panel is a tab stop (APG), so it keeps the global focus ring, drawn round the list with
 `--radius-sm`. An empty tab reuses the empty state: "Nothing collected yet", and for Remaining
 "Nothing on your wanted list", "N more to find" on a finite set short of its target, or "All
-collected" once it is complete — owned at or past the target, even with wanted items listed. It
+collected" when Remaining is empty and owned is at or past the target. (The header's Complete badge
+counts owned against the target alone, so it can show while Remaining still lists wanted items.) It
 never says "No items yet", which would claim the collection is empty when the tab only hides what is
-in it.
+in it. A search or filter whose matches are all in another tab says so — "No remaining items match
+“penny”", how many match under All — with a quiet **Show them under All** button, rather than the
+"try fewer words" advice for a search that matched nothing.
 
 ## Waiting and emptiness (#225)
 

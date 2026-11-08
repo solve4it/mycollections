@@ -486,6 +486,11 @@ destination is a focusable container — the collection's tab panel, which is al
 user the list is now empty, because "The trash is empty." and "Nothing on your wanted list" are
 plain paragraphs, not live regions. Before the tabs (#42) the item list's container was the Items
 heading; the panel is better, because it is where the list was and it says what the list emptied into.
+A screen reader does not reliably read a focused container's content, though, so while an empty
+state shows the panel is `aria-describedby` its title and description (ids from `useId`, passed to
+`EmptyState` as `titleId`/`descriptionId`), and the attribute is absent while rows show. Focus
+landing on the emptied panel then announces "Remaining, tab panel, Nothing on your wanted list, Items
+whose status is Wanted or Ordered appear here." Unit and e2e tests assert that accessible description.
 
 A search (#41) can take a row off the list as a side effect of an edit — and a sort can move it,
 which in a browser loses focus too: React moves a keyed row with `insertBefore`, which takes the
@@ -619,17 +624,36 @@ where each part lives:
 The selected tab lives in the URL as `?show=collected|remaining`; All is the bare URL. Switching
 navigates with `replace: true` and `resetScroll: false`, like a search keystroke: the arrows select
 as they move, so pushing would make Back step through every tab passed over.
-`validateItemSearch` drops an unknown value and rewrites `show=all` as no param (R17). It
+`validateItemSearch` drops an unknown value and treats `show=all` as no param (R17). It
 names every key it drops as `undefined` rather than leaving it out, because TanStack Router lays the
 validated search over the raw URL's: a key left out lets the raw value show through, and
-`?show=owned` reached the screen as a tab that was none of the three.
+`?show=owned` reached the screen as a tab that was none of the three. Naming it also makes the
+address canonical on arrival: the router sees that the validated search stringifies differently
+from the address and replaces it, so `?show=all&q=x` becomes `?q=x` in the address bar at once, with
+no extra history entry, and no redirect of our own is needed. That was checked in Chrome, and
+`detail.tabs.test.tsx` pins it against `router.history`.
 
-A switch is announced like a search that settles: after `RESULT_ANNOUNCE_DELAY_MS`, the tab's count
-("2 items collected") or, for an empty tab, its empty state's title ("All collected", "3 more to
-find"). The tab is part of what `isListed` checks (see "Focus has to survive the action"), and
-under Remaining the add form starts on Wanted (`DynamicItemForm`'s `initialStatus`, which the form
-follows when it changes, R16). `keyboard.spec.ts` walks the stops and the arrow keys;
-`a11y.spec.ts` scans each tab and the three empty Remaining states.
+A switch is announced like a search that settles, after `RESULT_ANNOUNCE_DELAY_MS`. What is spoken
+is what is shown:
+- the count line, which names the tab once one narrows the list: "2 items collected", or "2
+  remaining items match “e”" when a search narrows it too, even though four items match under All;
+- for an empty view, its empty state's title: "All collected", "3 more to find".
+
+A search or filter whose matches all sit in another tab gets its own empty state. It says "No
+remaining items match “penny”" and "1 item matches under All.", and both are spoken. Its **Show
+them under All** button selects All and hands focus to that tab, passing `removing`, because the
+button only goes once the router has moved. "Try fewer or shorter words" is kept for a search that
+matched nothing anywhere. No empty state is ever built from placeholder data. While the next view
+loads, the kept result belongs to the previous search, so an empty one shows the list's loading
+state rather than claiming this view is empty ("4 more to find" on a set whose wanted item is
+arriving). Kept rows stay on screen, marked `aria-busy`.
+
+The tab is part of what `isListed` checks (see "Focus has to survive the action"). Under Remaining
+the add form starts on Wanted, through `DynamicItemForm`'s `initialStatus` (R16). The form follows a
+change of that prop only until the user picks a status; a reset clears the pick. That stops a tab
+switch from turning a half-typed Ordered item into an Owned one, and a refetch from overwriting a
+row editor's draft. `keyboard.spec.ts` walks the stops and the arrow keys; `a11y.spec.ts` scans each
+tab, the three empty Remaining states, and the "matches only under another tab" state.
 
 ### Page titles and route announcements
 
