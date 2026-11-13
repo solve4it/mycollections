@@ -34,6 +34,12 @@ When you own as many items as the set has, a **Complete** badge appears beside t
 
 A finite set without a size shows no bar. Its page reminds you to add the size from **Edit collection**. Collections that are not finite sets show neither the bar nor the reminder.
 
+### Completing a set
+
+When something you do on a set's page brings it up to its size, the app marks the moment. That can be **Mark collected** on a wanted or ordered item, saving an item's edit that changes it to **Owned**, or adding a new owned item. A message appears at the bottom of the screen saying what you did and that the set is complete, for example **Marked “Penny” as collected. Coin set is complete!**, and the **Complete** badge gives a short stamp. Screen readers hear that message once, in place of the usual confirmation for that action. The message clears itself after ten seconds; the badge stays for as long as the set is complete. If your device asks for reduced motion, the badge does not move.
+
+Only a change you make from the set's page counts, and only once per completion. There is no message when you open a set that was already complete, when you lower a set's size in **Edit collection** to what you already own, when you undo a delete, or when you restore an item from the trash in **Settings**. If the set's count had not loaded when you made the change, or could not be loaded, there is no message either, because the app cannot tell that the change was the one that completed it. If the set later drops below its size, for example because you edit an item back to **Wanted**, completing it again is celebrated again.
+
 ## Editing and deleting
 
 Open a collection and choose **Edit collection** to change its name, description, whether it is a finite set and how many items the set has, and — the part that matters most — its fields. Emptying the **Number of items in the set** box, or clearing the **Finite set** tick, removes the stored size when you save. A collection's shape is not fixed at creation: add a field you wish you had, rename one that reads badly, drop one you never fill in, or drag the order around.

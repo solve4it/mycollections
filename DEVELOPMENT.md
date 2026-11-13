@@ -835,10 +835,11 @@ is only ever caught by asserting the list.
 ### Live regions the announcer cannot carry
 
 The announcer is hidden and holds no controls, so a message that has to be **seen**, or that comes
-with something to **press**, needs a region of its own. There are three: the undo toast, whose
+with something to **press**, needs a region of its own. There are four: the undo toast, whose
 words "Deleted …" and Undo button have to stay together on screen (`routes/collections/$id.tsx`);
-the import's progress and result on Settings (`.import-live`); and the trash's emptied
-confirmation (`.trash-live`). The rule such a region has to follow is the same one, met
+the celebration when an action completes a finite set (`.celebration-live`, #42), which is seen as
+well as heard; the import's progress and result on Settings (`.import-live`); and the trash's
+emptied confirmation (`.trash-live`). The rule such a region has to follow is the same one, met
 differently — persistent and empty, never conditional:
 
 - **Render the region unconditionally, and put the message inside it later.** `routes/collections/$id.tsx`
@@ -855,9 +856,21 @@ differently — persistent and empty, never conditional:
   page-level `getByRole("status")` queries pointed at the loading skeletons, which are now the only
   thing in the app carrying that role (`components/Skeleton.tsx`).
 - **Give the region a class, and query it by that.** Three polite regions share `/settings` with the
-  shell's announcer, so a bare `[aria-live="polite"]` locator is ambiguous in both Vitest (which
-  renders the real root route) and Playwright. `.undo-toast-live`, `.import-live` and `.trash-live`
+  shell's announcer, and a collection's page has the toast's and the celebration's beside it, so a
+  bare `[aria-live="polite"]` locator is ambiguous in both Vitest (which renders the real root
+  route) and Playwright. `.undo-toast-live`, `.celebration-live`, `.import-live` and `.trash-live`
   exist to be named.
+- **One event, one message.** Two regions changing in the same tick are two announcements, read in
+  an order nothing controls. When an action completes a finite set, the celebration carries the
+  action's own sentence ("Marked “Penny” as collected.") followed by the news, and the announcer
+  message — or, for Add item, the `.add-item-live` confirmation — that the action would have sent
+  is skipped. Focus is chosen exactly as it would have been; only the words move.
+- **Siblings, not nesting.** `.celebration-live` sits beside `.undo-toast-live` inside
+  `.undo-toast-region`, so a completion landing while a toast is open is a second region speaking
+  its own addition rather than a change inside the toast's. The region takes no pointer
+  (`pointer-events: none`) because it is layout; the message inside takes it back, because
+  `elementsFromPoint` skips a `pointer-events: none` element, and that is how touch exploration
+  (VoiceOver on iOS) and axe find what is on screen.
 - **A message that cannot change is not a live region at all.** A notice decided once — the setup
   screen's "storage will not remember your token", Settings' session-only token hint, the trash's
   loading line, a finite set's "add how many items the set has" hint (#42) — is in its screen's first commit or in none of them, so `role="status"` on it buys
@@ -870,13 +883,18 @@ differently — persistent and empty, never conditional:
 - **No `aria-atomic` unless the whole region is one string.** Nothing in the app is any more: the
   shell's announcer holds one node per message (above), so it is not atomic either. A region whose content is replaced in place — a second
   delete renaming the toast — would re-read the entire toast instead of the name that changed.
-- **This is about `aria-live`, not about `role="alert"`.** An `alert` is announced when it is inserted — the user agent fires an event on creation — so a failure surface that appears with its message inside it is correct, and the app's error screens are written that way. Everything above applies to the announcer and to the three class-named regions, which are `aria-live` and are not.
+- **This is about `aria-live`, not about `role="alert"`.** An `alert` is announced when it is inserted — the user agent fires an event on creation — so a failure surface that appears with its message inside it is correct, and the app's error screens are written that way. Everything above applies to the announcer and to the four class-named regions, which are `aria-live` and are not.
 - **Scan the open state.** An interactive state no route-level scan reaches gets its own scan in
   `apps/web/e2e/a11y.spec.ts`, with the region asserted empty before the action and filled after.
   This is the only place the mechanism is proven in a real browser — jsdom has no accessibility tree
   at all. If the state times out, hold it open rather than racing the scan: the undo toast's timer
   stops while the pointer is over it, and where a message has no such hold, `page.clock.install()`
-  freezes time for the scan and `page.clock.fastForward()` then proves the self-clear as well.
+  freezes time for the scan and `page.clock.fastForward()` then proves the self-clear as well. A
+  message in the fixed toast strip has one more condition: axe works out a text element's
+  background per line box, and over a scrolled page each line of a wrapped element sits on
+  different content, so it reports "could not decide" (`elmPartiallyObscuring`) however the
+  message is painted. The celebration's scan seeds names short enough for each of its two
+  sentences to fit one line at 390px, and asserts that it does before scanning.
 - **Give a message a life span, and empty the region in place.** A message that describes a finished
   event has to go away on its own when nothing on the page can clear it — Settings' emptied-trash
   confirmation outlived its list for the whole mount because the only thing that could have cleared

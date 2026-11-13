@@ -95,7 +95,7 @@ That gate is a single `@media (prefers-reduced-motion: reduce)` block at the end
 rather than `none` so `transitionend`/`animationend` handlers still fire, and it cancels the
 card's hover _displacement_ as well — zeroing the duration alone leaves a 2px jump under the
 pointer, which is motion, just faster. The one orchestrated moment is reserved for set
-completion (#42).
+completion (#42): the Complete badge's stamp, below.
 
 ## Theming mechanics
 
@@ -351,6 +351,33 @@ the card's `<Link>`. A native progress element there is a second accessible obje
 added to the link's name on top of the words that already say it. `<progress>` also clamps its
 value to `max`, so an over-target set would read as exactly full and lose the honest "6 of 5". The
 words carry the meaning, and the bar is decoration that repeats them.
+
+### Completing a set
+
+When an action on the set's page takes owned up to the target, the page celebrates once. The
+actions are Mark collected, a row's Save, and Add item. Landing on a complete set, lowering the
+target, an undo and a Settings restore are not news, and none of them celebrates.
+
+- **The message** is the undo toast's drawer label without an action: `--cabinet` ground,
+  `--cabinet-ink` text, a `--cabinet-line` border and a manila check, entering with the toast's
+  `toast-in`. It holds two sentences on two lines. First comes what the action did, in that
+  action's own words ("Marked “Penny” as collected."). Then comes the news, "Coin set is
+  complete!", in weight 600. It sits in the toast's fixed strip, above any open toast, and clears
+  after ten seconds. Its contrast is the toast's: `--cabinet-ink` and `--manila` on `--cabinet`,
+  computed in `toast.integration.test.ts`. The two lines are separate blocks partly for axe, which
+  decides a fixed overlay's contrast per element and gives up on text that wraps over different
+  page content.
+- **The stamp.** While the message is up, the header's Complete badge runs `stamp-in` once over
+  480ms: scale 1 → 1.25 → 0.95 → rest, like a rubber stamp pressed down. It is **scale only**, and
+  it starts from the badge's resting size. The badge is already painted when the celebration
+  begins, because the counts land a commit first, so an entrance from opacity 0 would blink it out
+  and back in. There is **no fill mode**, so a stamp that is cut short rests at the badge's own
+  style. The card never stamps.
+- **Reduced motion.** The global opt-out takes the stamp to 0.01ms like everything else, and the
+  scale-only frames are why that is correct rather than merely fast. The badge just stays where it
+  was. `motion.integration.test.ts` holds the keyframe before the opt-out block, with no opacity
+  and no fill mode. The e2e sweep checks the 480ms stamp with motion on and the collapsed one with
+  it off.
 
 ## Status tabs (#42)
 
