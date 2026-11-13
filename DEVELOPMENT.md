@@ -76,6 +76,15 @@ User-facing documentation lives in `docs/` at the repo root, not in `apps/docs`.
 
 Each workspace is a pnpm package and a Turborepo target. The monorepo uses [Turborepo](https://turbo.build/) to orchestrate build/test/lint across workspaces with caching.
 
+A workspace with nothing to build has **no `build` script**. Turbo skips a package that lacks the
+script, whereas a no-op `"build": "echo …"` runs, emits nothing into the `dist/**` that the root
+`turbo.json` declares as its output, and prints `no output files found` on every uncached build.
+That warning has to stay meaningful, because it is how a real package whose build silently stopped
+emitting gets noticed (#417). The placeholder packages (`lookup`, `sync`, `ui`, and both plugins)
+add their `build` script when they get real code. Every workspace with real code declares
+`"type": "module"` in its `package.json`. The web app needs it too, so that Vite loads `vite.config.ts`
+as ESM instead of warning that it is ESM syntax in a CommonJS file.
+
 ## Common scripts
 
 Run from the repo root:

@@ -2,6 +2,7 @@
   "name": "@mycollections/web",
   "version": "0.0.0",
   "private": true,
+  "type": "module",
   "author": "Solve4It <https://solve4it.com>",
   "license": "Apache-2.0",
   "repository": {
