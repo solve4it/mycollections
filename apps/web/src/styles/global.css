@@ -775,6 +775,9 @@ p[role="alert"] {
 }
 
 .collection-card-eyebrow {
+  /* Painted above the name, though it follows the name in the DOM (#370): the
+     name is what the card's link must be called first. */
+  order: -1;
   display: flex;
   align-items: baseline;
   gap: var(--space-2);
@@ -788,9 +791,12 @@ p[role="alert"] {
 
 /* The separator is decorative punctuation, so it is drawn rather than written:
    keeping it out of the DOM leaves `getByText("3 items")` — the guard that the
-   card shows item counts, not field counts (#191) — matching a real text node. */
+   card shows item counts, not field counts (#191) — matching a real text node.
+   Drawn is not the same as silent, though: generated content is part of an
+   accessible name, so the empty alt text after the slash is what keeps the `·`
+   out of the link's name (#370). */
 .collection-card-count::before {
-  content: "·";
+  content: "·" / "";
   margin-right: var(--space-2);
 }
 
