@@ -10,6 +10,7 @@ import { pathOf } from "./logger.js";
 import { registerCollectionRoutes } from "./routes/collections.js";
 import { registerExportRoutes } from "./routes/export.js";
 import { registerItemRoutes } from "./routes/items.js";
+import { type MediaRouteOptions, registerMediaRoutes } from "./routes/media.js";
 import { registerTrashRoutes } from "./routes/trash.js";
 
 export interface AppOptions {
@@ -34,6 +35,12 @@ export interface AppOptions {
    * `isDev`: outside development the API answers no CORS request at all.
    */
   devOrigins?: readonly string[];
+  /**
+   * Image storage and its limits (#37). Without it the image routes are not
+   * registered at all — there is nowhere to put a file — and purges have no
+   * files to remove. `server.ts` always passes one.
+   */
+  media?: MediaRouteOptions;
 }
 
 /** Strips the port, brackets, casing and any trailing dot from a Host header value. */
@@ -146,7 +153,7 @@ export async function buildApp(options: AppOptions) {
     // @fastify/cors defaults Access-Control-Allow-Methods to only GET, HEAD and
     // POST, which makes browsers block our PATCH/DELETE routes in preflight.
     // Advertise every method the API exposes.
-    methods: ["GET", "HEAD", "POST", "PATCH", "DELETE", "OPTIONS"],
+    methods: ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
   });
 
   await app.register(fastifySensible);
@@ -194,7 +201,8 @@ export async function buildApp(options: AppOptions) {
     await registerCollectionRoutes(authenticated, db);
     await registerItemRoutes(authenticated, db);
     await registerExportRoutes(authenticated, db);
-    await registerTrashRoutes(authenticated, db);
+    await registerTrashRoutes(authenticated, db, options.media?.store);
+    if (options.media) await registerMediaRoutes(authenticated, db, options.media);
   });
 
   return app;
