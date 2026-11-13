@@ -249,6 +249,33 @@ test.describe("accessibility", () => {
     await expectNoAccessibilityViolations(page);
   });
 
+  /**
+   * Adding and removing a field, said through the shell's announcer (#377). A
+   * sighted user sees the row appear or go; since #367 a screen-reader user is
+   * moved to the surviving label, and was left to infer the rest. The region is
+   * asserted empty first — words already inside a region when it arrives are
+   * usually not read by NVDA or JAWS — so the message has to arrive in it.
+   */
+  test("the new collection form announcing a field added and a field removed", async ({ page }) => {
+    await page.goto("/collections/new");
+    await expect(page).toHaveURL(/\/collections\/new$/);
+
+    const region = page.locator('.visually-hidden[aria-live="polite"]');
+    await expect(region, "the announcer must be on the page, and empty, on arrival").toBeEmpty();
+    const messages = region.locator(":scope > *");
+
+    await page.getByRole("button", { name: "Add field" }).click();
+    await expect(page.getByRole("textbox", { name: "Field label" })).toHaveCount(2);
+    await expect(messages).toHaveText(["Added a field"]);
+
+    await page.getByRole("textbox", { name: "Field label" }).first().fill("Pressing");
+    await page.getByRole("button", { name: "Remove field" }).first().click();
+    await expect(page.getByRole("textbox", { name: "Field label" })).toHaveCount(1);
+    await expect(messages).toHaveText(["Added a field", "Removed field “Pressing”"]);
+
+    await expectNoAccessibilityViolations(page);
+  });
+
   test("the collection editor of a finite set with a target", async ({ page, api }) => {
     await api.reset();
     const collection = await api.createCollection({
