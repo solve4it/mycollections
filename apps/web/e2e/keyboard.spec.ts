@@ -355,21 +355,35 @@ test.describe("keyboard traversal of every screen", () => {
   });
 
   /**
-   * An item's own page (#37). The photos are pictures, not controls, so the
-   * only stops its content adds are the way back and the uploader; Take photo
-   * is offered on touch screens only, which neither project emulates.
+   * An item's own page (#37). The photos are pictures, not controls; each
+   * tile's actions are the stops, named for their photo (#375's rule). The
+   * cover has no Make cover, and the moves at either end stay as stops marked
+   * unavailable rather than vanishing. Take photo is offered on touch screens
+   * only, which neither project emulates.
    */
   test("an item's page with photos", async ({ page, api }) => {
     await api.reset();
     const collection = await api.createCollection({ name: "Vinyl records", fields: FIELDS });
     const item = await api.createItem(collection.id, { title: "Kind of Blue", year: 1959 });
     await api.uploadImage(collection.id, item.id);
+    await api.uploadImage(collection.id, item.id);
 
     await page.goto(`/collections/${collection.id}/items/${item.id}`);
     await expect(page.getByRole("heading", { level: 1, name: "Kind of Blue" })).toBeVisible();
-    await expect(page.locator(".image-gallery img")).toHaveCount(1);
+    await expect(page.locator(".image-gallery img")).toHaveCount(2);
 
-    await expectTabOrder(page, "an item's page", ['link "Back to Vinyl records"', 'button "Add photos"']);
+    await expectTabOrder(page, "an item's page", [
+      'link "Back to Vinyl records"',
+      'button "Move photo 1 of 2 earlier" [disabled]',
+      'button "Move photo 1 of 2 later"',
+      'button "Delete photo 1 of 2": Delete',
+      // Quoted whole by the snapshot, because the name holds ": ".
+      `'button "Make cover: photo 2 of 2"': Make cover`,
+      'button "Move photo 2 of 2 earlier"',
+      'button "Move photo 2 of 2 later" [disabled]',
+      'button "Delete photo 2 of 2": Delete',
+      'button "Add photos"',
+    ]);
   });
 
   /**
@@ -442,6 +456,49 @@ test.describe("no screen traps focus", () => {
 });
 
 test.describe("every action is operable without a pointer", () => {
+  /**
+   * The gallery by key alone (#37): a move keeps focus on the photo it moved,
+   * a delete hands focus to the photo now in its place, and Undo brings focus
+   * back with the photo.
+   */
+  test("a photo moved, made the cover, deleted and restored, by key", async ({ page, api }) => {
+    await api.reset();
+    const collection = await api.createCollection({ name: "Vinyl records", fields: FIELDS });
+    const item = await api.createItem(collection.id, { title: "Kind of Blue", year: 1959 });
+    const first = await api.uploadImage(collection.id, item.id);
+    const second = await api.uploadImage(collection.id, item.id);
+    await page.goto(`/collections/${collection.id}/items/${item.id}`);
+    await expect(page.locator(".image-gallery img")).toHaveCount(2);
+    const order = () =>
+      page
+        .locator(".image-gallery [data-media-id]")
+        .evaluateAll((tiles) => tiles.map((tile) => tile.getAttribute("data-media-id")));
+
+    // Enter moves the first photo later; focus stays with that photo's control.
+    await page.getByRole("button", { name: "Move photo 1 of 2 later" }).focus();
+    await page.keyboard.press("Enter");
+    await expect.poll(order).toEqual([second.id, first.id]);
+    expect(await focusedControl(page), "a move must leave focus on the photo it moved").toBe(
+      'button "Move photo 2 of 2 later" [disabled]',
+    );
+
+    // Space makes it the cover again; its Make cover goes, so focus moves to its first remaining control.
+    await page.getByRole("button", { name: "Make cover: photo 2 of 2" }).focus();
+    await page.keyboard.press(" ");
+    await expect.poll(order).toEqual([first.id, second.id]);
+    await expect(page.getByRole("button", { name: "Move photo 1 of 2 earlier" })).toBeFocused();
+
+    // Delete hands focus to the photo now in its place; Undo brings the photo, and focus, back.
+    await page.getByRole("button", { name: "Delete photo 1 of 2" }).focus();
+    await page.keyboard.press("Enter");
+    await expect(page.locator(".undo-toast")).toContainText("Deleted a photo");
+    await expect(page.getByRole("button", { name: "Move photo 1 of 1 earlier" })).toBeFocused();
+    await page.getByRole("button", { name: "Undo" }).focus();
+    await page.keyboard.press("Enter");
+    await expect.poll(order).toEqual([first.id, second.id]);
+    await expect(page.getByRole("button", { name: "Move photo 1 of 2 earlier" })).toBeFocused();
+  });
+
   /**
    * A row's name opens the item's page and Add photos opens the picker (#37),
    * by key. The name is a link, so Enter is its key; Add photos is a button,

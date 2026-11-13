@@ -660,6 +660,24 @@ test.describe("accessibility", () => {
     await expectNoAccessibilityViolations(page);
   });
 
+  /** A photo deleted from an item's page (#37): the undo toast, open over the gallery. */
+  test("an item's page with a photo just deleted", async ({ page, api }) => {
+    await api.reset();
+    const collection = await api.createCollection({ name: "Vinyl records", fields: FIELDS });
+    const item = await api.createItem(collection.id, { title: "Kind of Blue", year: 1959, signed: true }, "owned");
+    await api.uploadImage(collection.id, item.id);
+    await api.uploadImage(collection.id, item.id);
+    await page.goto(`/collections/${collection.id}/items/${item.id}`);
+    await expect(page.locator(".image-gallery img")).toHaveCount(2);
+
+    // The region is there, empty, before the delete — the #308 rule.
+    await expect(page.locator(".image-gallery-area .undo-toast-live")).toBeEmpty();
+    await page.getByRole("button", { name: "Delete photo 2 of 2" }).click();
+    await expect(page.locator(".image-gallery-area .undo-toast-live")).toContainText("Deleted a photo");
+    await expect(page.locator(".image-gallery img")).toHaveCount(1);
+    await expectNoAccessibilityViolations(page);
+  });
+
   test("the collection editor", async ({ page, api }) => {
     await api.reset();
     const collection = await api.createCollection({ name: "Vinyl records", fields: FIELDS });
