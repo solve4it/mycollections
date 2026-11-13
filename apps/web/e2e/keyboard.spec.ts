@@ -21,8 +21,6 @@ import { expect, focusedControl, NOTHING_FOCUSED, tabOrder, test } from "./fixtu
  * the control holding it (#367). Those blocks assert a specific named control
  * rather than "not `<body>`", which would pass for a focus landing anywhere.
  *
- * One state this file traverses is knowingly wrong in a way it does not assert:
- * a collection card is announced code-then-count-then-name (#370).
  */
 
 const FIELDS = [
@@ -116,29 +114,38 @@ async function expectTabOrder(page: import("@playwright/test").Page, screen: str
   expect(await tabOrder(page), `the tab order of ${screen}`).toEqual(wholeSequence(content));
 }
 
-/**
- * Drops a collection's catalog code to a placeholder.
- *
- * The code is derived from the server-generated id (`lib/cover.ts`), so it is a
- * different two characters every run. Everything else about the name — that the
- * code comes first, that the item count follows it, and that the collection's
- * own name comes third — is asserted exactly, because that order is what a
- * screen-reader user hears before they reach the word they were looking for.
- */
-function withoutCatalogCode(stops: string[]): string[] {
-  return stops.map((stop) => stop.replace(/C-[0-9A-Z]{2}/, "C-xx"));
-}
-
 test.describe("keyboard traversal of every screen", () => {
   test.describe("the setup screen", () => {
     // The screen only exists without a token, and the shared context seeds one.
     test.use({ storageState: { cookies: [], origins: [] } });
 
+    /**
+     * The form and nothing else (#371). The shell's nav and skip link are not
+     * on this screen: every destination they offered redirected straight back
+     * here, so "Collections" was a link that did nothing and said nothing. With
+     * no token there is nowhere else to go, so the first-run screen offers
+     * nowhere else.
+     */
     test("asking for a token", async ({ page }) => {
       await page.goto("/setup");
       await expect(page.getByLabel("API Token")).toBeVisible();
 
-      await expectTabOrder(page, "the setup screen", ['textbox "API Token"', 'button "Connect"']);
+      expect(await tabOrder(page), "the tab order of the setup screen").toEqual([
+        'textbox "API Token"',
+        'button "Connect"',
+      ]);
+    });
+
+    /**
+     * Settings is guarded like every other screen (#371). Without the guard it
+     * rendered with every query unauthenticated, offering to disconnect a token
+     * that was never there.
+     */
+    test("settings without a token goes to setup", async ({ page }) => {
+      await page.goto("/settings");
+      await expect(page).toHaveURL(/\/setup$/);
+      await expect(page.getByLabel("API Token")).toBeVisible();
+      await expect(page.getByRole("button", { name: "Disconnect" })).toHaveCount(0);
     });
   });
 
@@ -176,14 +183,18 @@ test.describe("keyboard traversal of every screen", () => {
     await page.goto("/collections");
     await expect(page.getByRole("heading", { level: 1, name: "Collections" })).toBeVisible();
 
-    expect(withoutCatalogCode(await tabOrder(page)), "the tab order of the collections list").toEqual(
+    // The name first, then the count (#370). The catalog code is not in the
+    // name at all — it is a cover ornament derived from the id — and nor is the
+    // drawn `·` between it and the count. Asserted exactly, with no
+    // placeholder for the code: one leaking back in would differ every run and fail here.
+    expect(await tabOrder(page), "the tab order of the collections list").toEqual(
       wholeSequence([
         'link "Create collection"',
-        'link "C-xx ·1 item Vinyl records Jazz"',
-        'link "C-xx ·0 items Board games"',
-        'link "C-xx ·2 items Coin set 1 of 3 collected"',
-        'link "C-xx ·1 item Stamp set 1 of 1 collected Complete"',
-        'link "C-xx ·0 items Card set"',
+        'link "Vinyl records 1 item Jazz"',
+        'link "Board games 0 items"',
+        'link "Coin set 2 items 1 of 3 collected"',
+        'link "Stamp set 1 item 1 of 1 collected Complete"',
+        'link "Card set 0 items"',
       ]),
     );
   });
@@ -1174,6 +1185,156 @@ test.describe("focus when the control holding it goes away", () => {
       "an emptied trash must hand focus to its section",
     ).toBeFocused();
   });
+});
+
+/**
+ * Escape, as the way out of the two transient surfaces (#376).
+ *
+ * The confirmation kept by hand what a `<dialog>` would have given it, except
+ * this; and the undo toast never times out while focus is inside it, so for a
+ * keyboard user it is permanent until they find Dismiss. Escape is the exit both
+ * owe, and it goes where the matching button goes: Cancel's destination for the
+ * confirmation, Dismiss's for the toast.
+ */
+test.describe("Escape dismisses what is transient (#376)", () => {
+  test("Escape closes a confirmation without confirming, handing focus back to its trigger", async ({ page, api }) => {
+    await api.reset();
+    const collection = await api.createCollection({ name: "Vinyl records", fields: FIELDS });
+    const item = await api.createItem(collection.id, { title: "Kind of Blue", year: 1959 });
+    await api.deleteItem(collection.id, item.id);
+
+    await page.goto("/settings");
+    const trigger = page.getByRole("button", { name: purgeName("Kind of Blue") });
+    await trigger.focus();
+    await page.keyboard.press("Enter");
+    await expect(page.getByRole("alert")).toBeVisible();
+    expect(await focusedControl(page)).toBe('button "Cancel"');
+
+    await page.keyboard.press("Escape");
+    await expect(page.getByRole("alert"), "Escape must close the question").toHaveCount(0);
+    await expect(trigger, "Escape must hand focus back to the button that asked").toBeFocused();
+    // And it answered "no": the row is still in the trash.
+    await expect(page.getByRole("button", { name: restoreName("Kind of Blue") })).toHaveCount(1);
+
+    // From the destructive option too, which is where Shift+Tab leaves a user.
+    await page.keyboard.press("Enter");
+    await page.keyboard.press("Shift+Tab");
+    expect(await focusedControl(page)).toBe(purgeStop("Kind of Blue"));
+    await page.keyboard.press("Escape");
+    await expect(page.getByRole("alert")).toHaveCount(0);
+    await expect(trigger).toBeFocused();
+    await expect(page.getByRole("button", { name: restoreName("Kind of Blue") })).toHaveCount(1);
+  });
+
+  test("Escape closes the undo toast without undoing, handing focus where the delete left it", async ({
+    page,
+    api,
+  }) => {
+    await api.reset();
+    const collection = await api.createCollection({ name: "Vinyl records", fields: FIELDS });
+    await api.createItem(collection.id, { title: "Kind of Blue", year: 1959 });
+    await api.createItem(collection.id, { title: "Blue Train", year: 1957 });
+
+    await page.goto(`/collections/${collection.id}`);
+    await page.getByRole("button", { name: deleteName("Kind of Blue") }).click();
+    const undo = page.getByRole("button", { name: "Undo" });
+    await undo.focus();
+
+    await page.keyboard.press("Escape");
+    await expect(undo, "Escape must close the toast").toHaveCount(0);
+    await expect(page.getByRole("listitem"), "Escape must not undo the delete").toHaveCount(1);
+    await expect(
+      page.getByRole("button", { name: editName("Blue Train") }),
+      "Escape must hand focus where the delete left it, as Dismiss does",
+    ).toBeFocused();
+  });
+
+  /**
+   * A second delete inside the window used to rebind the toast in place: same
+   * element, same focused Undo, now about a different item — so a user standing
+   * on it could undo the wrong delete. The press is a programmatic click, which
+   * presses Delete without moving focus off Undo, as a Safari click or an iOS
+   * tap does.
+   */
+  test("a second delete inside the window does not leave focus on an Undo bound to another item", async ({
+    page,
+    api,
+  }) => {
+    await api.reset();
+    const collection = await api.createCollection({ name: "Vinyl records", fields: FIELDS });
+    await api.createItem(collection.id, { title: "Kind of Blue", year: 1959 });
+    await api.createItem(collection.id, { title: "Blue Train", year: 1957 });
+    await api.createItem(collection.id, { title: "Giant Steps", year: 1960 });
+
+    await page.goto(`/collections/${collection.id}`);
+    await page.getByRole("button", { name: deleteName("Kind of Blue") }).click();
+    const undo = page.getByRole("button", { name: "Undo" });
+    await undo.focus();
+    const firstUndo = await undo.elementHandle();
+
+    await page
+      .getByRole("button", { name: deleteName("Blue Train") })
+      .evaluate((button: HTMLElement) => button.click());
+    await expect(page.getByText("Deleted “Blue Train”")).toBeVisible();
+    await expect(page.getByRole("listitem")).toHaveCount(1);
+
+    expect(
+      await firstUndo?.evaluate((button) => button.isConnected),
+      "the toast for the first delete must be replaced, not rebound",
+    ).toBe(false);
+    await expect(
+      page.getByRole("button", { name: editName("Giant Steps") }),
+      "focus must go where the second delete sends it, not stay on a rebound Undo",
+    ).toBeFocused();
+  });
+});
+
+/**
+ * The undo toast is fixed over the page, so it can paint over a control a
+ * keyboard user has just tabbed to (#372, WCAG 2.2 2.4.11 Focus Not Obscured).
+ * Compared as boxes, not screenshots: every stop on the page, with the toast up,
+ * must have its box — focus ring included — clear of the toast's.
+ */
+test.describe("the undo toast never covers the focused control (#372)", () => {
+  for (const items of [2, 14]) {
+    test(`with ${items} items, no stop is under the toast`, async ({ page, api }) => {
+      await api.reset();
+      const collection = await api.createCollection({ name: "Vinyl records", fields: FIELDS });
+      for (let index = 0; index < items; index++) {
+        await api.createItem(collection.id, { title: `Record ${index + 1}`, year: 1950 + index });
+      }
+
+      await page.goto(`/collections/${collection.id}`);
+      await expect(page.getByRole("listitem")).toHaveCount(items);
+      await page.getByRole("button", { name: deleteName("Record 1") }).click();
+      await expect(page.getByRole("button", { name: "Undo" })).toBeVisible();
+      await page.locator("body").focus();
+      await page.evaluate(() => window.scrollTo(0, 0));
+
+      const obscured: string[] = [];
+      for (let press = 0; press < 80; press++) {
+        await page.keyboard.press("Tab");
+        const stop = await focusedControl(page);
+        if (stop === NOTHING_FOCUSED) break;
+        const overlap = await page.evaluate(() => {
+          const toast = document.querySelector(".undo-toast")?.getBoundingClientRect();
+          const focused = document.activeElement?.getBoundingClientRect();
+          if (!toast || !focused) return false;
+          // The focus ring is drawn outside the box (global.css :focus-visible).
+          const ring = 4;
+          return (
+            focused.left - ring < toast.right &&
+            focused.right + ring > toast.left &&
+            focused.top - ring < toast.bottom &&
+            focused.bottom + ring > toast.top
+          );
+        });
+        if (overlap && !stop.startsWith('button "Undo"') && !stop.startsWith('button "Dismiss"')) obscured.push(stop);
+      }
+
+      expect(obscured, "controls whose focus ring the toast paints over").toEqual([]);
+    });
+  }
 });
 
 test.describe("searching a collection (#41)", () => {

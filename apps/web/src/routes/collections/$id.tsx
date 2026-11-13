@@ -35,6 +35,7 @@ import {
   validateItemSearch,
 } from "../../lib/item-search.js";
 import { CONTENT_LINK_ACTIVE_OPTIONS } from "../../lib/links.js";
+import { useOverlayClearance } from "../../lib/overlay-clearance.js";
 import { type PageName, usePageTitle } from "../../lib/page-title.js";
 import {
   collectionCountsQueryKey,
@@ -433,6 +434,9 @@ function CollectionDetailPage() {
   // here, at the page, because the page is what survives all three.
   const handOffFocus = useFocusHandoff();
   const panelRef = useRef<HTMLDivElement>(null);
+  // The toast strip is fixed over the page's foot; this keeps whatever takes
+  // focus scrolled clear of it (#372).
+  const toastRegionRef = useOverlayClearance();
 
   function setSearch(next: string) {
     // `replace` so keystrokes do not fill the history; `resetScroll: false` or
@@ -762,7 +766,7 @@ function CollectionDetailPage() {
           one string wholesale, this region's content is replaced in place by a
           second delete, and atomic would re-read the whole toast instead of the
           name that changed. */}
-      <div className="undo-toast-region">
+      <div className="undo-toast-region" ref={toastRegionRef}>
         {/* Completing a finite set (#42): the fourth region the announcer cannot
             carry, because the words are seen as well as heard. The same
             mechanism as the toast's, beside it rather than inside it — a

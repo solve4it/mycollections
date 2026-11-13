@@ -25,10 +25,11 @@ test.describe("accessibility of the setup screen", () => {
     await page.goto("/setup");
     await expect(page).toHaveURL(/\/setup$/);
     await expect(page.getByLabel("API Token")).toBeVisible();
-    // The shell's nav renders here too (#369 asked for it to be scanned), so a
-    // change that dropped it from this screen must not quietly shrink the scan.
-    // Not named: which nav is shown depends on the viewport.
-    await expect(page.getByRole("navigation").first()).toBeVisible();
+    // The shell's nav is not on this screen (#371): with no token, every place
+    // it led redirected straight back here. The landmark the scan still covers
+    // is <main>, which has to survive the nav going.
+    await expect(page.getByRole("navigation")).toHaveCount(0);
+    await expect(page.getByRole("main")).toBeVisible();
 
     await expectNoAccessibilityViolations(page);
   });

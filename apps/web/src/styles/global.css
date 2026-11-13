@@ -401,6 +401,16 @@ h2 {
   flex: 1;
   min-width: 0;
   padding: 24px;
+  /* Room for the last control on the page to scroll up clear of the undo toast
+     strip while it is up (#372); --overlay-clearance is only set then. */
+  padding-bottom: calc(24px + var(--overlay-clearance, 0px));
+}
+
+/* The browser's own focus scrolling stops short of the toast strip, so a
+   control reached by Tab is never left behind it (#372, WCAG 2.4.11). Zero
+   whenever the strip is empty: lib/overlay-clearance.ts measures it. */
+html {
+  scroll-padding-bottom: var(--overlay-clearance, 0px);
 }
 
 /* Bottom nav — shown on mobile only */
@@ -1599,7 +1609,9 @@ p[role="alert"] {
 
   .shell-main {
     padding: 16px;
-    padding-bottom: calc(var(--bottom-nav-height) + 16px);
+    /* The clearance is measured from the viewport's foot, so it already covers
+       the bottom nav the toast sits above: whichever is taller wins. */
+    padding-bottom: calc(max(var(--bottom-nav-height), var(--overlay-clearance, 0px)) + 16px);
   }
 
   /* No bottom nav on a bare screen (#371), so no room kept for one. */
