@@ -1665,6 +1665,36 @@ p[role="alert"] {
   background: var(--card);
 }
 
+/* The photo is the drag handle (#37). The image inside takes no pointer
+   events, so a press lands on the handle and the browser never starts its own
+   image drag; and no long-press callout or text selection on touch, where a
+   press and hold is how a drag begins. */
+.image-drag-handle {
+  cursor: grab;
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+
+.image-drag-handle img {
+  pointer-events: none;
+  -webkit-user-drag: none;
+}
+
+.image-gallery-item-dragging {
+  position: relative;
+  z-index: 1;
+}
+
+.image-gallery-item-dragging .image-drag-handle {
+  cursor: grabbing;
+}
+
+.image-gallery-item-dragging .image-gallery-thumb {
+  box-shadow: 0 6px 20px rgb(0 0 0 / 0.25);
+}
+
 .media-image-placeholder {
   display: block;
   width: 100%;
