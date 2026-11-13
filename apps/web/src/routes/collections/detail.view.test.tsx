@@ -234,6 +234,13 @@ describe("the grid (#38)", () => {
     expect(train.getByRole("button", { name: "Delete “Blue Train”" })).toBeInTheDocument();
   });
 
+  it("waits for the items with placeholder cards, not rows", async () => {
+    vi.mocked(listItems).mockReturnValue(new Promise(() => {}));
+    renderDetail();
+    expect(await screen.findByRole("status")).toHaveTextContent("Loading items…");
+    expect(document.querySelectorAll(".item-list-grid .skeleton-card-cover")).toHaveLength(3);
+  });
+
   it("shows every field again in the list", async () => {
     vi.mocked(getCollection).mockResolvedValue(COLLECTION);
     renderDetail();

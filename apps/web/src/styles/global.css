@@ -1017,6 +1017,20 @@ p[role="alert"] {
   block-size: 0.8125rem;
 }
 
+/* A placeholder card in a collection's grid (#38): stacked like the real card,
+   with the cover's square reserved. */
+.item-list-grid .skeleton-row {
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.skeleton-card-cover {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1;
+  border-radius: var(--radius-sm);
+}
+
 /* Screen entrance (#225). The wrapper in __root.tsx is keyed by pathname, so it
    remounts on navigation and this replays — a CSS animation does not restart on
    its own. No fill mode on purpose: before the animation runs and after it ends

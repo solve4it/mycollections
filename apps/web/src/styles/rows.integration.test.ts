@@ -134,3 +134,12 @@ describe("the grid view (#38)", () => {
     expect(declaration(cover, "object-fit")).toBe("contain");
   });
 });
+
+describe("a placeholder card (#38)", () => {
+  it("stacks like a real card and reserves the same square cover", () => {
+    expect(declaration(only(RULES, ".item-list-grid .skeleton-row").body, "flex-direction")).toBe("column");
+    const cover = only(RULES, ".skeleton-card-cover").body;
+    expect(declaration(cover, "aspect-ratio")).toBe("1");
+    expect(declaration(cover, "width")).toBe("100%");
+  });
+});

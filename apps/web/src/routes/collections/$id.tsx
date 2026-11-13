@@ -950,13 +950,13 @@ function ItemList({
           <p>{t("items_error_description")}</p>
         </div>
       );
-    return <ItemListSkeleton label={t("loading_items")} />;
+    return <ItemListSkeleton label={t("loading_items")} view={view} />;
   }
 
   // Nothing to show *yet*: the empty result is the previous view's, kept while
   // this one loads, and is no answer about this one (#42). Rows kept that way
   // stay on screen marked busy, below; an empty kept result shows the wait.
-  if (items.length === 0 && query.isPlaceholderData) return <ItemListSkeleton label={t("loading_items")} />;
+  if (items.length === 0 && query.isPlaceholderData) return <ItemListSkeleton label={t("loading_items")} view={view} />;
 
   // "Nothing matches", "nothing in this tab" and "nothing here" are different
   // news with different ways out (#41, #42); the page says which.
