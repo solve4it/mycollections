@@ -1,7 +1,11 @@
+import { mkdtemp } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { openDatabase } from "@mycollections/db";
 import { buildApp } from "./app.js";
 import { resolveServerConfig, type ServerConfig, startupWarnings } from "./config.js";
 import { buildLoggerOptions } from "./logger.js";
+import { MediaStore } from "./media/media-store.js";
 
 /**
  * A misconfiguration is the operator's to fix, so print the message rather than a stack
@@ -23,6 +27,14 @@ function loadConfig(): ServerConfig {
 const config = loadConfig();
 
 const handle = await openDatabase({ path: config.dbPath });
+
+// An in-memory database (the e2e suite) has no folder to keep images beside, and
+// nothing it stores outlives the process, so neither do its images.
+const mediaDir = config.mediaDir ?? (await mkdtemp(join(tmpdir(), "mycollections-media-")));
+const media = await MediaStore.open(mediaDir).catch(exitWithConfigurationError);
+// Files no row names any more: a crash between a purge's commit and its unlink, a
+// database restored from a backup older than its images. Nothing is in flight yet.
+const swept = await media.sweep(await handle.media.listFileRefs());
 // `buildApp` validates too — it refuses a dev CORS allowlist that is empty or not
 // loopback — and a throw here is a misconfiguration like any other, not a crash.
 const app = await buildApp({
@@ -37,6 +49,8 @@ const app = await buildApp({
 await app.listen({ port: config.port, host: config.host });
 
 console.log(`Database: ${config.dbPath}`);
+console.log(`Media: ${mediaDir}`);
+if (swept > 0) console.log(`Removed ${swept} image file(s) no longer referenced by the database.`);
 for (const warning of startupWarnings(config)) {
   console.warn(`WARNING: ${warning}`);
 }
