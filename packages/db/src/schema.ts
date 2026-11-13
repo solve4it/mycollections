@@ -49,6 +49,15 @@ export const items = sqliteTable(
   (table) => [index("items_collection_id_idx").on(table.collectionId, table.deletedAt)],
 );
 
+/**
+ * Images attached to an item (#37). The item's primary is the live row with the
+ * lowest `position`; there is no flag that could name two. Files are not
+ * referenced from here: they live at `<MEDIA_DIR>/<item_id>/<id>…`, derived from
+ * the ids, so moving the media directory breaks no row.
+ *
+ * Soft-deleted rows keep their `position`, so an Undo puts the image back where
+ * it was; the order only ever compares positions, so the gap is harmless.
+ */
 export const media = sqliteTable(
   "media",
   {
@@ -57,14 +66,16 @@ export const media = sqliteTable(
       .notNull()
       .references(() => items.id, { onDelete: "cascade" }),
     kind: text("kind").notNull(),
+    source: text("source").notNull(),
     mimeType: text("mime_type").notNull(),
     bytes: integer("bytes").notNull(),
-    isPrimary: integer("is_primary", { mode: "boolean" }).notNull(),
-    storagePath: text("storage_path"),
+    width: integer("width").notNull(),
+    height: integer("height").notNull(),
+    position: integer("position").notNull(),
     createdAt: text("created_at").notNull(),
     deletedAt: text("deleted_at"),
   },
-  (table) => [index("media_item_id_idx").on(table.itemId)],
+  (table) => [index("media_item_id_idx").on(table.itemId, table.deletedAt, table.position)],
 );
 
 export const userProfile = sqliteTable(

@@ -23,7 +23,7 @@ export {
   type TagValue,
   type UpdateItemInput,
 } from "./repositories/items.js";
-export { type CreateMediaInput, MediaRepository } from "./repositories/media.js";
+export { type CreateMediaInput, type MediaFileRef, MediaRepository } from "./repositories/media.js";
 export {
   type UpsertUserProfileInput,
   type UserProfile,

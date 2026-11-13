@@ -10,7 +10,7 @@ An earlier draft of this package called for an in-memory SQLite mirror in front 
 | -------------- | ------------------------------------------------------------------------------------------------------------------------- |
 | `collections`  | Collection metadata, `is_finite_set` flag and its `target_count`, and the field schema (JSON array of `FieldDefinition`)  |
 | `items`        | Items with `status` (`owned`/`wanted`/`ordered`) and custom field values in a JSON column queryable with `json_extract()` |
-| `media`        | Per-item media (images) with primary designation and `storage_path`                                                       |
+| `media`        | Per-item images (#37): `source`, display `width`/`height`, and `position` — the first live one is the primary             |
 | `user_profile` | Account info from the auth layer plus a JSON settings blob (theme, locale, opt-outs)                                      |
 
 Later phases add their own tables via new migrations: `share_links` (#48), `plugin_data` (#54/#55), `licenses` (#57), and `mutations`/`sync_state` (#49).
@@ -52,6 +52,14 @@ Some migrations are hand-written (`pnpm exec drizzle-kit generate --custom --nam
 - **Never run `drizzle-kit push` or `pull` against a real database.** They diff against the live schema, which holds `items_fts` and its triggers that `schema.ts` cannot describe, and would drop them.
 - **A migration that rebuilds `items`** (drizzle-kit's create-copy-drop-rename pattern for most column changes) drops its triggers with the old table. It must recreate the `items_fts` triggers (and the `items_search_key` foreign key) and end with `DELETE FROM items_fts; UPDATE items SET fields = fields;` to re-index. The trigger-inventory test in `items-query.test.ts` fails if the triggers go missing.
 
+`0003_media.sql` is the other hand-edited kind: it replaces the `media` table outright (`DROP` then `CREATE`). drizzle-kit generated `ADD … NOT NULL` columns with no default, which SQLite refuses on any database, and nothing before #37 ever wrote a media row, so there was nothing to copy. Do not use it as the model for a table that holds data — that needs drizzle-kit's create-copy-drop-rename rebuild.
+
+## Media (#37)
+
+Every `MediaRepository` write takes the item id as well as the media id and matches on both, so a media id reached through the wrong item changes nothing. There is no primary flag: the live image with the lowest `position` is the primary, and making one primary is `moveToFront`. A trashed image keeps its position, so `restore` puts it back in its slot (shifting any image renumbered into it since). `reorder` is all-or-nothing: the list must name every live image of the item exactly once.
+
+The files are not referenced from the table. They live at `<MEDIA_DIR>/<itemId>/<mediaId>…`, derived from the ids by the API; `listFileRefs()` is the list of rows whose files must stay, and anything else under the directory is an orphan for the API to remove. `emptyTrash()` also deletes trashed images (rows only — their files go with that sweep).
+
 ## File permissions
 
 The database holds every collection in plaintext, so `openDatabase()` creates it — plus its `-wal`/`-shm` sidecars and any pre-migration `.bak` — readable and writable only by the owning account (`0600`), and creates missing parent directories as `0700`. An existing database opened with looser permissions is tightened on startup (#242).
@@ -91,7 +99,7 @@ handle.close();
 | `openDatabase` / `DatabaseHandle` | Open + migrate the database; returns repositories, the Drizzle instance (`db`), and the raw connection (`sqlite`)                                                                                                        |
 | `CollectionsRepository`           | CRUD (a finite set's `targetCount` included), soft delete/restore, `listDeleted()`/`purge()` for the trash, hard delete                                                                                                  |
 | `ItemsRepository`                 | CRUD, list by status / search (`q`) / `sort` / `filters`, `tagValues()`, `countsByCollection()`/`countsForCollection()`, `reindex()`, `listDeleted()`/`purge()` for the trash, `findByFieldValue()` via `json_extract()` |
-| `MediaRepository`                 | CRUD plus `setPrimary()` (demotes the previous primary in the same transaction)                                                                                                                                          |
+| `MediaRepository`                 | Item-scoped: `create`, `listByItem`, `reorder`/`moveToFront`, `softDelete`/`restore`, `primaryForItems`, `listFileRefs`                                                                                                  |
 | `UserProfileRepository`           | `get()` / `upsert()` keyed by the auth layer's account key                                                                                                                                                               |
 | `emptyTrash`                      | Permanently removes every trashed collection (cascading to its items) and every trashed item, in one transaction                                                                                                         |
 | `InvalidItemQueryError`           | Thrown by `listByCollection` for a sort or filter the collection cannot honour, and by `tagValues` for a field that is not tags; fixed text, safe for a 400                                                              |

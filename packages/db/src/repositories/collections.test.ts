@@ -146,7 +146,14 @@ describe("CollectionsRepository", () => {
   it("hard delete removes the row and cascades to items and media", async () => {
     const collection = await handle.collections.create({ name: "Books", fields, isFiniteSet: false });
     const item = await handle.items.create({ collectionId: collection.id, fields: { title: "Dune" } });
-    await handle.media.create({ itemId: item.id, kind: "image", mimeType: "image/png", bytes: 10 });
+    await handle.media.create({
+      itemId: item.id,
+      source: "user-attached",
+      mimeType: "image/webp",
+      bytes: 10,
+      width: 1,
+      height: 1,
+    });
 
     expect(await handle.collections.hardDelete(collection.id)).toBe(true);
     expect(await handle.collections.getById(collection.id, { includeDeleted: true })).toBeNull();
