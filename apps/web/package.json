@@ -28,7 +28,7 @@
     "i18next-browser-languagedetector": "^8.3.0",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
-    "react-i18next": "^17.1.11"
+    "react-i18next": "^18.0.1"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.14.0",
