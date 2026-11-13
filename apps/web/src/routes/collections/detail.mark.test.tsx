@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ItemListQuery } from "../../lib/api-client.js";
 import { parseSearch, stringifySearch } from "../../lib/search-params.js";
 import { rootRoute } from "../__root.js";
+import { authenticatedRoute } from "../_authenticated.js";
 import { collectionDetailRoute } from "./$id.js";
 
 vi.mock("../../lib/api-client.js", () => ({
@@ -95,7 +96,7 @@ function renderAt(path: string, collection: Collection = COLLECTION) {
   vi.mocked(getCollection).mockResolvedValue(collection);
   const history = createMemoryHistory({ initialEntries: [path] });
   const router = createRouter({
-    routeTree: rootRoute.addChildren([collectionDetailRoute]),
+    routeTree: rootRoute.addChildren([authenticatedRoute.addChildren([collectionDetailRoute])]),
     history,
     parseSearch,
     stringifySearch,

@@ -7,7 +7,7 @@ import {
   type ItemFilter,
 } from "@mycollections/core";
 import { type UseQueryResult, useQueryClient } from "@tanstack/react-query";
-import { createRoute, Link, redirect, useNavigate } from "@tanstack/react-router";
+import { createRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useId, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { CollectionProgress } from "../../components/CollectionProgress.js";
@@ -22,7 +22,6 @@ import { CollectionDetailSkeleton, ItemListSkeleton } from "../../components/Ske
 import { StatusTabs } from "../../components/StatusTabs.js";
 import { UndoToast } from "../../components/UndoToast.js";
 import { useAnnounce } from "../../lib/announcer.js";
-import { getToken } from "../../lib/api-client.js";
 import { scopedId } from "../../lib/dom-id.js";
 import { type FocusDestination, useFocusHandoff } from "../../lib/focus-handoff.js";
 import {
@@ -49,10 +48,10 @@ import {
   useSetItemStatus,
   useUpdateItem,
 } from "../../lib/queries.js";
-import { rootRoute } from "../__root.js";
+import { authenticatedRoute } from "../_authenticated.js";
 
 export const collectionDetailRoute = createRoute({
-  getParentRoute: () => rootRoute,
+  getParentRoute: () => authenticatedRoute,
   path: "/collections/$id",
   // "Collection" is only what this page is called until the collection itself
   // arrives; `dynamicTitle` is what tells the shell a better name is coming and
@@ -61,9 +60,6 @@ export const collectionDetailRoute = createRoute({
   // The search box's state (#41). Shape only — whether a sort suits this
   // collection is decided once its fields are known (`effectiveSort`).
   validateSearch: validateItemSearch,
-  beforeLoad: () => {
-    if (!getToken()) throw redirect({ to: "/setup" });
-  },
   component: CollectionDetailPage,
 });
 

@@ -4,6 +4,7 @@ import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createQueryClient } from "../../lib/query-client.js";
 import { rootRoute } from "../__root.js";
+import { authenticatedRoute } from "../_authenticated.js";
 import { collectionsRoute } from "./index.js";
 
 vi.mock("../../lib/api-client.js", () => ({
@@ -13,7 +14,7 @@ vi.mock("../../lib/api-client.js", () => ({
 
 import { listCollections } from "../../lib/api-client.js";
 
-const testRouteTree = rootRoute.addChildren([collectionsRoute]);
+const testRouteTree = rootRoute.addChildren([authenticatedRoute.addChildren([collectionsRoute])]);
 
 function makeQueryClient(networkMode?: NetworkMode) {
   return new QueryClient({ defaultOptions: { queries: { retry: false, networkMode } } });

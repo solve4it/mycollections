@@ -4,10 +4,11 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { clearToken } from "../../lib/api-client.js";
 import { rootRoute } from "../__root.js";
+import { authenticatedRoute } from "../_authenticated.js";
 import { collectionsRoute } from "../collections/index.js";
 import { setupRoute } from "./index.js";
 
-const testRouteTree = rootRoute.addChildren([setupRoute, collectionsRoute]);
+const testRouteTree = rootRoute.addChildren([authenticatedRoute.addChildren([collectionsRoute]), setupRoute]);
 
 function makeQueryClient() {
   return new QueryClient({ defaultOptions: { queries: { retry: false } } });
