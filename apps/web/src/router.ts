@@ -101,5 +101,17 @@ declare module "@tanstack/react-router" {
      * by which time the nav has already told a screen reader where the user is.
      */
     notFound?: boolean;
+    /**
+     * This screen renders without the shell's chrome — no skip link, no nav
+     * (#371). Only `/setup`, the one screen that exists without a token: every
+     * destination the nav offers is guarded on the token and redirects straight
+     * back, so on this screen the nav was a set of links that did nothing and
+     * said nothing. `<main>` and the announcer stay, so the screen is still a
+     * landmark and still announced.
+     *
+     * Declared on the route for the same reason as the two flags above: the
+     * shell decides in the render that changes the route.
+     */
+    bare?: boolean;
   }
 }

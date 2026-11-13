@@ -163,6 +163,11 @@ function useIsNotFound(): boolean {
   });
 }
 
+/** Whether the matched route asks for no skip link and no nav (#371). */
+function useIsBare(): boolean {
+  return useRouterState({ select: (state) => state.matches.some((match) => match.staticData.bare === true) });
+}
+
 /** Whether the matched route's screen publishes a title of its own (#309). */
 function useHasDynamicTitle(): boolean {
   return useRouterState({ select: (state) => state.matches.some((match) => match.staticData.dynamicTitle === true) });
@@ -174,6 +179,7 @@ export function Shell({ children }: ShellProps) {
   const pageId = usePageId();
   const hasDynamicTitle = useHasDynamicTitle();
   const isNotFound = useIsNotFound();
+  const bare = useIsBare();
   const { messages: announcements, announce } = useAnnouncements();
 
   /**
@@ -288,9 +294,12 @@ export function Shell({ children }: ShellProps) {
 
   return (
     <>
-      <a href="#main-content" className="skip-link">
-        {t("skip_to_main")}
-      </a>
+      {/* A skip link with nothing to skip goes with the nav it skips (#371). */}
+      {!bare && (
+        <a href="#main-content" className="skip-link">
+          {t("skip_to_main")}
+        </a>
+      )}
       {/* Outside the shell and outside the pathname-keyed wrapper in __root.tsx:
           a region that is torn down and rebuilt on every navigation is a region
           inserted with its text already in it, which is the bug above. No
@@ -299,24 +308,26 @@ export function Shell({ children }: ShellProps) {
           ambiguous with a region that is not about the page's status. Pages
           speak through it with `useAnnounce()` (lib/announcer.tsx). */}
       <Announcer messages={announcements} />
-      <div className="shell">
-        <nav className="shell-sidebar" aria-label={t("aria_main_nav")}>
-          <div className="sidebar-logo">
-            <Icon name="logo" className="logo-mark" />
-            {t("app_name")}
-          </div>
-          <div className="sidebar-nav">
-            {NAV_ITEM_DEFS.map(({ to, labelKey, icon }) => (
-              <NavLink key={to} to={to} className="touch-target" isNotFound={isNotFound}>
-                <Icon name={icon} />
-                {t(labelKey)}
-              </NavLink>
-            ))}
-          </div>
-          {/* The version is build-time injected (see vite.config.ts), so it is
+      <div className={bare ? "shell shell-bare" : "shell"}>
+        {!bare && (
+          <nav className="shell-sidebar" aria-label={t("aria_main_nav")}>
+            <div className="sidebar-logo">
+              <Icon name="logo" className="logo-mark" />
+              {t("app_name")}
+            </div>
+            <div className="sidebar-nav">
+              {NAV_ITEM_DEFS.map(({ to, labelKey, icon }) => (
+                <NavLink key={to} to={to} className="touch-target" isNotFound={isNotFound}>
+                  <Icon name={icon} />
+                  {t(labelKey)}
+                </NavLink>
+              ))}
+            </div>
+            {/* The version is build-time injected (see vite.config.ts), so it is
               interpolated rather than translated; only the label is a key. */}
-          <div className="sidebar-foot">{t("local_first_footer", { version: __APP_VERSION__ })}</div>
-        </nav>
+            <div className="sidebar-foot">{t("local_first_footer", { version: __APP_VERSION__ })}</div>
+          </nav>
+        )}
 
         {/* tabIndex={-1} is what makes the skip link work: Safari and Firefox
             scroll to a fragment target but leave focus behind unless the target
@@ -331,14 +342,16 @@ export function Shell({ children }: ShellProps) {
           </PageNameProvider>
         </main>
 
-        <nav className="shell-bottom-nav" aria-label={t("aria_bottom_nav")}>
-          {NAV_ITEM_DEFS.map(({ to, labelKey, icon }) => (
-            <NavLink key={to} to={to} className="bottom-nav-item touch-target" isNotFound={isNotFound}>
-              <Icon name={icon} />
-              <span>{t(labelKey)}</span>
-            </NavLink>
-          ))}
-        </nav>
+        {!bare && (
+          <nav className="shell-bottom-nav" aria-label={t("aria_bottom_nav")}>
+            {NAV_ITEM_DEFS.map(({ to, labelKey, icon }) => (
+              <NavLink key={to} to={to} className="bottom-nav-item touch-target" isNotFound={isNotFound}>
+                <Icon name={icon} />
+                <span>{t(labelKey)}</span>
+              </NavLink>
+            ))}
+          </nav>
+        )}
       </div>
     </>
   );

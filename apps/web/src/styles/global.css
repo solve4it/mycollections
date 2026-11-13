@@ -1601,6 +1601,11 @@ p[role="alert"] {
     padding: 16px;
     padding-bottom: calc(var(--bottom-nav-height) + 16px);
   }
+
+  /* No bottom nav on a bare screen (#371), so no room kept for one. */
+  .shell-bare .shell-main {
+    padding-bottom: 16px;
+  }
 }
 
 /* Undo toast (#33). A drawer label slid out over the page: the cabinet surface,

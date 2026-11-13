@@ -1,7 +1,34 @@
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createMemoryHistory, createRouter, RouterProvider } from "@tanstack/react-router";
-import { render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { render as baseRender, screen } from "@testing-library/react";
+import type { ReactElement } from "react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { clearToken, setToken } from "../lib/api-client.js";
 import { routeTree } from "../routeTree.js";
+
+// A connected app. Without a token /collections redirects to /setup, which
+// renders no nav at all (#371) — so these would be asserting on the one screen
+// that is deliberately bare.
+// The connected screens query, so they need a client; the requests themselves
+// never resolve here and the screen stays on its skeleton, which is all a test
+// of the shell around it needs.
+beforeEach(() => {
+  setToken("test-token");
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(() => new Promise(() => {})),
+  );
+});
+afterEach(() => {
+  vi.unstubAllGlobals();
+  clearToken();
+  localStorage.clear();
+});
+
+function render(ui: ReactElement) {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return baseRender(<QueryClientProvider client={client}>{ui}</QueryClientProvider>);
+}
 
 function makeRouter(initialPath = "/collections") {
   const router = createRouter({

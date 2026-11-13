@@ -8,7 +8,8 @@ import { rootRoute } from "../__root.js";
 export const setupRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/setup",
-  staticData: { titleKey: "setup:short_title" },
+  // No nav here (#371): with no token, every place it leads redirects back.
+  staticData: { titleKey: "setup:short_title", bare: true },
   beforeLoad: () => {
     if (getToken()) throw redirect({ to: "/collections" });
   },

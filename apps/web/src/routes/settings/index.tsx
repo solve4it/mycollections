@@ -1,9 +1,9 @@
-import { createRoute, useNavigate } from "@tanstack/react-router";
+import { createRoute, redirect, useNavigate } from "@tanstack/react-router";
 import { type ChangeEvent, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Icon } from "../../components/Icon.js";
 import { TrashSection } from "../../components/TrashSection.js";
-import { clearToken, exportData, isTokenSessionOnly } from "../../lib/api-client.js";
+import { clearToken, exportData, getToken, isTokenSessionOnly } from "../../lib/api-client.js";
 import { isErrorReportingEnabled, setErrorReportingEnabled } from "../../lib/error-reporter.js";
 import { useImportData } from "../../lib/queries.js";
 import { getThemePreference, isThemePreference, setThemePreference } from "../../lib/theme.js";
@@ -13,6 +13,12 @@ export const settingsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/settings",
   staticData: { titleKey: "settings:title" },
+  // Guarded like every other screen (#371). Without it, Settings rendered with
+  // every query unauthenticated and offered to disconnect a token that was
+  // never there.
+  beforeLoad: () => {
+    if (!getToken()) throw redirect({ to: "/setup" });
+  },
   component: SettingsPage,
 });
 
