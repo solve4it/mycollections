@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 /**
@@ -10,6 +11,12 @@ const MIN_NETWORK_TOKEN_LENGTH = 32;
 
 export interface ServerConfig {
   dbPath: string;
+  /**
+   * Where image files live (#37): `MEDIA_DIR`, else a `media` folder beside the
+   * database. Null for an in-memory database with no `MEDIA_DIR`, which has no
+   * folder to sit beside; the server then uses a temporary folder for the run.
+   */
+  mediaDir: string | null;
   port: number;
   host: string;
   token: string;
@@ -193,12 +200,21 @@ export function resolveServerConfig(env: NodeJS.ProcessEnv = process.env): Serve
     }
   }
 
+  // A fixed location anchored to the app directory (apps/api/data/app.db), resolved
+  // from this module's URL so it is the SAME file regardless of the working directory
+  // the server is launched from. A cwd-relative default would silently put the
+  // database in different places, making collections appear to vanish.
+  const dbPath = read(env.DB_PATH) ?? fileURLToPath(new URL("../data/app.db", import.meta.url));
+  const explicitMediaDir = read(env.MEDIA_DIR);
+
   return {
-    // A fixed location anchored to the app directory (apps/api/data/app.db), resolved
-    // from this module's URL so it is the SAME file regardless of the working directory
-    // the server is launched from. A cwd-relative default would silently put the
-    // database in different places, making collections appear to vanish.
-    dbPath: read(env.DB_PATH) ?? fileURLToPath(new URL("../data/app.db", import.meta.url)),
+    dbPath,
+    // Resolved to an absolute path for the same reason as the database default.
+    mediaDir: explicitMediaDir
+      ? resolve(explicitMediaDir)
+      : dbPath === ":memory:"
+        ? null
+        : join(dirname(dbPath), "media"),
     port: parsePort(read(env.PORT)),
     host,
     token: explicitToken ?? randomUUID(),

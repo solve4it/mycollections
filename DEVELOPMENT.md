@@ -179,7 +179,7 @@ API_TOKEN=dev-local-token pnpm --filter @mycollections/api dev
 
 > This placeholder is for loopback development only. The server refuses to bind a non-loopback `HOST` unless `API_TOKEN` is set explicitly _and_ is at least 32 characters, so a memorable token can never end up guarding a network-reachable API (#242).
 
-The SQLite database is created automatically at `apps/api/data/app.db` on first run (override with `DB_PATH`). This location is anchored to the app directory, so it's the same file no matter which directory you launch from, and the resolved path is printed on startup (`Database: …`). The `data/` directory is gitignored.
+The SQLite database is created automatically at `apps/api/data/app.db` on first run (override with `DB_PATH`). This location is anchored to the app directory, so it's the same file no matter which directory you launch from, and the resolved path is printed on startup (`Database: …`). Images go in a `media/` folder beside the database (override with `MEDIA_DIR`; printed as `Media: …`), so a scratch `DB_PATH` gets scratch images too. The `data/` directory is gitignored.
 
 ### Running a second instance side by side
 

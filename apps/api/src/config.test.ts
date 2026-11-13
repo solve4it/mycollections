@@ -46,6 +46,28 @@ describe("resolveServerConfig", () => {
     expect(resolve({ DB_PATH: ":memory:" }).dbPath).toBe(":memory:");
   });
 
+  describe("MEDIA_DIR (#37)", () => {
+    it("defaults to a media folder beside the database", () => {
+      expect(resolve({ DB_PATH: "/srv/collections/app.db" }).mediaDir).toBe("/srv/collections/media");
+      expect(resolve().mediaDir?.endsWith("/data/media")).toBe(true);
+    });
+
+    it("takes an explicit directory, resolved to an absolute path so it never depends on the working directory", () => {
+      expect(resolve({ MEDIA_DIR: "/mnt/photos" }).mediaDir).toBe("/mnt/photos");
+      expect(resolve({ MEDIA_DIR: "photos" }).mediaDir).toBe(`${process.cwd()}/photos`);
+    });
+
+    it("has no default for an in-memory database, which has no folder to sit beside", () => {
+      // The server gives such a run a temporary folder of its own (the e2e suite).
+      expect(resolve({ DB_PATH: ":memory:" }).mediaDir).toBeNull();
+      expect(resolve({ DB_PATH: ":memory:", MEDIA_DIR: "/tmp/e2e-media" }).mediaDir).toBe("/tmp/e2e-media");
+    });
+
+    it("treats an empty MEDIA_DIR as unset", () => {
+      expect(resolve({ DB_PATH: "/srv/app.db", MEDIA_DIR: " " }).mediaDir).toBe("/srv/media");
+    });
+  });
+
   // `process.env.X ?? default` only catches undefined. An exported-but-empty variable
   // is a string, so `HOST=""` reached app.listen() as "" — which binds every
   // interface, the exact exposure the bind guard exists to prevent.
