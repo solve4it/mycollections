@@ -3,6 +3,7 @@ import { authenticatedRoute } from "./routes/_authenticated.js";
 import { collectionDetailRoute } from "./routes/collections/$id.js";
 import { editCollectionRoute } from "./routes/collections/edit.js";
 import { collectionsRoute } from "./routes/collections/index.js";
+import { itemDetailRoute } from "./routes/collections/item.js";
 import { newCollectionRoute } from "./routes/collections/new.js";
 import { indexRoute } from "./routes/index.js";
 import { notFoundRoute } from "./routes/not-found.js";
@@ -20,6 +21,7 @@ export const routeTree = rootRoute.addChildren([
     newCollectionRoute,
     editCollectionRoute,
     collectionDetailRoute,
+    itemDetailRoute,
     collectionsRoute,
     settingsRoute,
   ]),
