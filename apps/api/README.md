@@ -14,31 +14,39 @@ Local Fastify API server for MyCollections. Runs on `localhost` only and is inte
 
 All routes require `Authorization: Bearer <token>` except `GET /api/health`.
 
-| Method   | Path                                         | Description                                                                                                       |
-| -------- | -------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
-| `GET`    | `/api/health`                                | Health check (no auth required)                                                                                   |
-| `GET`    | `/api/collections`                           | List all collections, each with `itemCount` and `ownedCount` (see [Counts and progress](#counts-and-progress-42)) |
-| `POST`   | `/api/collections`                           | Create a collection — a finite set may carry a target (see [A finite set's target](#a-finite-sets-target-42))     |
-| `GET`    | `/api/collections/:id`                       | Get a collection                                                                                                  |
-| `GET`    | `/api/collections/:id/counts`                | A collection's live items per status: `{ total, owned, wanted, ordered }`                                         |
-| `PATCH`  | `/api/collections/:id`                       | Update a collection, its field schema included (see [Editing a field schema](#editing-a-field-schema))            |
-| `DELETE` | `/api/collections/:id`                       | Soft-delete a collection                                                                                          |
-| `POST`   | `/api/collections/:id/restore`               | Restore a soft-deleted collection                                                                                 |
-| `GET`    | `/api/collections/:id/items`                 | List items (`?status=owned\|wanted\|ordered`, `?q=` search, `?sort=` — see below)                                 |
-| `POST`   | `/api/collections/:id/items`                 | Create an item                                                                                                    |
-| `POST`   | `/api/collections/:id/tags/rename`           | Rename or merge a tag across the collection's items (see below)                                                   |
-| `POST`   | `/api/collections/:id/tags/remove`           | Remove a tag from the collection's items                                                                          |
-| `GET`    | `/api/collections/:id/tag-values`            | Tags in use in a tags field (`?field=`), for suggestions                                                          |
-| `GET`    | `/api/collections/:id/items/:itemId`         | Get an item                                                                                                       |
-| `PATCH`  | `/api/collections/:id/items/:itemId`         | Update an item                                                                                                    |
-| `DELETE` | `/api/collections/:id/items/:itemId`         | Soft-delete an item                                                                                               |
-| `POST`   | `/api/collections/:id/items/:itemId/restore` | Restore a soft-deleted item                                                                                       |
-| `GET`    | `/api/trash`                                 | List what soft delete has hidden: `{ collections, items }`                                                        |
-| `DELETE` | `/api/trash`                                 | Empty the trash — permanently delete everything in it; returns `{ items, collections }` counts                    |
-| `DELETE` | `/api/trash/items/:itemId`                   | Permanently delete a trashed item                                                                                 |
-| `DELETE` | `/api/trash/collections/:id`                 | Permanently delete a trashed collection and its items                                                             |
-| `GET`    | `/api/export`                                | Download a JSON backup of all collections and items                                                               |
-| `POST`   | `/api/import`                                | Restore a backup document (`?mode=skip`)                                                                          |
+| Method   | Path                                                             | Description                                                                                                                                                            |
+| -------- | ---------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET`    | `/api/health`                                                    | Health check (no auth required)                                                                                                                                        |
+| `GET`    | `/api/collections`                                               | List all collections, each with `itemCount` and `ownedCount` (see [Counts and progress](#counts-and-progress-42))                                                      |
+| `POST`   | `/api/collections`                                               | Create a collection — a finite set may carry a target (see [A finite set's target](#a-finite-sets-target-42))                                                          |
+| `GET`    | `/api/collections/:id`                                           | Get a collection                                                                                                                                                       |
+| `GET`    | `/api/collections/:id/counts`                                    | A collection's live items per status: `{ total, owned, wanted, ordered }`                                                                                              |
+| `PATCH`  | `/api/collections/:id`                                           | Update a collection, its field schema included (see [Editing a field schema](#editing-a-field-schema))                                                                 |
+| `DELETE` | `/api/collections/:id`                                           | Soft-delete a collection                                                                                                                                               |
+| `POST`   | `/api/collections/:id/restore`                                   | Restore a soft-deleted collection                                                                                                                                      |
+| `GET`    | `/api/collections/:id/items`                                     | List items (`?status=owned\|wanted\|ordered`, `?q=` search, `?sort=` — see below), each with `primaryMedia`                                                            |
+| `POST`   | `/api/collections/:id/items`                                     | Create an item                                                                                                                                                         |
+| `POST`   | `/api/collections/:id/tags/rename`                               | Rename or merge a tag across the collection's items (see below)                                                                                                        |
+| `POST`   | `/api/collections/:id/tags/remove`                               | Remove a tag from the collection's items                                                                                                                               |
+| `GET`    | `/api/collections/:id/tag-values`                                | Tags in use in a tags field (`?field=`), for suggestions                                                                                                               |
+| `GET`    | `/api/collections/:id/items/:itemId`                             | Get an item                                                                                                                                                            |
+| `PATCH`  | `/api/collections/:id/items/:itemId`                             | Update an item                                                                                                                                                         |
+| `DELETE` | `/api/collections/:id/items/:itemId`                             | Soft-delete an item                                                                                                                                                    |
+| `POST`   | `/api/collections/:id/items/:itemId/restore`                     | Restore a soft-deleted item                                                                                                                                            |
+| `GET`    | `/api/collections/:id/items/:itemId/media`                       | An item's live images in order; the first is its primary (see [Images](#images-37))                                                                                    |
+| `POST`   | `/api/collections/:id/items/:itemId/media?source=`               | Upload one image as multipart field `file`; `source` is `user-attached` or `user-camera`. 201 with the image; 415, 413, 409 (50 per item) or 503 (busy, `Retry-After`) |
+| `GET`    | `/api/collections/:id/items/:itemId/media/:mediaId/display`      | The display image (WebP, sandboxed CSP, `no-store`)                                                                                                                    |
+| `GET`    | `/api/collections/:id/items/:itemId/media/:mediaId/thumb`        | The 480 px thumbnail, same headers                                                                                                                                     |
+| `PUT`    | `/api/collections/:id/items/:itemId/media/order`                 | `{ ids }` — every live image exactly once, or 409; returns the list                                                                                                    |
+| `POST`   | `/api/collections/:id/items/:itemId/media/:mediaId/make-primary` | Move an image to the front; returns the list                                                                                                                           |
+| `DELETE` | `/api/collections/:id/items/:itemId/media/:mediaId`              | Soft-delete an image (files kept for Undo)                                                                                                                             |
+| `POST`   | `/api/collections/:id/items/:itemId/media/:mediaId/restore`      | Put a soft-deleted image back in its slot                                                                                                                              |
+| `GET`    | `/api/trash`                                                     | List what soft delete has hidden: `{ collections, items }`                                                                                                             |
+| `DELETE` | `/api/trash`                                                     | Empty the trash — permanently delete everything in it; returns `{ items, collections }` counts                                                                         |
+| `DELETE` | `/api/trash/items/:itemId`                                       | Permanently delete a trashed item                                                                                                                                      |
+| `DELETE` | `/api/trash/collections/:id`                                     | Permanently delete a trashed collection and its items                                                                                                                  |
+| `GET`    | `/api/export`                                                    | Download a JSON backup of all collections and items                                                                                                                    |
+| `POST`   | `/api/import`                                                    | Restore a backup document (`?mode=skip`)                                                                                                                               |
 
 ### Searching and sorting items (#41, #42)
 
@@ -225,7 +233,14 @@ await app.listen({ port: 3001, host: "127.0.0.1" });
 
 ## Images (#37)
 
-`src/media/` turns an upload into what is stored and keeps the files. Upload and serving routes arrive in the next PR on #37; this is the part they call.
+`src/media/` turns an upload into what is stored and keeps the files; `src/routes/media.ts` puts it behind the routes above.
+
+- **Every media route** checks the collection is live, the item is live and in it, and the image belongs to that item, before it reads the upload, touches the disk or writes a row. Ids in media paths are validated as UUIDs by the route schema.
+- **The upload** is the only route with a multipart parser, registered in its own scope with every limit bounded: one file part, no fields, 25 MiB. The client's file name and declared type are never read or logged. `source` rides in the query string, because a streamed form field only counts when it precedes the file.
+- **Files first, then the row**, so a row never names a missing file; if the row cannot be written (the item was purged meanwhile) the files are removed.
+- **Item responses** — list, get, create, PATCH, restore — carry `primaryMedia: { id, width, height } | null`, added in one helper (`routes/item-response.ts`) so no route can answer without it. It is not part of `Item`, so the JSON export is unchanged.
+- **Purges** remove the files of exactly the image rows they took — diffed before and after, so an upload landing meanwhile is untouched — after the commit. Emptying the trash also takes images trashed on their own; the counts it returns are unchanged, since the trash lists items and collections only. A file that will not go is logged and left for the startup sweep.
+- **Not yet in backups or the JSON export** (#45, #47): a restored backup has no images.
 
 - **Accepted formats** are decided by the file's own first bytes, before sharp parses anything: JPEG, PNG, GIF, WebP and AVIF. The decoded format must agree. Everything else is refused, including SVG and TIFF, which the bundled libvips _can_ read: "sharp could decode it" is not an allowlist.
 - **Limits:** an upload may declare at most 50 megapixels (`MAX_INPUT_PIXELS`), which sharp checks from the header before decoding. libvips runs one thread with no operation cache, and `createJobLimiter` caps how many images are processed at once, refusing the rest with `QueueFullError` (a 503) instead of queueing without bound.
