@@ -377,3 +377,54 @@ describe("the gallery's actions (#37)", () => {
     await waitFor(() => expect(document.activeElement).toBe(screen.getByRole("button", { name: "Add photos" })));
   });
 });
+
+describe("the photo viewer (#37)", () => {
+  const A = "00000000-0000-4000-8000-0000000000a1";
+  const B = "00000000-0000-4000-8000-0000000000b2";
+
+  beforeEach(() => {
+    vi.mocked(listMedia).mockResolvedValue([media(A, 0), media(B, 1)]);
+    // jsdom has no modal dialogs; the real thing is exercised in Chromium by the e2e suite.
+    HTMLDialogElement.prototype.showModal = function showModal(this: HTMLDialogElement) {
+      this.setAttribute("open", "");
+    };
+    HTMLDialogElement.prototype.close = function close(this: HTMLDialogElement) {
+      this.removeAttribute("open");
+      this.dispatchEvent(new Event("close"));
+    };
+  });
+
+  const viewer = () => document.querySelector("dialog.image-viewer") as HTMLDialogElement;
+
+  it("opens a photo from its thumbnail, named by the photo, and steps through the others", async () => {
+    renderItemPage();
+    const open = await screen.findByRole("button", { name: "Photo 1 of 2 of “Kind of Blue”" });
+    expect(open).toHaveAttribute("aria-haspopup", "dialog");
+    fireEvent.click(open);
+    await waitFor(() => expect(viewer()).toHaveAttribute("open"));
+    const caption = viewer().querySelector(".image-viewer-caption") as HTMLElement;
+    expect(caption).toHaveTextContent("Photo 1 of 2 of “Kind of Blue”");
+    // The caption names the dialog, and says which photo is on show as it changes.
+    expect(viewer()).toHaveAttribute("aria-labelledby", caption.id);
+    expect(caption).toHaveAttribute("aria-live", "polite");
+
+    const previous = within(viewer()).getByRole("button", { name: "Previous", hidden: true });
+    expect(previous).toHaveAttribute("aria-disabled", "true");
+    fireEvent.click(within(viewer()).getByRole("button", { name: "Next", hidden: true }));
+    expect(caption).toHaveTextContent("Photo 2 of 2 of “Kind of Blue”");
+    fireEvent.keyDown(viewer(), { key: "ArrowLeft" });
+    expect(caption).toHaveTextContent("Photo 1 of 2 of “Kind of Blue”");
+    fireEvent.keyDown(viewer(), { key: "ArrowLeft" });
+    expect(caption).toHaveTextContent("Photo 1 of 2 of “Kind of Blue”");
+  });
+
+  it("closes back to the thumbnail of the photo last on show", async () => {
+    renderItemPage();
+    fireEvent.click(await screen.findByRole("button", { name: "Photo 1 of 2 of “Kind of Blue”" }));
+    await waitFor(() => expect(viewer()).toHaveAttribute("open"));
+    fireEvent.keyDown(viewer(), { key: "ArrowRight" });
+    fireEvent.click(within(viewer()).getByRole("button", { name: "Close photo", hidden: true }));
+    expect(viewer()).not.toHaveAttribute("open");
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: "Photo 2 of 2 of “Kind of Blue”" }));
+  });
+});

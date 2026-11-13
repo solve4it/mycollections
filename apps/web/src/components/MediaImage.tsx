@@ -1,4 +1,5 @@
 import type { MediaVariant } from "../lib/api-client.js";
+import { useSeen } from "../lib/in-view.js";
 import { useMediaImage } from "../lib/queries.js";
 
 /** The long edge of a stored thumbnail, as the API makes it (`THUMB_MAX_EDGE`). */
@@ -23,6 +24,8 @@ interface MediaImageProps {
   width: number;
   height: number;
   className?: string;
+  /** Fetch only once the image nears the viewport — for long lists, like a collection's rows. */
+  lazy?: boolean;
 }
 
 /**
@@ -33,15 +36,28 @@ interface MediaImageProps {
  * placeholder holds the image's space and its name, so the layout does not jump
  * and a screen reader still hears what the picture is.
  */
-export function MediaImage({ collectionId, itemId, mediaId, variant, alt, width, height, className }: MediaImageProps) {
-  const image = useMediaImage(collectionId, itemId, mediaId, variant);
+export function MediaImage({
+  collectionId,
+  itemId,
+  mediaId,
+  variant,
+  alt,
+  width,
+  height,
+  className,
+  lazy = false,
+}: MediaImageProps) {
+  const [seenRef, seen] = useSeen<HTMLElement>();
+  const image = useMediaImage(collectionId, itemId, mediaId, variant, { enabled: !lazy || seen });
   const size = variant === "thumb" ? thumbSize(width, height) : { width, height };
   if (!image.data) {
     return (
       <span
+        ref={lazy ? seenRef : undefined}
         className={className ? `media-image-placeholder ${className}` : "media-image-placeholder"}
-        role="img"
-        aria-label={alt}
+        // A placeholder stands in for the picture, so it says what the picture
+        // would — and, for a decorative one (`alt=""`), says nothing at all.
+        {...(alt ? { role: "img", "aria-label": alt } : { "aria-hidden": true })}
         // A thumbnail sits in a tile its container sizes; a display image
         // reserves its own shape.
         style={variant === "display" ? { aspectRatio: `${size.width} / ${size.height}` } : undefined}

@@ -11,7 +11,7 @@ import {
 } from "@dnd-kit/core";
 import { rectSortingStrategy, SortableContext, useSortable } from "@dnd-kit/sortable";
 import type { Media } from "@mycollections/core";
-import { type MouseEvent, type ReactNode, useState } from "react";
+import { type MouseEvent, type ReactNode, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useAnnounce } from "../lib/announcer.js";
 import { type FocusDestination, useFocusHandoff } from "../lib/focus-handoff.js";
@@ -19,6 +19,7 @@ import { useOverlayClearance } from "../lib/overlay-clearance.js";
 import { useDeleteMedia, useMakeCover, useMediaList, useReorderMedia, useRestoreMedia } from "../lib/queries.js";
 import { moveOnto } from "../lib/reorder.js";
 import { Icon } from "./Icon.js";
+import { ImageViewer } from "./ImageViewer.js";
 import { MediaImage } from "./MediaImage.js";
 import { UndoToast } from "./UndoToast.js";
 
@@ -114,6 +115,11 @@ export function ImageGallery({ collectionId, itemId, itemName, emptyDestination 
   const toastRegionRef = useOverlayClearance();
   const [undo, setUndo] = useState<{ mediaId: string; index: number } | null>(null);
   const [reduceMotion] = useState(prefersReducedMotion);
+  // The photo open in the viewer, if any.
+  const [viewing, setViewing] = useState<number | null>(null);
+  // A drag ends with the button still under the pointer often enough that its
+  // click would open the viewer; for that one click after a drag, it does not.
+  const justDragged = useRef(false);
   // A mouse drag starts after 8px of movement, so a click on a tile's buttons
   // is still a click. A touch drag starts after a 250ms press, so a swipe across
   // the photos still scrolls the page.
@@ -215,7 +221,20 @@ export function ImageGallery({ collectionId, itemId, itemName, emptyDestination 
       <DndContext
         sensors={sensors}
         collisionDetection={closestCenter}
-        onDragEnd={(event) => drop(list, event)}
+        onDragStart={() => {
+          justDragged.current = true;
+        }}
+        onDragEnd={(event) => {
+          drop(list, event);
+          setTimeout(() => {
+            justDragged.current = false;
+          });
+        }}
+        onDragCancel={() => {
+          setTimeout(() => {
+            justDragged.current = false;
+          });
+        }}
         accessibility={{ announcements: SILENT, screenReaderInstructions: { draggable: "" } }}
       >
         <SortableContext items={list.map((image) => image.id)} strategy={rectSortingStrategy}>
@@ -230,16 +249,31 @@ export function ImageGallery({ collectionId, itemId, itemName, emptyDestination 
                           Move buttons below are the keyboard path, so this
                           wrapper takes no role and no tab stop. */}
                       <div className="image-drag-handle" ref={handle.ref} {...handle.listeners}>
-                        <MediaImage
-                          collectionId={collectionId}
-                          itemId={itemId}
-                          mediaId={image.id}
-                          variant="thumb"
-                          width={image.width}
-                          height={image.height}
-                          alt={t("photo_alt", { name: itemName, position: index + 1, count })}
-                          className="image-gallery-thumb"
-                        />
+                        {/* Opens the photo full size. Its name is the photo's own alternative
+
+                            text, which also makes it the drag handle's visible content. */}
+
+                        <button
+                          type="button"
+                          className="image-open"
+                          aria-haspopup="dialog"
+                          onClick={() => {
+                            if (justDragged.current) return;
+
+                            setViewing(index);
+                          }}
+                        >
+                          <MediaImage
+                            collectionId={collectionId}
+                            itemId={itemId}
+                            mediaId={image.id}
+                            variant="thumb"
+                            width={image.width}
+                            height={image.height}
+                            alt={t("photo_alt", { name: itemName, position: index + 1, count })}
+                            className="image-gallery-thumb"
+                          />
+                        </button>
                       </div>
                       {index === 0 && <span className="image-cover-badge">{t("photo_cover")}</span>}
                       <div className="image-actions">
@@ -300,6 +334,21 @@ export function ImageGallery({ collectionId, itemId, itemName, emptyDestination 
   return (
     <div className="image-gallery-area">
       {content}
+      <ImageViewer
+        collectionId={collectionId}
+        itemId={itemId}
+        itemName={itemName}
+        photos={media.data ?? []}
+        index={viewing}
+        onIndexChange={setViewing}
+        onClose={(index) => {
+          setViewing(null);
+          // Back to the photo last on show — which the user may have stepped
+          // to inside the viewer — rather than the one that opened it.
+          const id = media.data?.[index]?.id;
+          if (id) document.querySelector<HTMLElement>(`[data-media-id="${id}"] .image-open`)?.focus();
+        }}
+      />
       {failed && <p role="alert">{t("photos_change_error")}</p>}
       {/* Always rendered once the page is, empty until a delete — the same
           region shape as the collection page's toast (#308): a live region
