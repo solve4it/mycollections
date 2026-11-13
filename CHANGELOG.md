@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.0.7](https://github.com/solve4it/mycollections/compare/mycollections-v0.0.6...mycollections-v0.0.7) (2026-11-13)
+
+
+### Features
+
+* **api:** image pipeline and media store ([#37](https://github.com/solve4it/mycollections/issues/37), 2a/5) ([#426](https://github.com/solve4it/mycollections/issues/426)) ([f7b7270](https://github.com/solve4it/mycollections/commit/f7b7270732b0708a9632ec49d12f82070df09198))
+* **api:** image routes, primaryMedia on items, purge file cleanup ([#37](https://github.com/solve4it/mycollections/issues/37), 2b/5) ([#427](https://github.com/solve4it/mycollections/issues/427)) ([3cd5c84](https://github.com/solve4it/mycollections/commit/3cd5c84b91ffff2befd7661336b3a3e03a2a69e1))
+* **db:** media schema, migration and item-scoped repository ([#37](https://github.com/solve4it/mycollections/issues/37), 1/4) ([#424](https://github.com/solve4it/mycollections/issues/424)) ([44401c7](https://github.com/solve4it/mycollections/commit/44401c7c4fbdffb5527b3e01a21c4f866c7b0de9))
+* **web:** drag photos to reorder, by mouse or touch ([#37](https://github.com/solve4it/mycollections/issues/37), 3c/6) ([#430](https://github.com/solve4it/mycollections/issues/430)) ([c5f41d6](https://github.com/solve4it/mycollections/commit/c5f41d6e0b9ee0ebc11c868dbb31ebac5bd141b0))
+* **web:** gallery actions — cover, move, delete with undo ([#37](https://github.com/solve4it/mycollections/issues/37), 3b/6) ([#429](https://github.com/solve4it/mycollections/issues/429)) ([0fb4f21](https://github.com/solve4it/mycollections/commit/0fb4f21d71e9a13838c8a73ccbe15b3f6cb8fd9c))
+* **web:** item page with photos and upload ([#37](https://github.com/solve4it/mycollections/issues/37), 3a/5) ([#428](https://github.com/solve4it/mycollections/issues/428)) ([1be7d8b](https://github.com/solve4it/mycollections/commit/1be7d8b681940857a2f54a8d5f971f38d8d65789))
+* **web:** photo viewer and covers on rows ([#37](https://github.com/solve4it/mycollections/issues/37), 4/6) ([#431](https://github.com/solve4it/mycollections/issues/431)) ([59c5943](https://github.com/solve4it/mycollections/commit/59c594386fdbd8c45f434a2fbbc847a4a81608c2))
+
 ## [0.0.6](https://github.com/solve4it/mycollections/compare/mycollections-v0.0.5...mycollections-v0.0.6) (2026-11-13)
 
 
