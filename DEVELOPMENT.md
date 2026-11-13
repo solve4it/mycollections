@@ -984,6 +984,15 @@ differently — persistent and empty, never conditional:
   region is torn down and rebuilt with its text inside; every assertion about the final DOM passes
   against exactly the bug this rule exists to prevent.
 
+**A question is not a live region at all (#335).** `ConfirmButton`'s prompt used to be a
+`<p role="alert">` — inserted with its text inside, and painted in the failure strip like "Import
+failed." Now it is a plain `.confirm-prompt` paragraph that both answers name as their
+`aria-describedby`, and focus lands on Cancel the moment it opens, so a screen reader speaks
+"Cancel, button" and then the question — the way a `<dialog>` announces itself on focus entry. Not
+`role="alertdialog"`: that pattern is modal, and these are row-scoped and can stand open several at
+once. Where focus is already moving to a control, describe the control with the message rather than
+adding a region beside it; `e2e/a11y.spec.ts` proves it against Chrome's own accessibility tree.
+
 ### The document language and direction
 
 `<html lang>` has to name the language the page is actually rendered in (WCAG 3.1.1), `<html dir>`
