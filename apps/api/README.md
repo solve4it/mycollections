@@ -133,6 +133,23 @@ The body schema declares `targetCount` with an empty schema on purpose: Fastify'
 coerces types, so `{ "type": "integer" }` would quietly turn `"5"` into 5 and `""` into
 0. Zod decides it instead, in the repository, before any write.
 
+### A collection's view (#38)
+
+Every collection in a response carries `itemView`: `"list"` or `"grid"`, how the
+collection's page lays out its items. It is `"list"` unless set. The web client switches
+it with `PATCH { "itemView": "grid" }`, which changes nothing else.
+
+| Request                                               | Result                                                 |
+| ----------------------------------------------------- | ------------------------------------------------------ |
+| `POST` without `itemView`                             | `201`, `itemView: "list"`                              |
+| `POST` or `PATCH` with `itemView: "grid"` or `"list"` | Stored and returned                                    |
+| `PATCH` without `itemView`                            | The stored view is kept                                |
+| `"table"`, `"Grid"`, `""`, `null`, `true`, `["grid"]` | `400`; nothing is written — the value is never coerced |
+
+Declared with an empty schema for the same reason as `targetCount`. It is part of the
+collection, so it is in exports and restored by imports; a backup written before it
+existed imports in the list view.
+
 ### Counts and progress (#42)
 
 Counts cover live items only: a trashed item counts toward nothing, and neither does any item of a trashed collection.

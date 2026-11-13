@@ -5,6 +5,7 @@ import {
   type CollectionWithItemCount,
   type FieldDefinition,
   type ItemCounts,
+  type ItemView,
 } from "@mycollections/core";
 import type { DatabaseHandle, UpdateCollectionInput } from "@mycollections/db";
 import type { FastifyInstance } from "fastify";
@@ -18,6 +19,12 @@ import type { FastifyInstance } from "fastify";
  */
 const targetCountSchema = {} as const;
 
+/**
+ * `itemView` (#38) is left to Zod the same way: declared so it is not dropped,
+ * typed by nothing so Ajv cannot coerce `["grid"]` into "grid".
+ */
+const itemViewSchema = {} as const;
+
 const createBodySchema = {
   type: "object",
   required: ["name", "fields", "isFiniteSet"],
@@ -28,6 +35,7 @@ const createBodySchema = {
     fields: { type: "array", minItems: 1, items: {} },
     isFiniteSet: { type: "boolean" },
     targetCount: targetCountSchema,
+    itemView: itemViewSchema,
   },
 } as const;
 
@@ -39,6 +47,7 @@ const updateBodySchema = {
     description: { type: "string", maxLength: COLLECTION_DESCRIPTION_MAX },
     isFiniteSet: { type: "boolean" },
     targetCount: targetCountSchema,
+    itemView: itemViewSchema,
     fields: { type: "array", minItems: 1, items: {} },
   },
 } as const;
@@ -81,6 +90,7 @@ export async function registerCollectionRoutes(app: FastifyInstance, db: Databas
       fields: unknown[];
       isFiniteSet: boolean;
       targetCount?: unknown;
+      itemView?: unknown;
     };
     try {
       const collection = await db.collections.create({
@@ -91,6 +101,7 @@ export async function registerCollectionRoutes(app: FastifyInstance, db: Databas
         isFiniteSet: body.isFiniteSet,
         // Validated downstream by Zod in the repository; absent stays absent.
         targetCount: body.targetCount as number | null | undefined,
+        itemView: body.itemView as ItemView | undefined,
       });
       return reply.code(201).send(collection);
     } catch (err) {
@@ -125,6 +136,7 @@ export async function registerCollectionRoutes(app: FastifyInstance, db: Databas
       description?: string;
       isFiniteSet?: boolean;
       targetCount?: unknown;
+      itemView?: unknown;
       fields?: unknown[];
     };
 
@@ -146,7 +158,7 @@ export async function registerCollectionRoutes(app: FastifyInstance, db: Databas
     try {
       // Fastify has already dropped keys the client did not send, so casting the
       // body whole cannot introduce an explicit `undefined` that would clobber a
-      // stored value. Field definitions and targetCount are validated downstream by
+      // stored value. Field definitions, targetCount and itemView are validated downstream by
       // Zod, which also refuses a target on a collection that is not a finite set
       // before anything is written.
       updated = await db.collections.update(id, body as UpdateCollectionInput);
