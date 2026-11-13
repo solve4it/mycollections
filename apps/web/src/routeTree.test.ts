@@ -24,7 +24,17 @@ function walk(route: AnyRoute, ancestors: AnyRoute[] = []): Array<{ route: AnyRo
 // `fullPath` is filled in when a router is built from the tree, not before.
 createRouter({ routeTree });
 
-const screens = walk(routeTree).filter(({ route }) => route.options.component !== undefined);
+/**
+ * A route that renders or fetches anything: a component, a loader, or a lazy
+ * module. A future screen that only declares a loader or `lazy` is still a
+ * screen, and must not slip past the coverage check below.
+ */
+const screens = walk(routeTree).filter(
+  ({ route }) =>
+    route.options.component !== undefined ||
+    route.options.loader !== undefined ||
+    (route as { lazyFn?: unknown }).lazyFn !== undefined,
+);
 const guarded = (ancestors: AnyRoute[]) => ancestors.includes(authenticatedRoute);
 
 afterEach(() => {
@@ -67,6 +77,25 @@ describe("the token guard (#420)", () => {
       expect(withToken.state.location.pathname).toBe(path);
     });
   }
+
+  /**
+   * The property a layout guard is usually assumed not to have: it runs again
+   * on a client navigation between two of its own children, rather than only
+   * when the layout is first entered. A token cleared mid-session — another
+   * tab's Disconnect, or storage evicted — must stop the next navigation.
+   */
+  it("runs again on a client navigation between two guarded screens, after the token is gone", async () => {
+    setToken("test-token");
+    const router = createRouter({ routeTree, history: createMemoryHistory({ initialEntries: ["/collections"] }) });
+    await router.load();
+    expect(router.state.location.pathname).toBe("/collections");
+
+    clearToken();
+    localStorage.clear();
+    await router.navigate({ to: "/settings" });
+    await router.load();
+    expect(router.state.location.pathname).toBe("/setup");
+  });
 
   it("leaves the screens outside it reachable without a token", async () => {
     for (const path of ["/setup", "/no/such/page"]) {
