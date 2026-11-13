@@ -1610,8 +1610,10 @@ p[role="alert"] {
   .shell-main {
     padding: 16px;
     /* The clearance is measured from the viewport's foot, so it already covers
-       the bottom nav the toast sits above: whichever is taller wins. */
-    padding-bottom: calc(max(var(--bottom-nav-height), var(--overlay-clearance, 0px)) + 16px);
+       the bottom nav the toast sits above: it replaces the nav's room rather
+       than adding to it. A fallback rather than max(): the clearance is only
+       ever set while the toast is up, and the toast is always above the nav. */
+    padding-bottom: calc(var(--overlay-clearance, var(--bottom-nav-height)) + 16px);
   }
 
   /* No bottom nav on a bare screen (#371), so no room kept for one. */

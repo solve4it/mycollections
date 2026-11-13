@@ -1,4 +1,4 @@
-import { cleanup, render } from "@testing-library/react";
+import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { OVERLAY_CLEARANCE_PROPERTY, OVERLAY_GAP_PX, useOverlayClearance } from "./overlay-clearance.js";
 
@@ -15,9 +15,16 @@ class FakeResizeObserver {
 function Region({ showing }: { showing: boolean }) {
   const ref = useOverlayClearance();
   return (
-    <div ref={ref} className="region">
-      {showing && <div className="undo-toast">Deleted</div>}
-    </div>
+    <>
+      <button type="button">Save</button>
+      <div ref={ref} className="region">
+        {showing && (
+          <div className="undo-toast">
+            Deleted <button type="button">Undo</button>
+          </div>
+        )}
+      </div>
+    </>
   );
 }
 
@@ -39,7 +46,17 @@ function clearance(): string {
 beforeEach(() => {
   vi.stubGlobal("ResizeObserver", FakeResizeObserver);
   vi.stubGlobal("innerHeight", 720);
-  vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockReturnValue({ top: 578 } as DOMRect);
+  vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (this: HTMLElement) {
+    // The region's top edge, and a Save button lying across it.
+    return (this.textContent === "Save" ? { top: 600, bottom: 644 } : { top: 578, bottom: 640 }) as DOMRect;
+  });
+  vi.stubGlobal("scrollBy", vi.fn());
+  // Frames run at once, so a check deferred to the next one is observable here.
+  vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => {
+    callback(0);
+    return 1;
+  });
+  vi.stubGlobal("cancelAnimationFrame", () => {});
 });
 
 afterEach(() => {
@@ -69,6 +86,35 @@ describe("useOverlayClearance (#372)", () => {
     rerender(<Late ready />);
     notifyResize();
     expect(clearance()).toBe(`${720 - 578 + OVERLAY_GAP_PX}px`);
+  });
+
+  it("scrolls a control focused under the region up clear of it, as focus() alone does not", () => {
+    render(<Region showing />);
+    notifyResize();
+    screen.getByRole("button", { name: "Save" }).focus();
+    // The control's foot (644) must clear the region's top (578) by the gap.
+    expect(window.scrollBy).toHaveBeenCalledWith({ top: 644 - (578 - OVERLAY_GAP_PX), behavior: "instant" });
+  });
+
+  it("checks the focused control again once the region is measured, for focus that landed first", () => {
+    const { rerender } = render(<Region showing={false} />);
+    screen.getByRole("button", { name: "Save" }).focus();
+    rerender(<Region showing />);
+    notifyResize();
+    expect(window.scrollBy).toHaveBeenCalledWith({ top: 644 - (578 - OVERLAY_GAP_PX), behavior: "instant" });
+  });
+
+  it("leaves focus inside the region, and focus while it is empty, where it is", () => {
+    const { rerender } = render(<Region showing={false} />);
+    notifyResize();
+    screen.getByRole("button", { name: "Save" }).focus();
+    expect(window.scrollBy).not.toHaveBeenCalled();
+    screen.getByRole("button", { name: "Save" }).blur();
+
+    rerender(<Region showing />);
+    notifyResize();
+    screen.getByRole("button", { name: "Undo" }).focus();
+    expect(window.scrollBy).not.toHaveBeenCalled();
   });
 
   it("gives the space back when the region empties, and when the page goes", () => {

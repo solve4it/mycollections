@@ -1295,6 +1295,23 @@ test.describe("Escape dismisses what is transient (#376)", () => {
  * Compared as boxes, not screenshots: every stop on the page, with the toast up,
  * must have its box — focus ring included — clear of the toast's.
  */
+/** Whether the focused control's box, focus ring included, meets the toast's. */
+async function isUnderToast(page: import("@playwright/test").Page): Promise<boolean> {
+  return await page.evaluate(() => {
+    const toast = document.querySelector(".undo-toast")?.getBoundingClientRect();
+    const focused = document.activeElement?.getBoundingClientRect();
+    if (!toast || !focused) return false;
+    // The focus ring is drawn outside the box (global.css :focus-visible).
+    const ring = 4;
+    return (
+      focused.left - ring < toast.right &&
+      focused.right + ring > toast.left &&
+      focused.top - ring < toast.bottom &&
+      focused.bottom + ring > toast.top
+    );
+  });
+}
+
 test.describe("the undo toast never covers the focused control (#372)", () => {
   for (const items of [2, 14]) {
     test(`with ${items} items, no stop is under the toast`, async ({ page, api }) => {
@@ -1316,25 +1333,37 @@ test.describe("the undo toast never covers the focused control (#372)", () => {
         await page.keyboard.press("Tab");
         const stop = await focusedControl(page);
         if (stop === NOTHING_FOCUSED) break;
-        const overlap = await page.evaluate(() => {
-          const toast = document.querySelector(".undo-toast")?.getBoundingClientRect();
-          const focused = document.activeElement?.getBoundingClientRect();
-          if (!toast || !focused) return false;
-          // The focus ring is drawn outside the box (global.css :focus-visible).
-          const ring = 4;
-          return (
-            focused.left - ring < toast.right &&
-            focused.right + ring > toast.left &&
-            focused.top - ring < toast.bottom &&
-            focused.bottom + ring > toast.top
-          );
-        });
+        const overlap = await isUnderToast(page);
         if (overlap && !stop.startsWith('button "Undo"') && !stop.startsWith('button "Dismiss"')) obscured.push(stop);
       }
 
       expect(obscured, "controls whose focus ring the toast paints over").toEqual([]);
     });
   }
+
+  /**
+   * Focus moved by script rather than by Tab — which is how every handoff in
+   * the app moves it (#367). Chromium's scroll-if-needed for `focus()` ignores
+   * `scroll-padding`, so the padding alone left the add form's Save, the last
+   * control on a short page, behind the toast on a phone.
+   */
+  test("a control focused by script is scrolled clear of the toast too", async ({ page, api }) => {
+    await api.reset();
+    const collection = await api.createCollection({ name: "Vinyl records", fields: FIELDS });
+    await api.createItem(collection.id, { title: "Kind of Blue", year: 1959 });
+    await api.createItem(collection.id, { title: "Blue Train", year: 1957 });
+
+    await page.goto(`/collections/${collection.id}`);
+    await page.getByRole("button", { name: deleteName("Kind of Blue") }).click();
+    await expect(page.getByRole("button", { name: "Undo" })).toBeVisible();
+    await page.evaluate(() => window.scrollTo(0, 0));
+
+    await page
+      .locator(".add-item")
+      .getByRole("button", { name: "Save" })
+      .evaluate((save: HTMLElement) => save.focus());
+    await expect.poll(() => isUnderToast(page), "Save, focused by script, must not sit under the toast").toBe(false);
+  });
 });
 
 test.describe("searching a collection (#41)", () => {
