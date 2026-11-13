@@ -1774,6 +1774,13 @@ test.describe("marking an item collected (#42)", () => {
     await expect(panel, "focus lands on the panel that now says the set is complete").toBeFocused();
     await expect(panel).toHaveAccessibleDescription("All collected You own every item in this set.");
     await expect(page.locator(".collection-detail .collection-progress")).toContainText("2 of 2 collected");
+    // The mark completed the set, so it is said once, by the celebration (#42,
+    // R8) — which changes the words and leaves focus exactly where it was sent.
+    await expect(page.locator(".celebration-live")).toHaveText(
+      "Marked “Nickel” as collected. It is no longer in this list. Coin set is complete!",
+    );
+    await expect(announcer(page)).not.toContainText("Marked");
+    await expect(panel).toBeFocused();
   });
 
   for (const pressed of ["by keyboard", "without focus"] as const) {

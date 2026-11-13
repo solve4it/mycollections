@@ -1,4 +1,5 @@
-import { expect, expectNoAccessibilityViolations, test } from "./fixtures.js";
+import type { Page } from "@playwright/test";
+import { type ApiFixture, expect, expectNoAccessibilityViolations, test } from "./fixtures.js";
 
 /**
  * The WCAG 2.1 AA baseline for #24: every route the app has, scanned in a real
@@ -988,6 +989,125 @@ test.describe("accessibility", () => {
    * the app's whole module graph — `import.meta.env` included — in with it.
    */
   const TRASH_CONFIRMATION_MS = 10_000;
+
+  /** Mirrors `CELEBRATION_MS` in `src/routes/collections/$id.tsx`, for the reason given above. */
+  const CELEBRATION_MS = 10_000;
+
+  /**
+   * Seeds a set one item short of its target of 2, and opens it.
+   *
+   * The names are short on purpose: each of the message's two sentences has
+   * to fit on one line at 390px for axe to decide its contrast. axe works out
+   * a text element's background per line box, and under a fixed overlay the
+   * page content beneath differs from one line to the next — one over the
+   * list, the next over the add form — so an element whose text wraps is
+   * "could not decide" however it is painted (`elmPartiallyObscuring`). The
+   * colors are the toast's tokens, whose contrast `toast.integration.test.ts`
+   * computes for both themes.
+   */
+  async function oneShortOfComplete(page: Page, api: ApiFixture) {
+    await api.reset();
+    const collection = await api.createCollection({
+      name: "Coins",
+      fields: FIELDS,
+      isFiniteSet: true,
+      targetCount: 2,
+    });
+    await api.createItem(collection.id, { title: "Penny", year: 1909 }, "owned");
+    await api.createItem(collection.id, { title: "Dime", year: 1916 }, "wanted");
+    await page.goto(`/collections/${collection.id}`);
+    await expect(page).toHaveURL(`/collections/${collection.id}`);
+    await expect(page.locator(".collection-progress")).toContainText("1 of 2 collected");
+  }
+
+  /** How many lines each of the celebration's two sentences takes — one each, for the scan to decide (above). */
+  function messageLines(page: Page) {
+    return page.locator(".celebration-action, .celebration-complete").evaluateAll((elements) =>
+      elements.map((element) => {
+        const range = document.createRange();
+        range.selectNodeContents(element);
+        return new Set(Array.from(range.getClientRects(), (rect) => Math.round(rect.top))).size;
+      }),
+    );
+  }
+
+  /** What the header's Complete badge is animating, if anything, and for how long. */
+  function badgeMotion(page: Page) {
+    return page.locator(".collection-progress-badge").evaluate((badge) => {
+      const computed = getComputedStyle(badge);
+      return { name: computed.animationName, seconds: Number.parseFloat(computed.animationDuration) };
+    });
+  }
+
+  /**
+   * Completing a finite set (#42): the celebration's region, empty before the
+   * action and filled by it — one message, carrying the mark's own words —
+   * scanned while it holds, then emptied in place when its window is up. The
+   * clock is frozen for the same reason as the emptied trash's below.
+   */
+  test("a finite set completed by Mark collected, celebrated, and cleared when its window is up", async ({
+    page,
+    api,
+  }) => {
+    await page.clock.install();
+    // The suite runs with reduced motion (playwright.config.ts); the stamp is
+    // what this spec is about, so motion is back on until the scan.
+    await page.emulateMedia({ reducedMotion: "no-preference" });
+    await oneShortOfComplete(page, api);
+
+    const region = page.locator(".celebration-live");
+    await expect(region).toHaveAttribute("aria-live", "polite");
+    await expect(region).not.toHaveAttribute("role");
+    await expect(region, "the region must be on the page, and empty, before the set is completed").toBeEmpty();
+
+    await page.getByRole("button", { name: "Mark collected “Dime”" }).click();
+
+    await expect(region).toHaveText("Marked “Dime” as collected. Coins is complete!");
+    await expect(page.locator(".collection-progress")).toContainText("2 of 2 collected");
+    await expect(page.locator(".collection-progress-badge")).toHaveText("Complete");
+    // Focus is where Mark collected always sends it; only the words changed.
+    await expect(page.getByRole("button", { name: "Edit “Dime”" })).toBeFocused();
+    // One message: the shell's announcer is not told about the mark as well.
+    await expect(page.locator('.visually-hidden[aria-live="polite"]')).not.toContainText("Marked");
+    expect(await badgeMotion(page)).toEqual({ name: "stamp-in", seconds: 0.48 });
+    // The region is layout and takes no pointer; the message takes it back, so
+    // hit testing — touch exploration, and axe — can find it.
+    expect(await region.evaluate((element) => getComputedStyle(element).pointerEvents)).toBe("none");
+    expect(await page.locator(".celebration").evaluate((element) => getComputedStyle(element).pointerEvents)).toBe(
+      "auto",
+    );
+
+    // Settled pixels for the scan, as everywhere else in the suite: the toast
+    // entrance's opacity fade would leave axe's contrast check undecided.
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    expect(await messageLines(page)).toEqual([1, 1]);
+    await expectNoAccessibilityViolations(page);
+
+    await page.clock.fastForward(CELEBRATION_MS + 1_000);
+    await expect(region, "the celebration must not outlive its window").toBeEmpty();
+    await expect(region).toHaveAttribute("aria-live", "polite");
+    // The badge stays — the set is still complete — but stops stamping.
+    await expect(page.locator(".collection-progress-badge")).toHaveText("Complete");
+    expect((await badgeMotion(page)).name).toBe("none");
+  });
+
+  /** The same completion for someone who asked for less motion: the words, and no stamp. */
+  test("a finite set completed with reduced motion: the celebration without the stamp", async ({ page, api }) => {
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await oneShortOfComplete(page, api);
+
+    await page.getByRole("button", { name: "Mark collected “Dime”" }).click();
+
+    await expect(page.locator(".celebration-live")).toHaveText("Marked “Dime” as collected. Coins is complete!");
+    const motion = await badgeMotion(page);
+    // The opt-out keeps the animation (so animationend still fires) and takes
+    // its duration to 0.01ms — no frame of it is ever seen.
+    expect(motion.name).toBe("stamp-in");
+    expect(motion.seconds).toBeLessThan(0.001);
+
+    expect(await messageLines(page)).toEqual([1, 1]);
+    await expectNoAccessibilityViolations(page);
+  });
 
   test("the emptied trash, announced on Settings, and cleared when its window is up", async ({ page, api }) => {
     await api.reset();
