@@ -1391,6 +1391,18 @@ p[role="alert"] {
   background: var(--card);
 }
 
+/* An item's cover on its row (#37): a small square, the whole photo fitted in. */
+.item-row-thumb {
+  flex: 0 0 auto;
+  display: block;
+  width: 56px;
+  height: 56px;
+  object-fit: contain;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--paper);
+}
+
 .item-fields {
   flex: 1 1 16rem;
   display: flex;
@@ -1693,6 +1705,65 @@ p[role="alert"] {
 
 .image-gallery-item-dragging .image-gallery-thumb {
   box-shadow: 0 6px 20px rgb(0 0 0 / 0.25);
+}
+
+/* The thumbnail is a button that opens the viewer; it should look like the
+   photo it is, not like a button. */
+.image-open {
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: inherit;
+  cursor: zoom-in;
+}
+
+/* The photo viewer (#37): a modal <dialog> in the top layer. */
+.image-viewer {
+  width: min(100vw - 2 * var(--space-4), 1200px);
+  max-height: calc(100vh - 2 * var(--space-4));
+  padding: var(--space-3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--card);
+  color: var(--ink);
+}
+
+.image-viewer::backdrop {
+  background: rgb(0 0 0 / 0.75);
+}
+
+.image-viewer-frame {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.image-viewer-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.image-viewer-caption {
+  margin: 0;
+}
+
+.image-viewer-image {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: calc(100vh - 12rem);
+  object-fit: contain;
+}
+
+.image-viewer-nav {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-2);
 }
 
 .media-image-placeholder {
