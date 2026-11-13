@@ -5,7 +5,7 @@
   "features": {
     "ghcr.io/devcontainers/features/github-cli:1": {},
     "ghcr.io/devcontainers/features/node:2": {
-      "version": "26.13.0",
+      "version": "26.13.1",
       "pnpmVersion": "none"
     }
   },

@@ -567,6 +567,7 @@ is then still the row being deleted, and focus leaves the document with it. On a
 header's counts query can supply that early commit even without the scheduled one.
 
 The callers that need `removing` are the ones whose removal lands after the request:
+
 - a row's Delete, which removes the row once the server answers;
 - a trash row's confirmed Delete forever, where `ConfirmButton` passes its confirm button to
   `onConfirm`;
@@ -672,6 +673,7 @@ no extra history entry, and no redirect of our own is needed. That was checked i
 
 A switch is announced like a search that settles, after `RESULT_ANNOUNCE_DELAY_MS`. What is spoken
 is what is shown:
+
 - the count line, which names the tab once one narrows the list: "2 items collected", or "2
   remaining items match “e”" when a search narrows it too, even though four items match under All;
 - for an empty view, its empty state's title: "All collected", "3 more to find".
@@ -830,7 +832,6 @@ bug again; the two 404 URLs are pinned in `not-found.test.tsx` and the crash scr
 `router.test.tsx`. Note what the axe sweep does **not** do here: `aria-current="page"` is valid
 markup on any link, so no automated rule can tell that it is pointing at the wrong page. This one
 is only ever caught by asserting the list.
-
 
 ### Live regions the announcer cannot carry
 
