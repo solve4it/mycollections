@@ -182,9 +182,16 @@ describe("ItemsRepository", () => {
 
   it("hard delete cascades to media", async () => {
     const item = await handle.items.create({ collectionId: collection.id, fields: {} });
-    const m = await handle.media.create({ itemId: item.id, kind: "image", mimeType: "image/png", bytes: 5 });
+    const m = await handle.media.create({
+      itemId: item.id,
+      source: "user-attached",
+      mimeType: "image/webp",
+      bytes: 5,
+      width: 1,
+      height: 1,
+    });
     await handle.items.hardDelete(item.id);
-    expect(await handle.media.getById(m.id, { includeDeleted: true })).toBeNull();
+    expect(await handle.media.getForItem(item.id, m.id, { includeDeleted: true })).toBeNull();
   });
 
   describe("countsByCollection (#42)", () => {
