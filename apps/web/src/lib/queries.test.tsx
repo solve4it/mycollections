@@ -47,6 +47,7 @@ const LISTED: CollectionWithItemCount = {
   fields: [{ id: "title", label: "Title", type: "text", required: true }],
   isFiniteSet: true,
   targetCount: 5,
+  itemView: "list",
   itemCount: 3,
   ownedCount: 2,
   createdAt: "2024-01-01T00:00:00.000Z",

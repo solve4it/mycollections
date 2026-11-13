@@ -48,6 +48,7 @@ const SAMPLE_COLLECTION = {
   fields: [{ id: "f1", label: "Title", type: "text" as const, required: true }],
   isFiniteSet: false,
   targetCount: null,
+  itemView: "list" as const,
   itemCount: 3,
   ownedCount: 2,
   createdAt: "2024-01-01T00:00:00.000Z",
