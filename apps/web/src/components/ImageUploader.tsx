@@ -106,7 +106,7 @@ export function ImageUploader({ collectionId, itemId }: ImageUploaderProps) {
       />
       <button
         type="button"
-        className="touch-target"
+        className="touch-target button-primary"
         aria-disabled={busy || undefined}
         onClick={() => open(filesInput.current)}
       >
