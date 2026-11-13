@@ -98,3 +98,30 @@ describe("undo toast motion", () => {
     expect(optOut, "the toast needs no rule of its own — `*` already covers it").not.toContain("undo-toast");
   });
 });
+
+describe("the celebration (#42)", () => {
+  it("is the toast's drawer label, so the toast's measured contrast is its contrast", () => {
+    // The e2e scan cannot check this message's contrast: it takes no pointer,
+    // and axe finds a text's background by hit testing. So the colors are held
+    // to the toast's tokens here, where their ratios are computed.
+    const message = only(".celebration").body;
+    expect(declaration(message, "background")).toBe("var(--cabinet)");
+    expect(declaration(message, "color")).toBe("var(--cabinet-ink)");
+    expect(declaration(message, "border")).toContain("var(--cabinet-line)");
+  });
+
+  it.each([
+    ["light", lightTokens],
+    ["dark", darkTokens],
+  ])("%s: the manila check clears 3:1 on the cabinet", (_theme, tokens) => {
+    expect(declaration(only(".celebration .icon").body, "color")).toBe("var(--manila)");
+    const cabinet = tokens.cabinet;
+    const manila = tokens.manila;
+    if (!cabinet || !manila) throw new Error("missing cabinet tokens");
+    expect(contrast(manila, cabinet)).toBeGreaterThanOrEqual(3);
+  });
+
+  it("enters as the toast does, through the same CSS animation the opt-out reaches", () => {
+    expect(declaration(only(".celebration").body, "animation")).toMatch(/toast-in/);
+  });
+});

@@ -95,10 +95,19 @@ export function useCollection(id: string) {
  */
 export function useCollectionCounts(id: string, enabled: boolean) {
   return useQuery({
-    queryKey: ["collections", id, "items", "counts"],
+    queryKey: collectionCountsQueryKey(id),
     queryFn: () => getCollectionCounts(id),
     enabled,
   });
+}
+
+/**
+ * The cache key `useCollectionCounts` uses, for reading the counts a change
+ * started from and the ones it left — which is how the page tells that an
+ * action completed a finite set (#42).
+ */
+export function collectionCountsQueryKey(id: string) {
+  return ["collections", id, "items", "counts"] as const;
 }
 
 /**

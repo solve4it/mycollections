@@ -147,3 +147,47 @@ describe("empty state", () => {
     expect(declaration(only(".empty-state-title").body, "color")).toBe("var(--ink)");
   });
 });
+
+describe("the completion stamp (#42)", () => {
+  const STAMP = "@keyframes stamp-in";
+  const celebrating = () => only(".collection-progress-celebrating .collection-progress-badge");
+
+  it("stamps the header's Complete badge only while the page is celebrating", () => {
+    expect(declaration(celebrating().body, "animation")).toMatch(/^stamp-in\b/);
+    // Not on the badge itself: landing on a complete set must not stamp it.
+    expect(declaration(only(".collection-progress-badge").body, "animation")).toBeUndefined();
+  });
+
+  it("is declared before the motion opt-out, so the opt-out reaches it", () => {
+    expect(css.indexOf(STAMP)).toBeGreaterThan(-1);
+    expect(css.indexOf(STAMP)).toBeLessThan(css.indexOf(REDUCED_MOTION));
+    expect(css.indexOf(".collection-progress-celebrating")).toBeLessThan(css.indexOf(REDUCED_MOTION));
+  });
+
+  it("moves scale alone and starts from the badge's resting state, so it can never flash", () => {
+    // R8: the badge is already painted when the celebration starts — the
+    // counts land a commit before the page knows it completed the set — so a
+    // stamp from opacity 0 would blink it out and back in.
+    const frames = extractBlock(css, STAMP);
+    expect(frames).not.toMatch(/opacity/);
+    const transforms = [...frames.matchAll(/transform:\s*([^;]+);/g)].map((match) => match[1]?.trim());
+    expect(transforms.length).toBeGreaterThanOrEqual(2);
+    for (const value of transforms) expect(value).toMatch(/^(scale\([\d.]+\)|none)$/);
+    const first = frames.slice(frames.indexOf("{", 1) + 1, frames.indexOf("}"));
+    expect(declaration(first, "transform") ?? "").toMatch(/^(scale\(1\)|none)$/);
+  });
+
+  it("sets no fill mode, so a cut-short stamp (or the 0.01ms opt-out) rests at the badge's own style", () => {
+    const body = celebrating().body;
+    expect(declaration(body, "animation")).not.toMatch(/\b(forwards|backwards|both)\b/);
+    expect(declaration(body, "animation-fill-mode")).toBeUndefined();
+  });
+
+  it("leaves the celebration, region and message alike, out of the pointer's way: it holds no control", () => {
+    // The message has no Undo and no close, so anything it took the pointer
+    // from would be dead for its whole ten seconds (#42 review). Screen
+    // readers get it from the live region, not from hit testing.
+    expect(declaration(only(".celebration-live").body, "pointer-events")).toBe("none");
+    expect(declaration(only(".celebration").body, "pointer-events")).toBe("none");
+  });
+});

@@ -874,6 +874,33 @@ p[role="alert"] {
   background: var(--owned);
 }
 
+/* Completing the set (#42): the one orchestrated moment the motion budget
+   keeps for it. The header's Complete badge is pressed down like a rubber
+   stamp, once, while the page celebrates — never on landing on a set that was
+   already complete, which is not news. Scale alone, from the badge's resting
+   size: the badge is already painted when the celebration starts (the counts
+   land a commit first), so an entrance from opacity 0 would blink it out and
+   back in. No fill mode, so a stamp cut short — or reduced to 0.01ms by the
+   opt-out at the end of this file — rests at the badge's own style. */
+.collection-progress-celebrating .collection-progress-badge {
+  animation: stamp-in 480ms ease-out;
+}
+
+@keyframes stamp-in {
+  from {
+    transform: scale(1);
+  }
+  35% {
+    transform: scale(1.25);
+  }
+  70% {
+    transform: scale(0.95);
+  }
+  to {
+    transform: none;
+  }
+}
+
 /* Skeletons (#225). A skeleton is a picture of what is coming, so it is drawn
    inside the real containers (.collection-grid, .item-list) and reserves the
    real boxes — when the data lands, nothing moves. */
@@ -1607,6 +1634,60 @@ p[role="alert"] {
   display: flex;
   flex-direction: column;
   align-items: center;
+}
+
+/* The celebration's live region (#42), the toast region's sibling: the same
+   centred column, empty and zero-height until a set is completed. Unlike the
+   toast it holds no control — no Undo, no close — so neither the region nor the
+   message takes the pointer: whatever the message covers stays usable for its
+   ten seconds rather than going dead under it. Screen readers get the words
+   from the live region, not from hit testing. */
+.celebration-live {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  pointer-events: none;
+}
+
+/* The same drawer label as the toast, with no action: the manila check is the
+   only accent, the color progress already uses. */
+.celebration {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  max-width: 480px;
+  margin: 0;
+  padding: var(--space-2) var(--space-4);
+  background: var(--cabinet);
+  color: var(--cabinet-ink);
+  border: 1px solid var(--cabinet-line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-lift);
+  animation: toast-in 150ms ease-out;
+  /* Said again, though it inherits from the region: the toast strip hands its
+     direct children the pointer back, and a wrapper added later must not pass
+     that on to the message. */
+  pointer-events: none;
+}
+
+.celebration .icon {
+  flex: none;
+  color: var(--manila);
+}
+
+/* What was done, then the news on a line of its own, in the weight that makes
+   it the news. */
+.celebration-message {
+  min-width: 0;
+}
+
+.celebration-action,
+.celebration-complete {
+  display: block;
+}
+
+.celebration-complete {
+  font-weight: 600;
 }
 
 .undo-toast {

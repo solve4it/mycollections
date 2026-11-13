@@ -153,13 +153,33 @@ function summarize(results: AxeResult[]): string[] {
  *
  * The assertion is on a summarized list rather than a count so a failure names
  * the rule and the offending selector instead of "expected 0, received 3".
+ *
+ * `contrastExclude` takes one selector out of the `color-contrast` rule and
+ * nothing else. Every other rule still runs on it, and color-contrast still
+ * runs on everything else. It exists for the celebration (#42): a message
+ * with `pointer-events: none` is skipped by `elementsFromPoint`, which is how
+ * axe finds a text's background, so the rule can only answer "could not
+ * decide" there. Whoever passes it must point at a test that computes that
+ * contrast instead.
  */
-export async function expectNoAccessibilityViolations(page: Page): Promise<void> {
-  const wcag = await new AxeBuilder({ page }).withTags(WCAG_2_1_AA).analyze();
-  const structural = await new AxeBuilder({ page }).withRules(STRUCTURAL_RULES).analyze();
+export async function expectNoAccessibilityViolations(
+  page: Page,
+  options: { contrastExclude?: string } = {},
+): Promise<void> {
+  const passes = [
+    options.contrastExclude
+      ? new AxeBuilder({ page }).withTags(WCAG_2_1_AA).disableRules(["color-contrast"])
+      : new AxeBuilder({ page }).withTags(WCAG_2_1_AA),
+    new AxeBuilder({ page }).withRules(STRUCTURAL_RULES),
+  ];
+  if (options.contrastExclude) {
+    passes.push(new AxeBuilder({ page }).withRules(["color-contrast"]).exclude(options.contrastExclude));
+  }
+  const results = [];
+  for (const pass of passes) results.push(await pass.analyze());
 
-  expect(summarize([...wcag.violations, ...structural.violations] as AxeResult[])).toEqual([]);
-  expect(summarize([...wcag.incomplete, ...structural.incomplete] as AxeResult[]), "axe could not decide").toEqual([]);
+  expect(summarize(results.flatMap((result) => result.violations) as AxeResult[])).toEqual([]);
+  expect(summarize(results.flatMap((result) => result.incomplete) as AxeResult[]), "axe could not decide").toEqual([]);
 }
 
 /**
