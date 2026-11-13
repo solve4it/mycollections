@@ -121,7 +121,13 @@ describe("the grid view (#38)", () => {
   it("stacks a card's cover, fields and actions, with the actions at the foot so they line up across a row", () => {
     const row = only(RULES, ".item-list-grid .item-row").body;
     expect(declaration(row, "flex-direction")).toBe("column");
-    expect(declaration(row, "height")).toBe("100%");
+    // Grown by flex inside a column cell, never height: 100%, which pushed a
+    // card's failure alert out of its cell and over the next row (#38 review).
+    expect(declaration(row, "flex")).toBe("1 1 auto");
+    expect(declaration(row, "height")).toBeUndefined();
+    const cell = only(RULES, ".item-list-grid > li").body;
+    expect(declaration(cell, "display")).toBe("flex");
+    expect(declaration(cell, "flex-direction")).toBe("column");
     // In a column the row's 16rem basis would be a height: a card resets it.
     expect(declaration(only(RULES, ".item-list-grid .item-fields").body, "flex")).toBe("0 0 auto");
     expect(declaration(only(RULES, ".item-list-grid .item-actions").body, "margin-top")).toBe("auto");

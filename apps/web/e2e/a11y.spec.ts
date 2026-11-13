@@ -763,6 +763,38 @@ test.describe("accessibility", () => {
     await expectNoAccessibilityViolations(page);
   });
 
+  test("a grid card's failed delete, its alert kept inside the card", async ({ page, api }) => {
+    await api.reset();
+    const collection = await api.createCollection({ name: "Vinyl records", fields: FIELDS, itemView: "grid" });
+    const failing = await api.createItem(collection.id, { title: "Kind of Blue", year: 1959 }, "owned");
+    for (const title of ["Blue Train", "Giant Steps", "Mingus Ah Um", "Time Out"]) {
+      await api.createItem(collection.id, { title, year: 1959 }, "owned");
+    }
+    await page.route(`**/api/collections/${collection.id}/items/${failing.id}`, (route) =>
+      route.request().method() === "DELETE" ? route.fulfill({ status: 500, body: "{}" }) : route.fallback(),
+    );
+
+    await page.goto(`/collections/${collection.id}`);
+    await page.getByRole("button", { name: "Delete “Kind of Blue”" }).click();
+    const card = page.locator(`[data-item-id="${failing.id}"]`);
+    const alert = card.getByRole("alert");
+    await expect(alert).toBeVisible();
+
+    // The alert belongs to its card: it must sit inside the card's cell and
+    // never reach down over the next row's cards and their controls.
+    const [cardBox, alertBox] = await Promise.all([card.boundingBox(), alert.boundingBox()]);
+    if (!cardBox || !alertBox) throw new Error("no layout");
+    expect(alertBox.y + alertBox.height).toBeLessThanOrEqual(cardBox.y + cardBox.height + 0.5);
+    const below = await page
+      .locator("ul.item-list-grid > li")
+      .evaluateAll(
+        (cards, bottom) => cards.map((c) => c.getBoundingClientRect().top).filter((top) => top > bottom - 1),
+        cardBox.y + cardBox.height,
+      );
+    for (const top of below) expect(top).toBeGreaterThanOrEqual(alertBox.y + alertBox.height);
+    await expectNoAccessibilityViolations(page);
+  });
+
   test("a view switch the server refused", async ({ page, api }) => {
     await api.reset();
     const collection = await api.createCollection({ name: "Vinyl records", fields: FIELDS });

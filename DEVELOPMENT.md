@@ -779,7 +779,9 @@ leave a gap at the end of the row above. The gap stays. `grid-auto-flow: dense` 
 painting cards out of DOM order, and that order is what the tab sequence, a screen reader and
 `rowDestination` all follow (WCAG 1.3.2, 2.4.3); `rows.integration.test.ts` refuses any
 `grid-auto-flow`. The columns are `minmax(min(100%, 14rem), 1fr)`, so at 320px the grid is one
-column with no sideways scroll, which `a11y.spec.ts` measures.
+column with no sideways scroll, which `a11y.spec.ts` measures. Each grid cell is a flex column and the card grows
+with `flex`, not `height: 100%`, so a row's failure alert stays inside its cell instead of being
+pushed over the next row's cards.
 
 A card shows the item's name as its link and at most three fields with a value (`cardFields`), the
 sort field first even when empty — a grid ordered by a field it does not show reads as shuffled.

@@ -1532,6 +1532,16 @@ p[role="alert"] {
   grid-column: 1 / -1;
 }
 
+/* The cell is a column of its own: the card grows to fill it, and a failure
+   alert under the card stays inside the cell. A card at height: 100% took the
+   cell's whole height, alert included, and pushed the alert out over the next
+   row's cards (#38 review). */
+.item-list-grid > li {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
 /* A card: cover, then status, name and a few fields, then the actions, pinned
    to the foot so they line up across a row of the grid whatever each card
    holds. The row's wrapping is a list concern; a card stacks. */
@@ -1540,7 +1550,7 @@ p[role="alert"] {
   flex-wrap: nowrap;
   align-items: stretch;
   justify-content: flex-start;
-  height: 100%;
+  flex: 1 1 auto;
 }
 
 /* In a column the row's 16rem basis would become a height. */
