@@ -24,7 +24,8 @@ interface ConfirmButtonProps {
    * `asking` is per-instance state and nothing closes the others, so several
    * prompts can stand open at once — at which point the page carries several
    * identical "Delete forever" buttons, and the prompt beside each is only their
-   * description, never part of the name.
+   * description, never part of the name — which is also what tells those
+   * open Cancels apart.
    */
   accessibleLabel?: string;
   /**
@@ -57,7 +58,11 @@ interface ConfirmButtonProps {
  * with no insert-timing race. It used to be a `<p role="alert">`, which also
  * painted a question in the failure treatment. Not `role="alertdialog"`
  * either: that pattern is modal — trapped focus, an inert page — and these are
- * not; several can stand open at once.
+ * not; several can stand open at once. Nor focus on the prompt itself (a
+ * `<p tabIndex={-1}>`): it would be spoken everywhere, but it costs a stop that
+ * is not a control and leaves Cancel a Tab away. The trade is VoiceOver with
+ * hints turned off in its verbosity settings, which skips descriptions on every
+ * control; the sentence still sits right before the buttons in reading order.
  */
 export function ConfirmButton({
   label,
