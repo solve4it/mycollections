@@ -1,5 +1,40 @@
 # Changelog
 
+## [0.0.6](https://github.com/solve4it/mycollections/compare/mycollections-v0.0.5...mycollections-v0.0.6) (2026-11-13)
+
+
+### Features
+
+* **core,db,api:** a finite set's target count ([#42](https://github.com/solve4it/mycollections/issues/42), 1/8) ([#405](https://github.com/solve4it/mycollections/issues/405)) ([cfa9d64](https://github.com/solve4it/mycollections/commit/cfa9d644eb406c19ccb73e7fb7d7caa41b5a4fdf))
+* **core,db,api:** owned counts and a finite set's progress ([#42](https://github.com/solve4it/mycollections/issues/42), 2/8) ([#406](https://github.com/solve4it/mycollections/issues/406)) ([66f5dd8](https://github.com/solve4it/mycollections/commit/66f5dd89ad83f0c0202727292b07e0967c3309fb))
+* **core,db,api:** structured item filters and tag suggestions ([#41](https://github.com/solve4it/mycollections/issues/41), 5/7) ([#401](https://github.com/solve4it/mycollections/issues/401)) ([3639041](https://github.com/solve4it/mycollections/commit/36390414e3beb58c658295752ad08f5e13c02b09))
+* **db,api:** full-text search and sort for a collection's items ([#41](https://github.com/solve4it/mycollections/issues/41), 1/5) ([#395](https://github.com/solve4it/mycollections/issues/395)) ([863e33e](https://github.com/solve4it/mycollections/commit/863e33e53e2d3dd434694b0c8898d9dacdcbbf7c))
+* manage a collection's tags — rename, merge, remove ([#41](https://github.com/solve4it/mycollections/issues/41), 7/7) ([#404](https://github.com/solve4it/mycollections/issues/404)) ([47bdc6a](https://github.com/solve4it/mycollections/commit/47bdc6a300e1a74f3e4a3d951c505b1b5859b785))
+* sort a collection's items by status ([#42](https://github.com/solve4it/mycollections/issues/42), 3/8) ([#407](https://github.com/solve4it/mycollections/issues/407)) ([a4e308d](https://github.com/solve4it/mycollections/commit/a4e308d0f5fe62d3b5307021d051bf1680ac7dfe))
+* **web:** a finite set's progress on its card and header ([#42](https://github.com/solve4it/mycollections/issues/42), 5/8) ([#409](https://github.com/solve4it/mycollections/issues/409)) ([05716ce](https://github.com/solve4it/mycollections/commit/05716ce457a000f3a7795cf472f6d164d4703373))
+* **web:** a finite set's target count on the create and edit forms ([#42](https://github.com/solve4it/mycollections/issues/42), 4/8) ([#408](https://github.com/solve4it/mycollections/issues/408)) ([8977fdf](https://github.com/solve4it/mycollections/commit/8977fdf3577f23a5372a93bb3a9dc949543b2fa9))
+* **web:** a Sort by select on the collection screen ([#41](https://github.com/solve4it/mycollections/issues/41), 4/6) ([#400](https://github.com/solve4it/mycollections/issues/400)) ([b827cb6](https://github.com/solve4it/mycollections/commit/b827cb679269dd7659a31ac3b560c5e8470b13a8))
+* **web:** all, collected and remaining tabs over a collection's items ([#42](https://github.com/solve4it/mycollections/issues/42), 6/8) ([#410](https://github.com/solve4it/mycollections/issues/410)) ([674c6d4](https://github.com/solve4it/mycollections/commit/674c6d45b5fe00cb971bc2a53fa007bd6eed8f5d))
+* **web:** celebrate completing a finite set ([#42](https://github.com/solve4it/mycollections/issues/42), 8/8) ([#416](https://github.com/solve4it/mycollections/issues/416)) ([f146918](https://github.com/solve4it/mycollections/commit/f1469181140fec818c645ff3e040e2334c9f49e5))
+* **web:** filter a collection — facets, applied-filter chips, Clear filters ([#41](https://github.com/solve4it/mycollections/issues/41), 6/7) ([#402](https://github.com/solve4it/mycollections/issues/402)) ([a0a9a29](https://github.com/solve4it/mycollections/commit/a0a9a2931793012210ef78249a6d74599224e8da))
+* **web:** mark collected, and wanted and ordered rows that look unfinished ([#42](https://github.com/solve4it/mycollections/issues/42), 7/8) ([#411](https://github.com/solve4it/mycollections/issues/411)) ([71d68fe](https://github.com/solve4it/mycollections/commit/71d68feaf6dcad48294485eb8617f14eb19b63d8))
+* **web:** search a collection from its screen ([#41](https://github.com/solve4it/mycollections/issues/41), 3/6) ([#399](https://github.com/solve4it/mycollections/issues/399)) ([dbf9b86](https://github.com/solve4it/mycollections/commit/dbf9b8695d0d59aa79a86cd1cebe75d5d2f19932))
+* **web:** useAnnounce — one node per message in the shell's live region ([#41](https://github.com/solve4it/mycollections/issues/41), 2/6) ([#398](https://github.com/solve4it/mycollections/issues/398)) ([b32749d](https://github.com/solve4it/mycollections/commit/b32749d562f2c6c66bca1a0f38e44a228c323c4f))
+
+
+### Bug Fixes
+
+* **ci:** install pnpm through Corepack so CI verifies the packageManager sha512 ([#393](https://github.com/solve4it/mycollections/issues/393)) ([fc92a91](https://github.com/solve4it/mycollections/commit/fc92a91fc55374d1414f29e79f273dfc6a87a246))
+* **deps:** update all non-major dependencies ([#412](https://github.com/solve4it/mycollections/issues/412)) ([c0ec8b7](https://github.com/solve4it/mycollections/commit/c0ec8b7673b14a1d9d35a9728a4b00da9e1f14a2))
+* **deps:** update dependency react-i18next to v18 ([#415](https://github.com/solve4it/mycollections/issues/415)) ([f8a99d9](https://github.com/solve4it/mycollections/commit/f8a99d9cc28c4eec6d08a110ad510763bbbb2be2))
+* **docs-site:** suppress the unused-import warning on the import that has it ([#394](https://github.com/solve4it/mycollections/issues/394)) ([d480994](https://github.com/solve4it/mycollections/commit/d48099443a7f383542e20954d73da0cb19b8c78d))
+* **infra:** collect tests from src only and stop compiling them into dist ([#397](https://github.com/solve4it/mycollections/issues/397)) ([fc38641](https://github.com/solve4it/mycollections/commit/fc38641abec5c8e919ab1a9b926b4e32d17a5f86))
+* **infra:** get pnpm through Corepack on Node 26, on laptops and in the devcontainer ([#392](https://github.com/solve4it/mycollections/issues/392)) ([b57ce35](https://github.com/solve4it/mycollections/commit/b57ce35b1bf12ac6b56385b4f1ad009f49e92194))
+* **web:** a confirmation speaks its question on focus, not as an alert ([#335](https://github.com/solve4it/mycollections/issues/335)) ([#423](https://github.com/solve4it/mycollections/issues/423)) ([811bc00](https://github.com/solve4it/mycollections/commit/811bc00b7a2da905df1e7153144d497ac4fba81b))
+* **web:** a11y batch: card names, bare setup screen, toast never covers focus, Escape dismisses ([#419](https://github.com/solve4it/mycollections/issues/419)) ([081a960](https://github.com/solve4it/mycollections/commit/081a9602ee32a67d079fe1cdb62d7078f52e8c5a))
+* **web:** announce adding and removing a schema field ([#422](https://github.com/solve4it/mycollections/issues/422)) ([1835c4c](https://github.com/solve4it/mycollections/commit/1835c4c535740cf7772195ea9a8c7c8444e95986))
+* **web:** give each item form its own DOM ids, so a row editor and the add form stop sharing labels ([#389](https://github.com/solve4it/mycollections/issues/389)) ([e87882d](https://github.com/solve4it/mycollections/commit/e87882d62ae487223ce60458aeab6fa454a06161))
+
 ## [0.0.5](https://github.com/solve4it/mycollections/compare/mycollections-v0.0.4...mycollections-v0.0.5) (2026-11-01)
 
 
