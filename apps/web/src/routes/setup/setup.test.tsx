@@ -39,6 +39,16 @@ afterEach(() => {
 });
 
 describe("SetupPage", () => {
+  it("renders without the shell's nav or skip link, which had nowhere to go (#371)", async () => {
+    renderSetup();
+    await screen.findByLabelText("API Token");
+    // Every nav destination redirected straight back here with no token, so
+    // the nav's links were silent no-ops. The page still sits in <main>.
+    expect(screen.queryByRole("navigation")).toBeNull();
+    expect(screen.queryByRole("link", { name: "Skip to main content" })).toBeNull();
+    expect(screen.getByRole("main")).toContainElement(screen.getByLabelText("API Token"));
+  });
+
   it("renders the API token input", async () => {
     renderSetup();
     expect(await screen.findByLabelText(/api token/i)).toBeInTheDocument();

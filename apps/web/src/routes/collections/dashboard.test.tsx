@@ -105,6 +105,14 @@ describe("CollectionsPage", () => {
     expect(await screen.findByText("C-DZ")).toBeInTheDocument();
   });
 
+  it("names the card's link after the collection first, with the code left out (#370)", async () => {
+    vi.mocked(listCollections).mockResolvedValue([{ ...SAMPLE_COLLECTION, itemCount: 3 }]);
+    renderCollections();
+    // Exact, not a regex: "C-DZ" ahead of the name, or the count ahead of it,
+    // both fail. The code is still on the card for the eye (the test above).
+    expect(await screen.findByRole("link", { name: /Books/ })).toHaveAccessibleName("Books 3 items My book collection");
+  });
+
   it("gives the collection the cover its id generates", async () => {
     vi.mocked(listCollections).mockResolvedValue([SAMPLE_COLLECTION]);
     renderCollections();
@@ -243,7 +251,7 @@ describe("a finite set's progress on its card (#42)", () => {
     expect(body?.lastElementChild).toHaveClass("collection-progress");
     expect(body?.lastElementChild).toHaveTextContent(/^3 of 5 collected$/);
     // Inside the link, so it is part of what the card is called.
-    expect(card("Books")).toHaveAccessibleName(expect.stringMatching(/Books My book collection 3 of 5 collected$/));
+    expect(card("Books")).toHaveAccessibleName("Books 4 items My book collection 3 of 5 collected");
   });
 
   it("says Complete on a set whose owned count has reached its target, and only then", async () => {
@@ -272,6 +280,6 @@ describe("a finite set's progress on its card (#42)", () => {
     expect(card("Movies").querySelector(".collection-progress")).toBeNull();
     // No hint on the card either: the collection's own page explains a missing target.
     expect(card("Books")).not.toHaveTextContent(/collected|progress/i);
-    expect(card("Books")).toHaveAccessibleName(expect.stringMatching(/4 items Books My book collection$/));
+    expect(card("Books")).toHaveAccessibleName("Books 4 items My book collection");
   });
 });

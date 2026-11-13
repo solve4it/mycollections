@@ -21,7 +21,14 @@ vi.mock("../../lib/api-client.js", () => ({
   emptyTrash: vi.fn(),
 }));
 
-import { exportData, type ImportSummary, importData, isTokenSessionOnly, listTrash } from "../../lib/api-client.js";
+import {
+  exportData,
+  getToken,
+  type ImportSummary,
+  importData,
+  isTokenSessionOnly,
+  listTrash,
+} from "../../lib/api-client.js";
 import { isErrorReportingEnabled, setErrorReportingEnabled } from "../../lib/error-reporter.js";
 import { getThemePreference, setThemePreference } from "../../lib/theme.js";
 
@@ -101,6 +108,15 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe("SettingsPage", () => {
+  it("goes to /setup without a token, like every other guarded screen (#371)", async () => {
+    vi.mocked(getToken).mockReturnValue(null);
+    const { router } = renderSettings();
+    await waitFor(() => expect(router.state.location.pathname).toBe("/setup"));
+    // No screen of unauthenticated queries offering to disconnect nothing.
+    expect(screen.queryByRole("button", { name: /disconnect/i })).toBeNull();
+    vi.mocked(getToken).mockReturnValue("test-token");
+  });
+
   it("renders Settings heading", async () => {
     renderSettings();
     expect(await screen.findByRole("heading", { level: 1 })).toHaveTextContent("Settings");

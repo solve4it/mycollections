@@ -104,6 +104,13 @@ describe("collection card", () => {
     expect(declaration(eyebrow.body, "text-transform")).toBe("uppercase");
   });
 
+  it("paints the eyebrow above the name it follows in the DOM, with a separator that is not spoken (#370)", () => {
+    expect(declaration(only(".collection-card-eyebrow").body, "order")).toBe("-1");
+    // The empty alt text is what keeps generated content out of the link's
+    // accessible name; a bare `content: "·"` is announced.
+    expect(declaration(only(".collection-card-count::before").body, "content")).toBe('"·" / ""');
+  });
+
   it("lifts the card on hover", () => {
     const hover = only(".collection-card:hover");
     expect(declaration(hover.body, "transform")).toBe("translateY(-2px)");

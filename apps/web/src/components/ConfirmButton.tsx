@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { type KeyboardEvent, useEffect, useRef, useState } from "react";
 import { Icon, type IconName } from "./Icon.js";
 
 interface ConfirmButtonProps {
@@ -47,8 +47,8 @@ interface ConfirmButtonProps {
  * belongs beside the row it is about, and a modal would rip context away from
  * a one-line confirmation. What the dialog would have given us is kept by hand:
  * the prompt is announced (`role="alert"`), focus lands on the safe option
- * rather than falling to the body when the trigger unmounts, and cancelling
- * hands focus back to the button the user pressed.
+ * rather than falling to the body when the trigger unmounts, cancelling hands
+ * focus back to the button the user pressed, and Escape cancels (#376).
  */
 export function ConfirmButton({
   label,
@@ -86,6 +86,23 @@ export function ConfirmButton({
     wasPending.current = pending;
   }, [pending]);
 
+  function withdraw() {
+    returnFocus.current = true;
+    setAsking(false);
+  }
+
+  // Escape is Cancel by key (#376) — the one thing a modal <dialog> gives for
+  // free that this hand-rolled version had dropped. On the buttons rather than
+  // their row, which is not interactive and would need a role to carry a
+  // handler. Refused while the action is in flight, like a second press of the
+  // confirm: the question is held open until the answer lands, and withdrawing
+  // it then would bring the trigger back only for the landing to remove it.
+  function handleKeyDown(event: KeyboardEvent<HTMLButtonElement>) {
+    if (event.key !== "Escape" || pending) return;
+    event.preventDefault();
+    withdraw();
+  }
+
   if (!asking) {
     return (
       <button
@@ -121,6 +138,7 @@ export function ConfirmButton({
             if (pending) return;
             onConfirm(event.currentTarget);
           }}
+          onKeyDown={handleKeyDown}
         >
           {confirmLabel}
         </button>
@@ -128,10 +146,8 @@ export function ConfirmButton({
           ref={cancelRef}
           type="button"
           className="touch-target button-quiet"
-          onClick={() => {
-            returnFocus.current = true;
-            setAsking(false);
-          }}
+          onClick={withdraw}
+          onKeyDown={handleKeyDown}
         >
           {cancelLabel}
         </button>

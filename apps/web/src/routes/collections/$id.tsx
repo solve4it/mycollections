@@ -35,6 +35,7 @@ import {
   validateItemSearch,
 } from "../../lib/item-search.js";
 import { CONTENT_LINK_ACTIVE_OPTIONS } from "../../lib/links.js";
+import { useOverlayClearance } from "../../lib/overlay-clearance.js";
 import { type PageName, usePageTitle } from "../../lib/page-title.js";
 import {
   collectionCountsQueryKey,
@@ -433,6 +434,9 @@ function CollectionDetailPage() {
   // here, at the page, because the page is what survives all three.
   const handOffFocus = useFocusHandoff();
   const panelRef = useRef<HTMLDivElement>(null);
+  // The toast strip is fixed over the page's foot; this keeps whatever takes
+  // focus scrolled clear of it (#372).
+  const toastRegionRef = useOverlayClearance();
 
   function setSearch(next: string) {
     // `replace` so keystrokes do not fill the history; `resetScroll: false` or
@@ -727,6 +731,15 @@ function CollectionDetailPage() {
             // Drop any failure from a previous undo: the new toast is about a new
             // deletion, and must not open carrying the last one's error.
             restoreItem.reset();
+            // A second delete inside the window replaces the toast rather than
+            // rebinding it (#376: it is keyed on the item below), so a user
+            // standing on the old Undo would lose focus with it. Hand it where
+            // this delete sends focus — named now, because the delete's own
+            // request was dropped the moment focus left its Delete for the toast.
+            // `mutateAsync` resolves after the list is fetched again, so the row
+            // is already gone and the index already names the row in its place.
+            const focused = document.activeElement;
+            if (focused?.closest(".undo-toast")) handOffFocus(rowDestination(index), { removing: focused });
             setUndo({ itemId: item.id, name: itemLabel(collection, item, t("untitled")), index });
           }}
         />
@@ -753,7 +766,7 @@ function CollectionDetailPage() {
           one string wholesale, this region's content is replaced in place by a
           second delete, and atomic would re-read the whole toast instead of the
           name that changed. */}
-      <div className="undo-toast-region">
+      <div className="undo-toast-region" ref={toastRegionRef}>
         {/* Completing a finite set (#42): the fourth region the announcer cannot
             carry, because the words are seen as well as heard. The same
             mechanism as the toast's, beside it rather than inside it — a
@@ -779,6 +792,10 @@ function CollectionDetailPage() {
         <div className="undo-toast-live" aria-live="polite">
           {undo && (
             <UndoToast
+              // Keyed on the item (#376). Without a key, a second delete inside the
+              // window reused the same DOM: focus stayed on Undo while Undo
+              // quietly changed which item it would restore.
+              key={undo.itemId}
               message={t("deleted_toast", { name: undo.name })}
               actionLabel={t("undo")}
               dismissLabel={t("dismiss_undo")}
@@ -807,6 +824,11 @@ function CollectionDetailPage() {
                 })
               }
               onDismiss={() => {
+                // Not mid-restore: the restore's own success hands focus and
+                // closes the toast, and a dismiss racing it would send focus to
+                // where the item was while the item comes back. This covers the
+                // timer, Dismiss and Escape (#376) alike.
+                if (restoreItem.isPending) return;
                 handOffFocus(rowDestination(undo.index));
                 setUndo(null);
               }}

@@ -475,7 +475,9 @@ its comment:
 | The editor's Cancel, or a successful Save       | the Edit that opened it                                                        | dialog: return to the invoker     |
 | A row's Delete                                  | the row that takes its place, else the one before, else the tab panel          | successor element                 |
 | The toast's Undo                                | the restored row's Edit, once it is back                                       | successor element                 |
-| The toast's Dismiss                             | wherever the delete handed focus                                               | — same answer as the delete       |
+| The toast's Dismiss, or Escape on the toast     | wherever the delete handed focus                                               | — same answer as the delete       |
+| A second delete while focus is in the toast     | the row in the second deleted row's place (the toast remounts, #376)           | successor element                 |
+| Escape on a confirmation (`ConfirmButton`)      | the trigger that asked — as Cancel does (#376)                                 | dialog: return to the invoker     |
 | Remove field                                    | the next field's **label**, else Add field                                     | successor element                 |
 | A confirmed trash purge                         | the next row in the **same** list, else the one before, else the trash section | successor element                 |
 | Save, when a search or tab no longer shows it   | the row that takes its place — as for a Delete (#41, #42)                      | successor element                 |
@@ -507,6 +509,27 @@ state shows the panel is `aria-describedby` its title and description (ids from 
 `EmptyState` as `titleId`/`descriptionId`), and the attribute is absent while rows show. Focus
 landing on the emptied panel then announces "Remaining, tab panel, Nothing on your wanted list, Items
 whose status is Wanted or Ordered appear here." Unit and e2e tests assert that accessible description.
+
+**Escape closes what is transient (#376).** The confirmation and the undo toast are the two
+surfaces a user opens without meaning to stay in, and the toast's timer is held open while focus is
+inside it, so for a keyboard user it never leaves by itself. Escape on either goes where the matching
+button goes, and is refused while the action it would race is in flight — a confirmed purge, or an
+Undo's restore. The toast is keyed on the item it is about, so a second delete inside the window
+replaces it rather than leaving focus on an Undo that has silently changed which item it restores.
+
+**Nothing fixed paints over focus (#372, WCAG 2.2 2.4.11).** The undo toast strip is fixed over the
+page's foot, by design. `useOverlayClearance()` (`lib/overlay-clearance.ts`) measures how much of
+the viewport it covers while it holds anything and publishes it as `--overlay-clearance` on `<html>`,
+which `global.css` turns into `scroll-padding-bottom` (Tab's own scrolling stops short of the strip)
+and extra foot padding on `<main>` (the last control on the page has room to scroll into). Neither
+covers a scripted `focus()` — Chromium's scroll-if-needed ignores `scroll-padding`, and every handoff
+above is a scripted `focus()` — so the hook also scrolls a control that takes focus under the strip
+up by exactly the overlap, and checks the focused control again on the frame after each measure. The
+frame is not a nicety: the reduced-motion block in `global.css` sets `transition-duration: 0.01ms`
+on every element, and with the default `transition-property: all` that gives _every_ property a
+real transition, padding included — so in the same tick the padding has not grown yet. Any new
+overlay fixed over content takes the same hook; `keyboard.spec.ts` checks every stop's box against
+the toast's, by Tab and by script.
 
 A search (#41) can take a row off the list as a side effect of an edit — and a sort can move it,
 which in a browser loses focus too: React moves a keyed row with `insertBefore`, which takes the
@@ -833,6 +856,13 @@ That default is right for the nav and wrong for everything else, which is the wh
   there the nav links are simply never current. Declared on the route rather than recognized in the
   shell for the same reason as `dynamicTitle` — the shell has to know during the same render as the
   route change, and a component-shaped answer arrives a commit after the nav has already spoken.
+- **The setup screen has no nav (#371).** Every screen but `/setup` guards on the token in
+  `beforeLoad` and redirects there without one, so on `/setup` each nav link was a silent no-op: the
+  redirect left the page id unchanged, so nothing was announced and focus never moved. `/setup`
+  declares `staticData: { bare: true }`, and the shell (`useIsBare`) leaves out the skip link and both
+  nav landmarks — `<main>` and the announcer stay. A new screen guards on the token like the others;
+  `/settings` was the one that did not, and rendered unauthenticated with a Disconnect for a token
+  that was never there.
 
 `Shell.navigation.test.tsx` sweeps every route for links that claim to be the current page and
 asserts the exact list — including the _value_, since a sweep that only listed the links would pass
