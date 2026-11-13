@@ -9,6 +9,7 @@ import {
 } from "@mycollections/core";
 import { type DatabaseHandle, InvalidItemQueryError } from "@mycollections/db";
 import type { FastifyInstance } from "fastify";
+import { oneWithPrimaryMedia, withPrimaryMedia } from "./item-response.js";
 
 const createBodySchema = {
   type: "object",
@@ -98,7 +99,8 @@ export async function registerItemRoutes(app: FastifyInstance, db: DatabaseHandl
     }
     try {
       // biome-ignore lint/suspicious/noExplicitAny: status narrowed by Fastify schema enum
-      return await db.items.listByCollection(id, { status: query.status as any, q: query.q, sort, filters });
+      const items = await db.items.listByCollection(id, { status: query.status as any, q: query.q, sort, filters });
+      return await withPrimaryMedia(db, items);
     } catch (err) {
       // InvalidItemQueryError messages are fixed text; anything else is a 500.
       if (err instanceof InvalidItemQueryError) throw app.httpErrors.badRequest(err.message);
@@ -168,7 +170,7 @@ export async function registerItemRoutes(app: FastifyInstance, db: DatabaseHandl
         status: body.status as any,
         fields: body.fields,
       });
-      return reply.code(201).send(item);
+      return reply.code(201).send(await oneWithPrimaryMedia(db, item));
     } catch (err) {
       throw app.httpErrors.badRequest(err instanceof Error ? err.message : "Invalid input");
     }
@@ -180,7 +182,7 @@ export async function registerItemRoutes(app: FastifyInstance, db: DatabaseHandl
     if (!collection) throw app.httpErrors.notFound("Collection not found");
     const item = await db.items.getById(itemId);
     if (!item || item.collectionId !== id) throw app.httpErrors.notFound("Item not found");
-    return item;
+    return oneWithPrimaryMedia(db, item);
   });
 
   app.patch("/api/collections/:id/items/:itemId", { schema: { body: updateBodySchema } }, async (request, _reply) => {
@@ -195,7 +197,7 @@ export async function registerItemRoutes(app: FastifyInstance, db: DatabaseHandl
     // biome-ignore lint/suspicious/noExplicitAny: narrowed by schema enum
     const updated = await db.items.update(itemId, { status: body.status as any, fields: body.fields });
     if (!updated) throw app.httpErrors.notFound("Item not found");
-    return updated;
+    return oneWithPrimaryMedia(db, updated);
   });
 
   app.post("/api/collections/:id/items/:itemId/restore", async (request, _reply) => {
@@ -209,7 +211,9 @@ export async function registerItemRoutes(app: FastifyInstance, db: DatabaseHandl
     if (!existing || existing.collectionId !== id) throw app.httpErrors.notFound("Item not found");
     const restored = await db.items.restore(itemId);
     if (!restored) throw app.httpErrors.notFound("Item not found in trash");
-    return db.items.getById(itemId);
+    const item = await db.items.getById(itemId);
+    if (!item) throw app.httpErrors.notFound("Item not found");
+    return oneWithPrimaryMedia(db, item);
   });
 
   app.delete("/api/collections/:id/items/:itemId", async (request, reply) => {

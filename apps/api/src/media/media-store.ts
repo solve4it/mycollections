@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { createReadStream, type ReadStream } from "node:fs";
+import type { ReadStream } from "node:fs";
 import { chmod, mkdir, open, readdir, rename, rmdir, stat, unlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { MediaFileRef } from "@mycollections/db";
@@ -86,14 +86,18 @@ export class MediaStore {
   async read(itemId: string, mediaId: string, variant: MediaVariant): Promise<ReadStream | null> {
     const path = this.#path(itemId, mediaId, variant);
     try {
+      // The stream owns the handle and closes it when done. Handing the bare fd
+      // to `fs.createReadStream` instead left two owners: the stream closed the
+      // fd, and the FileHandle tried again when collected (EBADF).
       const handle = await open(path, "r");
-      return createReadStream("", { fd: handle.fd, autoClose: true });
+      return handle.createReadStream();
     } catch (error) {
       if (isMissing(error)) return null;
       throw error;
     }
   }
 
+  /** Removes one image's files, and the item's folder if that leaves it empty. */
   async remove(itemId: string, mediaId: string): Promise<void> {
     const paths = [this.#path(itemId, mediaId, "display"), this.#path(itemId, mediaId, "thumb")];
     await Promise.all(
@@ -103,6 +107,8 @@ export class MediaStore {
         }),
       ),
     );
+    // Only succeeds when empty, which is exactly when it should.
+    await rmdir(join(this.#dir, itemId)).catch(() => {});
   }
 
   /**

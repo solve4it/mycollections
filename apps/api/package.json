@@ -29,6 +29,7 @@
     "@fastify/bearer-auth": "^10.1.4",
     "@fastify/cors": "^11.4.1",
     "@fastify/helmet": "^13.2.0",
+    "@fastify/multipart": "^10.1.8",
     "@fastify/sensible": "^6.0.7",
     "@fastify/swagger": "^9.9.3",
     "@fastify/swagger-ui": "^6.1.3",

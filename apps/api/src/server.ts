@@ -43,6 +43,7 @@ const app = await buildApp({
   isDev: config.isDev,
   allowedHosts: config.allowedHosts,
   devOrigins: config.devOrigins,
+  media: { store: media },
   logger: buildLoggerOptions({ isDev: config.isDev, level: process.env.LOG_LEVEL }),
 }).catch(exitWithConfigurationError);
 
