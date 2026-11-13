@@ -68,6 +68,8 @@ const deleteStop = (item: string) => `button "${deleteName(item)}": Delete`;
 const restoreStop = (row: string) => `button "${restoreName(row)}": Restore`;
 const purgeStop = (row: string) => `button "${purgeName(row)}": Delete forever`;
 const markStop = (item: string) => `button "${markName(item)}": Mark collected`;
+/** A row's name, which links to the item's own page (#37). Its name is the item's, so it needs no label. */
+const nameStop = (item: string) => `link "${item}"`;
 
 const SKIP_LINK = 'link "Skip to main content"';
 const NAV = ['link "Collections"', 'link "Settings"'];
@@ -339,8 +341,10 @@ test.describe("keyboard traversal of every screen", () => {
       'button "Filters"',
       'tab "All" [selected]',
       'tabpanel "All"',
+      nameStop("Kind of Blue"),
       editStop("Kind of Blue"),
       deleteStop("Kind of Blue"),
+      nameStop("Blue Train"),
       editStop("Blue Train"),
       deleteStop("Blue Train"),
       'combobox "Status"',
@@ -348,6 +352,24 @@ test.describe("keyboard traversal of every screen", () => {
       'spinbutton "Year"',
       'button "Save"',
     ]);
+  });
+
+  /**
+   * An item's own page (#37). The photos are pictures, not controls, so the
+   * only stops its content adds are the way back and the uploader; Take photo
+   * is offered on touch screens only, which neither project emulates.
+   */
+  test("an item's page with photos", async ({ page, api }) => {
+    await api.reset();
+    const collection = await api.createCollection({ name: "Vinyl records", fields: FIELDS });
+    const item = await api.createItem(collection.id, { title: "Kind of Blue", year: 1959 });
+    await api.uploadImage(collection.id, item.id);
+
+    await page.goto(`/collections/${collection.id}/items/${item.id}`);
+    await expect(page.getByRole("heading", { level: 1, name: "Kind of Blue" })).toBeVisible();
+    await expect(page.locator(".image-gallery img")).toHaveCount(1);
+
+    await expectTabOrder(page, "an item's page", ['link "Back to Vinyl records"', 'button "Add photos"']);
   });
 
   /**
@@ -420,6 +442,30 @@ test.describe("no screen traps focus", () => {
 });
 
 test.describe("every action is operable without a pointer", () => {
+  /**
+   * A row's name opens the item's page and Add photos opens the picker (#37),
+   * by key. The name is a link, so Enter is its key; Add photos is a button,
+   * so Space must work too. The picker is the browser's own dialog, which
+   * Playwright surfaces as a `filechooser` event rather than letting it open.
+   */
+  test("a row's name opens the item's page, and its Add photos opens the file picker", async ({ page, api }) => {
+    await api.reset();
+    const collection = await api.createCollection({ name: "Vinyl records", fields: FIELDS });
+    const item = await api.createItem(collection.id, { title: "Kind of Blue", year: 1959 });
+
+    await page.goto(`/collections/${collection.id}`);
+    await page.getByRole("link", { name: "Kind of Blue" }).focus();
+    await page.keyboard.press("Enter");
+    await expect(page).toHaveURL(`/collections/${collection.id}/items/${item.id}`);
+    await expect(page.getByRole("heading", { level: 1, name: "Kind of Blue" })).toBeVisible();
+
+    const add = page.getByRole("button", { name: "Add photos" });
+    await add.focus();
+    const chooser = page.waitForEvent("filechooser");
+    await page.keyboard.press(" ");
+    expect((await chooser).isMultiple(), "Add photos takes several files at once").toBe(true);
+  });
+
   /**
    * The row actions and the editor they open, driven by key alone.
    *
@@ -1734,9 +1780,11 @@ test.describe("the status tabs (#42)", () => {
     expect(await tabOrder(page), "the stops after the selected tab").toEqual(
       restOfSequence([
         'tabpanel "Remaining"',
+        nameStop("Blue Train"),
         markStop("Blue Train"),
         editStop("Blue Train"),
         deleteStop("Blue Train"),
+        nameStop("Giant Steps"),
         markStop("Giant Steps"),
         editStop("Giant Steps"),
         deleteStop("Giant Steps"),
@@ -1855,11 +1903,14 @@ test.describe("marking an item collected (#42)", () => {
       'button "Filters"',
       'tab "All" [selected]',
       'tabpanel "All"',
+      nameStop("Kind of Blue"),
       editStop("Kind of Blue"),
       deleteStop("Kind of Blue"),
+      nameStop("Blue Train"),
       markStop("Blue Train"),
       editStop("Blue Train"),
       deleteStop("Blue Train"),
+      nameStop("Giant Steps"),
       markStop("Giant Steps"),
       editStop("Giant Steps"),
       deleteStop("Giant Steps"),

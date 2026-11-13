@@ -15,6 +15,12 @@ export interface SeededCollection {
 }
 
 /** Creates fixture data through the API, the same way the app does. */
+/** A valid 1×1 PNG: the smallest image the upload pipeline accepts. */
+export const TINY_PNG = Buffer.from(
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
+  "base64",
+);
+
 export class ApiFixture {
   constructor(private readonly request: APIRequestContext) {}
 
@@ -40,6 +46,20 @@ export class ApiFixture {
       data: status === undefined ? { fields } : { fields, status },
     });
     expect(res.status(), `creating item in ${collectionId}`).toBe(201);
+    return (await res.json()) as { id: string };
+  }
+
+  /**
+   * Attaches an image to an item through the real upload route (#37). The
+   * server processes it like any upload, so the page shows what it really
+   * stores: a WebP the size the pipeline made.
+   */
+  async uploadImage(collectionId: string, itemId: string): Promise<{ id: string }> {
+    const res = await this.request.post(
+      `${API_URL}/api/collections/${collectionId}/items/${itemId}/media?source=user-attached`,
+      { headers: this.headers, multipart: { file: { name: "sleeve.png", mimeType: "image/png", buffer: TINY_PNG } } },
+    );
+    expect(res.status(), `uploading an image to ${itemId}`).toBe(201);
     return (await res.json()) as { id: string };
   }
 
