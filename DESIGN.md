@@ -364,9 +364,9 @@ target, an undo and a Settings restore are not news, and none of them celebrates
   action's own words ("Marked “Penny” as collected."). Then comes the news, "Coin set is
   complete!", in weight 600. It sits in the toast's fixed strip, above any open toast, and clears
   after ten seconds. Its contrast is the toast's: `--cabinet-ink` and `--manila` on `--cabinet`,
-  computed in `toast.integration.test.ts`. The two lines are separate blocks partly for axe, which
-  decides a fixed overlay's contrast per element and gives up on text that wraps over different
-  page content.
+  computed in `toast.integration.test.ts`. Unlike the toast it takes no pointer, the message any
+  more than its region. With nothing in it to press, a message that took clicks would leave the
+  input or button under it dead for ten seconds.
 - **The stamp.** While the message is up, the header's Complete badge runs `stamp-in` once over
   480ms: scale 1 → 1.25 → 0.95 → rest, like a rubber stamp pressed down. It is **scale only**, and
   it starts from the badge's resting size. The badge is already painted when the celebration

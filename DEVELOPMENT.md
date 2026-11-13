@@ -835,11 +835,17 @@ is only ever caught by asserting the list.
 ### Live regions the announcer cannot carry
 
 The announcer is hidden and holds no controls, so a message that has to be **seen**, or that comes
-with something to **press**, needs a region of its own. There are four: the undo toast, whose
-words "Deleted …" and Undo button have to stay together on screen (`routes/collections/$id.tsx`);
-the celebration when an action completes a finite set (`.celebration-live`, #42), which is seen as
-well as heard; the import's progress and result on Settings (`.import-live`); and the trash's
-emptied confirmation (`.trash-live`). The rule such a region has to follow is the same one, met
+with something to **press**, needs a region of its own. There are five. Three are on a
+collection's page (`routes/collections/$id.tsx`):
+
+- the undo toast (`.undo-toast-live`), whose words "Deleted …" and Undo button have to stay
+  together on screen;
+- the celebration when an action completes a finite set (`.celebration-live`, #42), which is seen
+  as well as heard;
+- the add form's "Added …" confirmation (`.add-item-live`, #368).
+
+Two are on Settings: the import's progress and result (`.import-live`), and the trash's emptied
+confirmation (`.trash-live`). The rule such a region has to follow is the same one, met
 differently — persistent and empty, never conditional:
 
 - **Render the region unconditionally, and put the message inside it later.** `routes/collections/$id.tsx`
@@ -856,10 +862,10 @@ differently — persistent and empty, never conditional:
   page-level `getByRole("status")` queries pointed at the loading skeletons, which are now the only
   thing in the app carrying that role (`components/Skeleton.tsx`).
 - **Give the region a class, and query it by that.** Three polite regions share `/settings` with the
-  shell's announcer, and a collection's page has the toast's and the celebration's beside it, so a
-  bare `[aria-live="polite"]` locator is ambiguous in both Vitest (which renders the real root
-  route) and Playwright. `.undo-toast-live`, `.celebration-live`, `.import-live` and `.trash-live`
-  exist to be named.
+  shell's announcer, and four share a collection's page with it: the toast's, the celebration's and
+  the add form's. A bare `[aria-live="polite"]` locator is ambiguous in both Vitest (which renders
+  the real root route) and Playwright. `.undo-toast-live`, `.celebration-live`, `.add-item-live`,
+  `.import-live` and `.trash-live` exist to be named.
 - **One event, one message.** Two regions changing in the same tick are two announcements, read in
   an order nothing controls. When an action completes a finite set, the celebration carries the
   action's own sentence ("Marked “Penny” as collected.") followed by the news, and the announcer
@@ -867,10 +873,20 @@ differently — persistent and empty, never conditional:
   is skipped. Focus is chosen exactly as it would have been; only the words move.
 - **Siblings, not nesting.** `.celebration-live` sits beside `.undo-toast-live` inside
   `.undo-toast-region`, so a completion landing while a toast is open is a second region speaking
-  its own addition rather than a change inside the toast's. The region takes no pointer
-  (`pointer-events: none`) because it is layout; the message inside takes it back, because
-  `elementsFromPoint` skips a `pointer-events: none` element, and that is how touch exploration
-  (VoiceOver on iOS) and axe find what is on screen.
+  its own addition rather than a change inside the toast's. Neither the region nor the message
+  takes the pointer (`pointer-events: none`). The message holds no control, no Undo and no close, so
+  anything it took the pointer from would be dead for its whole ten seconds. Screen readers get it
+  from the live region, not from hit testing.
+- **Celebrate only a completion the page watched happen.** `watchCompletion()` reads the cached
+  counts before the change is sent and again after the hook has fetched them anew. "Before" counts
+  only when it is fresh: status `success`, `fetchStatus` idle, not invalidated, and fetched since
+  the page mounted. Otherwise it is unknown, and unknown never celebrates. React Query serves the
+  previous visit's counts at once while the mount refetch runs. If the set was completed elsewhere
+  in the meantime (a Settings restore, an import, another device), reading those counts as
+  "incomplete before" turned an unrelated save into a completion. The check is also told whether
+  the change itself turned an item owned, because two changes in flight together each see the
+  counts the other moved. The price is that a change sent while another's refetch is still in
+  flight is not celebrated. Missing a completion beats claiming a false one.
 - **A message that cannot change is not a live region at all.** A notice decided once — the setup
   screen's "storage will not remember your token", Settings' session-only token hint, the trash's
   loading line, a finite set's "add how many items the set has" hint (#42) — is in its screen's first commit or in none of them, so `role="status"` on it buys
@@ -883,18 +899,20 @@ differently — persistent and empty, never conditional:
 - **No `aria-atomic` unless the whole region is one string.** Nothing in the app is any more: the
   shell's announcer holds one node per message (above), so it is not atomic either. A region whose content is replaced in place — a second
   delete renaming the toast — would re-read the entire toast instead of the name that changed.
-- **This is about `aria-live`, not about `role="alert"`.** An `alert` is announced when it is inserted — the user agent fires an event on creation — so a failure surface that appears with its message inside it is correct, and the app's error screens are written that way. Everything above applies to the announcer and to the four class-named regions, which are `aria-live` and are not.
+- **This is about `aria-live`, not about `role="alert"`.** An `alert` is announced when it is inserted — the user agent fires an event on creation — so a failure surface that appears with its message inside it is correct, and the app's error screens are written that way. Everything above applies to the announcer and to the five class-named regions, which are `aria-live` and are not.
 - **Scan the open state.** An interactive state no route-level scan reaches gets its own scan in
   `apps/web/e2e/a11y.spec.ts`, with the region asserted empty before the action and filled after.
   This is the only place the mechanism is proven in a real browser — jsdom has no accessibility tree
   at all. If the state times out, hold it open rather than racing the scan: the undo toast's timer
   stops while the pointer is over it, and where a message has no such hold, `page.clock.install()`
   freezes time for the scan and `page.clock.fastForward()` then proves the self-clear as well. A
-  message in the fixed toast strip has one more condition: axe works out a text element's
-  background per line box, and over a scrolled page each line of a wrapped element sits on
-  different content, so it reports "could not decide" (`elmPartiallyObscuring`) however the
-  message is painted. The celebration's scan seeds names short enough for each of its two
-  sentences to fit one line at 390px, and asserts that it does before scanning.
+  message with `pointer-events: none` cannot have its contrast checked by axe, which finds a text's
+  background through `elementsFromPoint`, and that skips the element. So the celebration's scan
+  passes `contrastExclude: ".celebration"` to `expectNoAccessibilityViolations`. That takes the
+  message out of `color-contrast` alone; every other rule still runs on it. Its contrast is
+  computed in `toast.integration.test.ts` instead. The same spec proves the message gives the
+  pointer away: it scrolls a control under it and checks that `elementFromPoint` and a real click
+  reach the control.
 - **Give a message a life span, and empty the region in place.** A message that describes a finished
   event has to go away on its own when nothing on the page can clear it — Settings' emptied-trash
   confirmation outlived its list for the whole mount because the only thing that could have cleared

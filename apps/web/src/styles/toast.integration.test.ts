@@ -101,9 +101,9 @@ describe("undo toast motion", () => {
 
 describe("the celebration (#42)", () => {
   it("is the toast's drawer label, so the toast's measured contrast is its contrast", () => {
-    // The e2e scan can only decide a one-line message (axe judges a wrapped one
-    // per line box, over different page content each time), so the colors are
-    // held to the toast's tokens here, where their ratios are computed.
+    // The e2e scan cannot check this message's contrast: it takes no pointer,
+    // and axe finds a text's background by hit testing. So the colors are held
+    // to the toast's tokens here, where their ratios are computed.
     const message = only(".celebration").body;
     expect(declaration(message, "background")).toBe("var(--cabinet)");
     expect(declaration(message, "color")).toBe("var(--cabinet-ink)");
