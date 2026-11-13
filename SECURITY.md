@@ -9,6 +9,7 @@ If you discover a security vulnerability in MyCollections, please report it resp
 Instead, please email: **security@solve4it.com**
 
 Include:
+
 - A description of the vulnerability
 - Steps to reproduce
 - Affected versions

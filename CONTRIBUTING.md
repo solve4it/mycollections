@@ -45,6 +45,7 @@ All commits use the [Conventional Commits](https://www.conventionalcommits.org/)
 ```
 
 **Types:**
+
 - `feat` — new feature
 - `fix` — bug fix
 - `chore` — tooling, config, dependencies, build system

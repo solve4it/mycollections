@@ -3,6 +3,7 @@
 ## Project
 
 MyCollections is a personal collection management application with a plugin architecture.
+
 - **Organization**: Solve4It (solve4it.com)
 - **Repo**: solve4it/mycollections
 - **License**: Apache 2.0
@@ -46,6 +47,7 @@ curl -s -X POST \
 ## Issue Workflow
 
 Every piece of work follows this process:
+
 1. Verify a GitHub issue exists on the project board
 2. Move the issue to `In Progress` on the project board
 3. Create a feature branch: `<type>/issue-<number>-<short-description>`
