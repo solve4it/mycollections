@@ -1637,10 +1637,11 @@ p[role="alert"] {
 }
 
 /* The celebration's live region (#42), the toast region's sibling: the same
-   centred column, empty and zero-height until a set is completed. It holds no
-   control, so unlike the toast it gives the pointer back to the page under it —
-   it is a message laid over the screen for ten seconds, and it must not swallow
-   a click meant for whatever it covers. */
+   centred column, empty and zero-height until a set is completed. The region
+   takes no pointer — it is layout, and must never swallow a click meant for the
+   page around the message. The message itself takes it back, as the toast does:
+   hit testing is how touch exploration (VoiceOver on iOS) and axe find what is
+   on screen, and a `pointer-events: none` message is invisible to both. */
 .celebration-live {
   display: flex;
   flex-direction: column;
@@ -1663,11 +1664,29 @@ p[role="alert"] {
   border-radius: var(--radius);
   box-shadow: var(--shadow-lift);
   animation: toast-in 150ms ease-out;
+  pointer-events: auto;
 }
 
 .celebration .icon {
   flex: none;
   color: var(--manila);
+}
+
+/* What was done, then the news on a line of its own, in the weight that makes
+   it the news. Blocks rather than one run of text, which also keeps each line
+   one element: axe decides a fixed overlay's contrast per element, and gives
+   up on one whose line boxes sit over different page content. */
+.celebration-message {
+  min-width: 0;
+}
+
+.celebration-action,
+.celebration-complete {
+  display: block;
+}
+
+.celebration-complete {
+  font-weight: 600;
 }
 
 .undo-toast {

@@ -254,7 +254,9 @@ function CollectionDetailPage() {
   // the target to it. Held in local state with a life span of its own, as the
   // add confirmation is; each celebration is a new object, so a second one
   // restarts the window.
-  const [celebration, setCelebration] = useState<{ message: string } | null>(null);
+  // `action` is what the action would have said on its own; the completion
+  // follows it as a sentence of its own (see the region below).
+  const [celebration, setCelebration] = useState<{ action: string } | null>(null);
   // Whether the completion on screen has been celebrated. Two changes in
   // flight together can both have started below the target and both find it
   // reached; only the first says so.
@@ -652,11 +654,10 @@ function CollectionDetailPage() {
               handOffFocus(
                 () => document.querySelector<HTMLElement>(`[data-item-id="${saved.id}"] [data-row-edit]`) ?? null,
               );
-              if (celebrate) setCelebration({ message: t("celebration_saved", { name, collection: collection.name }) });
+              if (celebrate) setCelebration({ action: t("celebration_saved", { name }) });
             } else {
               handOffFocus(rowDestination(index));
-              if (celebrate)
-                setCelebration({ message: t("celebration_saved_hidden", { name, collection: collection.name }) });
+              if (celebrate) setCelebration({ action: t("saved_hidden", { name }) });
               else announce(t("saved_hidden", { name }));
             }
           }}
@@ -688,13 +689,11 @@ function CollectionDetailPage() {
             const celebrate = completed();
             if (isListed(marked.id)) {
               handOffFocus(() => document.querySelector<HTMLElement>(`[data-item-id="${marked.id}"] [data-row-edit]`));
-              if (celebrate)
-                setCelebration({ message: t("celebration_marked", { name, collection: collection.name }) });
+              if (celebrate) setCelebration({ action: t("marked_collected", { name }) });
               else announce(t("marked_collected", { name }));
             } else {
               handOffFocus(rowDestination(index));
-              if (celebrate)
-                setCelebration({ message: t("celebration_marked_hidden", { name, collection: collection.name }) });
+              if (celebrate) setCelebration({ action: t("marked_collected_hidden", { name }) });
               else announce(t("marked_collected_hidden", { name }));
             }
           }}
@@ -745,7 +744,14 @@ function CollectionDetailPage() {
           {celebration && (
             <p className="celebration">
               <Icon name="check" />
-              {celebration.message}
+              {/* Two sentences, two blocks: what was done, then the news. The
+                  space keeps them two sentences in the accessible text. */}
+              <span className="celebration-message">
+                <span className="celebration-action">{celebration.action}</span>{" "}
+                <span className="celebration-complete">
+                  {t("celebration_complete", { collection: collection.name })}
+                </span>
+              </span>
             </p>
           )}
         </div>
@@ -814,12 +820,7 @@ function CollectionDetailPage() {
                 // One message (R8): the celebration carries the add, and an
                 // earlier add's confirmation goes rather than sit beside it.
                 setAdded(null);
-                setCelebration({
-                  message: t(hidden ? "celebration_added_hidden" : "celebration_added", {
-                    name,
-                    collection: collection.name,
-                  }),
-                });
+                setCelebration({ action: t(hidden ? "added_status_hidden" : "celebration_added", { name }) });
               } else {
                 setAdded({ name, hidden });
               }
