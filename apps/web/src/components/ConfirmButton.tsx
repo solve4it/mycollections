@@ -1,4 +1,4 @@
-import { type KeyboardEvent, useEffect, useRef, useState } from "react";
+import { type KeyboardEvent, useEffect, useId, useRef, useState } from "react";
 import { Icon, type IconName } from "./Icon.js";
 
 interface ConfirmButtonProps {
@@ -23,8 +23,8 @@ interface ConfirmButtonProps {
    * Both buttons take it, and the confirm needs it as much as the trigger:
    * `asking` is per-instance state and nothing closes the others, so several
    * prompts can stand open at once — at which point the page carries several
-   * identical "Delete forever" buttons, and the `role="alert"` beside each was
-   * announced when it was inserted rather than being part of any name.
+   * identical "Delete forever" buttons, and the prompt beside each is only their
+   * description, never part of the name.
    */
   accessibleLabel?: string;
   /**
@@ -46,9 +46,18 @@ interface ConfirmButtonProps {
  * answer for a page-blocking decision, but these are row-scoped — the question
  * belongs beside the row it is about, and a modal would rip context away from
  * a one-line confirmation. What the dialog would have given us is kept by hand:
- * the prompt is announced (`role="alert"`), focus lands on the safe option
- * rather than falling to the body when the trigger unmounts, cancelling hands
- * focus back to the button the user pressed, and Escape cancels (#376).
+ * the prompt is announced, focus lands on the safe option rather than falling
+ * to the body when the trigger unmounts, cancelling hands focus back to the
+ * button the user pressed, and Escape cancels (#376).
+ *
+ * The announcement rides on focus, not on a live region (#335). Both answers
+ * take the prompt as their `aria-describedby`, and focus lands on Cancel the
+ * moment the question opens, so a screen reader speaks "Cancel, button" and
+ * then the question — the way a `<dialog>` announces itself on focus entry,
+ * with no insert-timing race. It used to be a `<p role="alert">`, which also
+ * painted a question in the failure treatment. Not `role="alertdialog"`
+ * either: that pattern is modal — trapped focus, an inert page — and these are
+ * not; several can stand open at once.
  */
 export function ConfirmButton({
   label,
@@ -62,6 +71,7 @@ export function ConfirmButton({
   className,
 }: ConfirmButtonProps) {
   const [asking, setAsking] = useState(false);
+  const promptId = useId();
   const triggerRef = useRef<HTMLButtonElement>(null);
   const cancelRef = useRef<HTMLButtonElement>(null);
   const returnFocus = useRef(false);
@@ -120,7 +130,7 @@ export function ConfirmButton({
 
   return (
     <div className="confirm-row">
-      <p role="alert" className="confirm-prompt">
+      <p id={promptId} className="confirm-prompt">
         {prompt}
       </p>
       <div className="confirm-actions">
@@ -128,6 +138,7 @@ export function ConfirmButton({
           ref={triggerRef}
           type="button"
           aria-label={accessibleLabel}
+          aria-describedby={promptId}
           className="touch-target button-danger"
           // `aria-disabled`, never `disabled` (#368): Chrome drops focus to
           // <body> when the focused control is disabled, so the confirm the
@@ -145,6 +156,7 @@ export function ConfirmButton({
         <button
           ref={cancelRef}
           type="button"
+          aria-describedby={promptId}
           className="touch-target button-quiet"
           onClick={withdraw}
           onKeyDown={handleKeyDown}
