@@ -411,6 +411,13 @@ rendered page. Two spec files drive the parts it cannot see.
   operable by key, with Space as well as Enter where the control is a button; and — the two blocks
   at the end of the file — where focus is left by an action that takes the control holding it away,
   or marks it busy.
+- `drag.spec.ts` drags photos on an item's page (#37), by mouse and by touch (Chrome's input
+  domain, since Playwright has no touch drag). Dragging is a pointer-only layer over the order the
+  Move buttons change: dnd-kit gets mouse and touch sensors and no keyboard sensor, its
+  `attributes` are never spread (they would make each tile a focusable `role="button"` with a
+  second keyboard model), and its announcements are silenced so results are spoken through the
+  shell's announcer like everything else. A touch drag starts after a 250ms hold, so a swipe over
+  the photos still scrolls — the spec checks both.
 
 The tab-order expectations are lists of each stop's ARIA role and accessible name, exactly as
 Playwright computes them — `button "Delete"`, `textbox "Collection name": Vinyl records` — so a
