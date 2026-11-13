@@ -1,4 +1,4 @@
-import sharp from "sharp";
+import sharp, { type Metadata, type SharpOptions } from "sharp";
 
 /** Long edge of the stored display image, in pixels. Never enlarged. */
 export const DISPLAY_MAX_EDGE = 2560;
@@ -67,7 +67,7 @@ function sniff(input: Buffer): AcceptedFormat | null {
 }
 
 /** What sharp's metadata calls each accepted format; AVIF is HEIF with AV1 compression. */
-function decodedMatches(format: AcceptedFormat, metadata: sharp.Metadata): boolean {
+function decodedMatches(format: AcceptedFormat, metadata: Metadata): boolean {
   if (format === "avif") return metadata.format === "heif" && metadata.compression === "av1";
   return metadata.format === format;
 }
@@ -93,8 +93,8 @@ export async function processImage(input: Buffer): Promise<ProcessedImage> {
   const format = sniff(input);
   if (format === null) throw new UnsupportedImageError();
 
-  const options: sharp.SharpOptions = { limitInputPixels: MAX_INPUT_PIXELS, failOn: "error", pages: 1 };
-  let metadata: sharp.Metadata;
+  const options: SharpOptions = { limitInputPixels: MAX_INPUT_PIXELS, failOn: "error", pages: 1 };
+  let metadata: Metadata;
   try {
     metadata = await sharp(input, options).metadata();
   } catch (error) {
