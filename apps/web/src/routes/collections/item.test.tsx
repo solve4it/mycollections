@@ -425,6 +425,8 @@ describe("the photo viewer (#37)", () => {
     fireEvent.keyDown(viewer(), { key: "ArrowRight" });
     fireEvent.click(within(viewer()).getByRole("button", { name: "Close photo", hidden: true }));
     expect(viewer()).not.toHaveAttribute("open");
-    expect(document.activeElement).toBe(screen.getByRole("button", { name: "Photo 2 of 2 of “Kind of Blue”" }));
+    await waitFor(() =>
+      expect(document.activeElement).toBe(screen.getByRole("button", { name: "Photo 2 of 2 of “Kind of Blue”" })),
+    );
   });
 });

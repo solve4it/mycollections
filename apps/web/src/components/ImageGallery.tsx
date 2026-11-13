@@ -341,12 +341,10 @@ export function ImageGallery({ collectionId, itemId, itemName, emptyDestination 
         photos={media.data ?? []}
         index={viewing}
         onIndexChange={setViewing}
-        onClose={(index) => {
-          setViewing(null);
-          // Back to the photo last on show — which the user may have stepped
-          // to inside the viewer — rather than the one that opened it.
+        onClose={() => setViewing(null)}
+        returnFocusTo={(index) => {
           const id = media.data?.[index]?.id;
-          if (id) document.querySelector<HTMLElement>(`[data-media-id="${id}"] .image-open`)?.focus();
+          return id ? document.querySelector<HTMLElement>(`[data-media-id="${id}"] .image-open`) : null;
         }}
       />
       {failed && <p role="alert">{t("photos_change_error")}</p>}

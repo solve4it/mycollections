@@ -12,8 +12,13 @@ interface ImageViewerProps {
   /** The photo on show, or null when the viewer is closed. */
   index: number | null;
   onIndexChange: (index: number) => void;
-  /** Called with the index on show when the viewer closes, so focus can go back to that photo. */
+  /** Called with the index on show when the viewer has closed. */
   onClose: (index: number) => void;
+  /**
+   * The control focus returns to on close, for the photo last on show — which
+   * the user may have stepped to, so not necessarily the one that opened it.
+   */
+  returnFocusTo: (index: number) => HTMLElement | null;
 }
 
 /**
@@ -36,6 +41,7 @@ export function ImageViewer({
   index,
   onIndexChange,
   onClose,
+  returnFocusTo,
 }: ImageViewerProps) {
   const { t } = useTranslation("items");
   const dialogRef = useRef<HTMLDialogElement>(null);
@@ -53,6 +59,22 @@ export function ImageViewer({
     if (open && !dialog.open) dialog.showModal();
     if (!open && dialog.open) dialog.close();
   }, [open]);
+
+  /**
+   * Every way out goes through here — Close, Escape, the backdrop. Closing a
+   * modal dialog restores focus to whatever opened it, synchronously inside
+   * `close()`; focusing the photo last on show right after, in the same task,
+   * overrides that before anything is announced. Doing it later, from the
+   * `close` event, let focus visit the opener first — two announcements, and
+   * in Chromium sometimes the wrong one last.
+   */
+  function closeViewer() {
+    const dialog = dialogRef.current;
+    if (!dialog?.open) return;
+    const shown = indexRef.current ?? 0;
+    dialog.close();
+    returnFocusTo(shown)?.focus();
+  }
 
   function step(by: -1 | 1) {
     if (index === null) return;
@@ -79,10 +101,15 @@ export function ImageViewer({
       onKeyDown={handleKeyDown}
       // Escape (the `cancel` event), the Close button and a backdrop click all
       // end in `close`; the parent drops its index and hands focus back.
+      onCancel={(event) => {
+        // Escape: closed by hand, so focus can be placed (see closeViewer).
+        event.preventDefault();
+        closeViewer();
+      }}
       onClose={() => onClose(indexRef.current ?? 0)}
       onClick={(event) => {
         // A click on the backdrop lands on the dialog itself, outside its box.
-        if (event.target === event.currentTarget) dialogRef.current?.close();
+        if (event.target === event.currentTarget) closeViewer();
       }}
     >
       <div className="image-viewer-frame">
@@ -94,7 +121,7 @@ export function ImageViewer({
             type="button"
             className="touch-target button-quiet"
             aria-label={t("close_viewer")}
-            onClick={() => dialogRef.current?.close()}
+            onClick={closeViewer}
           >
             <Icon name="cross" />
           </button>
