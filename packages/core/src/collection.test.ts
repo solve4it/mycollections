@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { COLLECTION_DESCRIPTION_MAX, COLLECTION_NAME_MAX, CollectionSchema, TARGET_COUNT_MAX } from "./collection.js";
+import {
+  COLLECTION_DESCRIPTION_MAX,
+  COLLECTION_NAME_MAX,
+  CollectionSchema,
+  ITEM_VIEWS,
+  ItemViewSchema,
+  TARGET_COUNT_MAX,
+} from "./collection.js";
 
 const baseCollection = {
   id: "11111111-1111-4111-8111-111111111111",
@@ -105,5 +112,31 @@ describe("CollectionSchema targetCount (#42)", () => {
 
   it("caps the target at one hundred thousand", () => {
     expect(TARGET_COUNT_MAX).toBe(100_000);
+  });
+});
+
+describe("CollectionSchema itemView (#38)", () => {
+  it("defaults itemView to list when absent", () => {
+    expect(CollectionSchema.parse(baseCollection).itemView).toBe("list");
+  });
+
+  it.each(["list", "grid"])("accepts %s", (itemView) => {
+    expect(CollectionSchema.parse({ ...baseCollection, itemView }).itemView).toBe(itemView);
+  });
+
+  it.each([
+    ["an unknown view", "table"],
+    ["a different case", "Grid"],
+    ["an empty string", ""],
+    ["null", null],
+    ["a boolean", true],
+    ["a number", 1],
+  ])("rejects %s", (_label, itemView) => {
+    expect(CollectionSchema.safeParse({ ...baseCollection, itemView }).success).toBe(false);
+  });
+
+  it("lists exactly the two views, list first as the default", () => {
+    expect(ITEM_VIEWS).toEqual(["list", "grid"]);
+    expect(ItemViewSchema.options).toEqual(["list", "grid"]);
   });
 });

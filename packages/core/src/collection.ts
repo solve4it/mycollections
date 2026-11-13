@@ -17,6 +17,19 @@ export const TARGET_COUNT_MAX = 100_000;
 export const COLLECTION_NAME_MAX = 120;
 export const COLLECTION_DESCRIPTION_MAX = 2000;
 
+/**
+ * How a collection's items are laid out on its page (#38): compact rows, or
+ * cards led by each item's cover. A property of the collection rather than of
+ * one browser, so it is the same on every device and travels with a backup —
+ * the owner's call. List is first and the default, the layout every collection
+ * had before the choice existed.
+ */
+export const ITEM_VIEWS = ["list", "grid"] as const;
+
+export const ItemViewSchema = z.enum(ITEM_VIEWS);
+
+export type ItemView = z.infer<typeof ItemViewSchema>;
+
 export const CollectionSchema = z
   .object({
     id: z.uuid(),
@@ -30,6 +43,8 @@ export const CollectionSchema = z
      * written before the field existed — version 1 backups included — still parse.
      */
     targetCount: z.number().int().min(1).max(TARGET_COUNT_MAX).nullable().default(null),
+    /** Defaulted, like `targetCount`, so documents written before views existed still parse (#38). */
+    itemView: ItemViewSchema.default("list"),
     createdAt: z.iso.datetime(),
     updatedAt: z.iso.datetime(),
     deletedAt: z.iso.datetime().nullable().default(null),

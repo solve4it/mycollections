@@ -4,6 +4,9 @@ export {
   type Collection,
   CollectionSchema,
   type CollectionWithItemCount,
+  ITEM_VIEWS,
+  type ItemView,
+  ItemViewSchema,
   TARGET_COUNT_MAX,
 } from "./collection.js";
 export {
