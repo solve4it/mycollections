@@ -138,3 +138,64 @@ describe("0002_target_count (#42)", () => {
     }
   });
 });
+
+describe("0003_media (#37)", () => {
+  it("follows the target-count migration in the journal", () => {
+    const { entries } = readJournal(SHIPPED);
+    const index = entries.findIndex((entry) => entry.tag === "0003_media");
+    expect(index).toBe(3);
+    const [previous, current] = [entries[index - 1], entries[index]];
+    expect(previous?.tag).toBe("0002_target_count");
+    expect(current && previous && current.when > previous.when).toBe(true);
+  });
+
+  it("upgrades a database with items, replacing only the media table and leaving search intact", async () => {
+    const dir = makeTmpDir();
+    const path = join(dir, "app.db");
+    const before = await openDatabase({ path, migrationsFolder: migrationsBefore(dir, "0003_media") });
+    const stamp = "2026-01-01T00:00:00.000Z";
+    const books = "22222222-2222-4222-8222-222222222222";
+    const fields = JSON.stringify([{ id: "title", type: "text", label: "Title", required: true }]);
+    before.sqlite
+      .prepare(
+        "INSERT INTO collections (id, name, description, fields, is_finite_set, target_count, created_at, updated_at, deleted_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+      )
+      .run(books, "Books", null, fields, 0, null, stamp, stamp, null);
+    before.sqlite
+      .prepare(
+        "INSERT INTO items (id, collection_id, status, fields, created_at, updated_at, deleted_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+      )
+      .run("cccccccc-cccc-4ccc-8ccc-cccccccccccc", books, "owned", '{"title":"Dune"}', stamp, stamp, null);
+    before.close();
+
+    const after = await openDatabase({ path });
+    try {
+      const columns = (
+        after.sqlite.prepare("PRAGMA table_info(media)").all() as { name: string; notnull: number }[]
+      ).map((c) => [c.name, c.notnull]);
+      expect(columns).toEqual([
+        ["id", 1],
+        ["item_id", 1],
+        ["kind", 1],
+        ["source", 1],
+        ["mime_type", 1],
+        ["bytes", 1],
+        ["width", 1],
+        ["height", 1],
+        ["position", 1],
+        ["created_at", 1],
+        ["deleted_at", 0],
+      ]);
+      // The cascade from items survived the replacement.
+      const fks = after.sqlite.prepare("PRAGMA foreign_key_list(media)").all() as {
+        table: string;
+        on_delete: string;
+      }[];
+      expect(fks.map((fk) => [fk.table, fk.on_delete])).toEqual([["items", "CASCADE"]]);
+      const found = await after.items.listByCollection(books, { q: "dune" });
+      expect(found.map((i) => i.fields.title)).toEqual(["Dune"]);
+    } finally {
+      after.close();
+    }
+  });
+});
