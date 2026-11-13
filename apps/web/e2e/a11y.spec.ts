@@ -712,6 +712,78 @@ test.describe("accessibility", () => {
     await expectNoAccessibilityViolations(page);
   });
 
+  /**
+   * A collection in its grid (#38): a card with a cover and one with the empty
+   * frame, scanned at both viewports by the projects, and then at 320px — the
+   * WCAG 1.4.10 reflow width — where the grid must fall to one column with no
+   * sideways scroll.
+   */
+  test("a collection in the grid, with a cover and an empty frame", async ({ page, api }) => {
+    await api.reset();
+    const collection = await api.createCollection({ name: "Vinyl records", fields: FIELDS, itemView: "grid" });
+    const covered = await api.createItem(collection.id, { title: "Kind of Blue", year: 1959, signed: true }, "owned");
+    await api.createItem(collection.id, { title: "Blue Train", year: 1957, signed: false }, "wanted");
+    await api.uploadImage(collection.id, covered.id);
+
+    await page.goto(`/collections/${collection.id}`);
+    await expect(page).toHaveURL(`/collections/${collection.id}`);
+    await expect(page.getByRole("heading", { level: 1, name: "Vinyl records" })).toBeVisible();
+    await expect(page.locator("ul.item-list-grid > li")).toHaveCount(2);
+    const cover = page.locator(`[data-item-id="${covered.id}"] img.item-card-cover`);
+    await expect(cover).toHaveAttribute("src", /^blob:/);
+    await expect(cover).toHaveAttribute("alt", "");
+    await expect(page.locator(".item-card-cover-empty")).toHaveCount(1);
+    await expectNoAccessibilityViolations(page);
+
+    await page.setViewportSize({ width: 320, height: 800 });
+    const lefts = await page
+      .locator("ul.item-list-grid > li")
+      .evaluateAll((cards) => cards.map((card) => Math.round(card.getBoundingClientRect().left)));
+    expect(new Set(lefts).size, "one column at 320px").toBe(1);
+    const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
+    expect(overflow, "no sideways scroll at 320px").toBeLessThanOrEqual(0);
+    await expectNoAccessibilityViolations(page);
+  });
+
+  test("a grid card's editor open, across the whole row", async ({ page, api }) => {
+    await api.reset();
+    const collection = await api.createCollection({ name: "Vinyl records", fields: FIELDS, itemView: "grid" });
+    await api.createItem(collection.id, { title: "Kind of Blue", year: 1959, signed: true }, "owned");
+    await api.createItem(collection.id, { title: "Blue Train", year: 1957, signed: false }, "wanted");
+
+    await page.goto(`/collections/${collection.id}`);
+    await page.getByRole("button", { name: "Edit “Kind of Blue”" }).click();
+    const editor = page.getByRole("form", { name: "Editing “Kind of Blue”" });
+    await expect(editor).toBeVisible();
+    const [listWidth, editorWidth] = await Promise.all([
+      page.locator("ul.item-list-grid").evaluate((list) => list.getBoundingClientRect().width),
+      page.locator("li.item-editing").evaluate((li) => li.getBoundingClientRect().width),
+    ]);
+    expect(Math.round(editorWidth)).toBe(Math.round(listWidth));
+    await expectNoAccessibilityViolations(page);
+  });
+
+  test("a view switch the server refused", async ({ page, api }) => {
+    await api.reset();
+    const collection = await api.createCollection({ name: "Vinyl records", fields: FIELDS });
+    await api.createItem(collection.id, { title: "Kind of Blue", year: 1959, signed: true }, "owned");
+    await page.route(`**/api/collections/${collection.id}`, (route) =>
+      route.request().method() === "PATCH" ? route.fulfill({ status: 500, body: "{}" }) : route.fallback(),
+    );
+
+    await page.goto(`/collections/${collection.id}`);
+    await expect(page.getByText("Kind of Blue")).toBeVisible();
+    const view = page.getByRole("combobox", { name: "View" });
+    await view.selectOption("grid");
+
+    await expect(page.getByRole("alert")).toHaveText(
+      "Could not change the view. It is as it was — check that the app's server is running, then try again.",
+    );
+    await expect(view).toHaveValue("list");
+    await expect(page.locator("ul.item-list")).not.toHaveClass(/item-list-grid/);
+    await expectNoAccessibilityViolations(page);
+  });
+
   test("the collection editor", async ({ page, api }) => {
     await api.reset();
     const collection = await api.createCollection({ name: "Vinyl records", fields: FIELDS });
