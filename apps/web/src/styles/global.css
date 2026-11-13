@@ -1199,6 +1199,10 @@ p[role="alert"] {
   flex: 0 1 16rem;
 }
 
+.item-list-controls .item-view {
+  flex: 0 1 9rem;
+}
+
 /* The filter panel and the filters in force (#41). The facets reuse .form-row
    and .checkbox-row; this only lays them out. */
 .filter-panel {
@@ -1496,6 +1500,59 @@ p[role="alert"] {
   flex-wrap: wrap;
   gap: var(--space-2);
   min-width: 0;
+}
+
+/* A collection's grid view (#38). The same <ul> and item rows as the list —
+   switching the view swaps a class and never an element, so nothing remounts.
+   min(100%, 14rem) lets one card fill a 320px screen rather than push the page
+   sideways. No grid-auto-flow: an open editor spans a whole row and can leave a
+   gap at the end of the row above, and filling it with `dense` would paint
+   cards out of their DOM order, which the tab order and a screen reader follow. */
+.item-list-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 14rem), 1fr));
+  gap: var(--space-3);
+}
+
+.item-list-grid > .item-editing {
+  grid-column: 1 / -1;
+}
+
+/* A card: cover, then status, name and a few fields, then the actions, pinned
+   to the foot so they line up across a row of the grid whatever each card
+   holds. The row's wrapping is a list concern; a card stacks. */
+.item-list-grid .item-row {
+  flex-direction: column;
+  flex-wrap: nowrap;
+  align-items: stretch;
+  justify-content: flex-start;
+  height: 100%;
+}
+
+/* In a column the row's 16rem basis would become a height. */
+.item-list-grid .item-fields {
+  flex: 0 0 auto;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-1);
+}
+
+.item-list-grid .item-actions {
+  margin-top: auto;
+}
+
+/* A card's cover: a square reserved before the photo arrives, so lazy covers
+   never shift the grid, with the whole photo fitted in. An item with no photo
+   gets the same frame, empty, so the cards in a row line up. */
+.item-card-cover {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 1;
+  object-fit: contain;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--paper);
 }
 
 /* Settings: file picker row */
