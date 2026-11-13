@@ -150,8 +150,13 @@ function ignoreRejection(): void {}
  * Asked once an item change has landed and the list and counts have been
  * fetched again: did this change complete the set? True at most once per
  * completion (#42). Started before the change is sent, because only then can
- * it read the counts the change started from.
+ * it read the counts the change started from. `addsOwned` is whether the
+ * change itself turned an item owned — a rename, or a save to Wanted, is never
+ * the change that completed a set, whatever the counts say afterwards.
  */
+type CompletionWatch = (addsOwned: boolean) => boolean;
+
+/** A `CompletionWatch` with the change's answer already given, for the page to ask once. */
 type CompletionCheck = () => boolean;
 
 /**
@@ -261,6 +266,10 @@ function CollectionDetailPage() {
   // flight together can both have started below the target and both find it
   // reached; only the first says so.
   const celebratedRef = useRef(false);
+  // When this page mounted: counts fetched before it — the previous visit's,
+  // served from the cache while the mount refetch runs — say nothing about
+  // where the set stands now.
+  const [mountedAt] = useState(() => Date.now());
 
   useEffect(() => {
     if (!celebration) return;
@@ -280,14 +289,24 @@ function CollectionDetailPage() {
 
   /**
    * Whether the cached counts say the set is complete; null when they cannot
-   * say — not a measurable set, counts not loaded, or the last fetch failed.
-   * Read from the cache rather than the render, because a check runs in a
+   * say. Read from the cache rather than the render, because a check runs in a
    * promise callback that closes over the render in which the change began.
+   *
+   * Only counts that are fresh can say. Not a measurable set, counts not
+   * loaded, the last fetch failed — and also counts being fetched again,
+   * marked invalid, or fetched before this page mounted. The last three are
+   * all the same hazard: React Query serves the previous visit's counts at
+   * once while the mount refetch runs, and if the set was completed elsewhere
+   * meanwhile (a Settings restore, an import, another device), reading them as
+   * "incomplete before" turned an unrelated save into a completion (#42
+   * review). The cost: a change sent while another's refetch is in flight
+   * reads null and is not celebrated. Missing a completion beats claiming one.
    */
   function completeInCache(): boolean | null {
     if (!collection) return null;
     const state = queryClient.getQueryState<ItemCounts>(collectionCountsQueryKey(id));
     if (state?.status !== "success" || state.data === undefined) return null;
+    if (state.isInvalidated || state.fetchStatus !== "idle" || state.dataUpdatedAt < mountedAt) return null;
     return collectionProgress(collection, state.data.owned)?.complete ?? null;
   }
 
@@ -299,12 +318,14 @@ function CollectionDetailPage() {
    * worse than missing one, so the answer is no. "After" is the counts as
    * fetched again by the mutation's hook, which awaits the refetch before the
    * promise this rides resolves; a failed refetch leaves the error status, and
-   * the answer is no again.
+   * the answer is no again. And only a change that added an owned item can be
+   * the one that completed the set: two changes in flight together both see
+   * the counts the other moved.
    */
-  function watchCompletion(): CompletionCheck {
+  function watchCompletion(): CompletionWatch {
     const was = completeInCache();
-    return () => {
-      if (was !== false || completeInCache() !== true || celebratedRef.current) return false;
+    return (addsOwned) => {
+      if (!addsOwned || was !== false || completeInCache() !== true || celebratedRef.current) return false;
       celebratedRef.current = true;
       return true;
     };
@@ -816,7 +837,7 @@ function CollectionDetailPage() {
             createItem.mutateAsync(payload).then((item) => {
               const name = itemLabel(collection, item, t("untitled"));
               const hidden = !isListed(item.id);
-              if (completed()) {
+              if (completed(item.status === "owned")) {
                 // One message (R8): the celebration carries the add, and an
                 // earlier add's confirmation goes rather than sit beside it.
                 setAdded(null);
@@ -867,7 +888,7 @@ interface ItemListProps {
   /** The search or filters match only in another tab: select All (`trigger` is the button, which goes). */
   onShowAll: (trigger: HTMLElement) => void;
   /** Started as a row sends a Save or a Mark collected, and handed back with its result (#42). */
-  watchCompletion: () => CompletionCheck;
+  watchCompletion: () => CompletionWatch;
   /** After a row's Save has landed and the list has been fetched again. */
   onSaved: (item: Item, index: number, completed: CompletionCheck) => void;
   /** After a row's Mark collected has landed and the list has been fetched again. */
@@ -974,7 +995,7 @@ function ItemList({
 interface ItemRowProps {
   collection: Collection;
   item: Item;
-  watchCompletion: () => CompletionCheck;
+  watchCompletion: () => CompletionWatch;
   onSaved: (item: Item, completed: CompletionCheck) => void;
   onMarked: (item: Item, completed: CompletionCheck) => void;
   onDeleting: (trigger: HTMLElement) => void;
@@ -1052,7 +1073,8 @@ function ItemRow({ collection, item, watchCompletion, onDeleting, onDeleted, onS
               // alert below; the empty handler only keeps it from surfacing
               // as an unhandled rejection.
               updateItem.mutateAsync({ itemId: item.id, input: payload }).then((saved) => {
-                onSaved(saved, completed);
+                // Only a save that turned this item owned can have completed the set.
+                onSaved(saved, () => completed(item.status !== "owned" && saved.status === "owned"));
                 setEditing(false);
               }, ignoreRejection);
             }}
@@ -1104,7 +1126,7 @@ function ItemRow({ collection, item, watchCompletion, onDeleting, onDeleted, onS
                 const completed = watchCompletion();
                 markItem
                   .mutateAsync({ itemId: item.id, status: "owned" })
-                  .then((marked) => onMarked(marked, completed), ignoreRejection);
+                  .then((marked) => onMarked(marked, () => completed(true)), ignoreRejection);
               }}
             >
               <Icon name="check" />
