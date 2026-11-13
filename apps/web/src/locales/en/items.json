@@ -164,5 +164,17 @@
   "upload_failed_busy_one": "{{count}} photo was not added: the server is busy with other photos. Try again in a moment.",
   "upload_failed_busy_other": "{{count}} photos were not added: the server is busy with other photos. Try again in a moment.",
   "upload_failed_one": "{{count}} photo was not added. Check that the app’s server is running, then try again.",
-  "upload_failed_other": "{{count}} photos were not added. Check that the app’s server is running, then try again."
+  "upload_failed_other": "{{count}} photos were not added. Check that the app’s server is running, then try again.",
+  "photo_name": "photo {{position}} of {{count}}",
+  "make_cover": "Make cover",
+  "make_cover_photo": "Make cover: {{photo}}",
+  "move_earlier_photo": "Move {{photo}} earlier",
+  "move_later_photo": "Move {{photo}} later",
+  "delete_photo": "Delete {{photo}}",
+  "photo_moved": "Moved to position {{position}} of {{count}}.",
+  "photo_now_cover": "This photo is now the cover.",
+  "photo_deleted_toast": "Deleted a photo",
+  "photo_restored": "Photo restored.",
+  "photos_change_error": "Could not change the photos. They are as they were — check that the app’s server is running, then try again.",
+  "photo_restore_error": "Could not restore the photo. Check that the app’s server is running, then try again."
 }

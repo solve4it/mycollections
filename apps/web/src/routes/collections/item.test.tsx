@@ -14,12 +14,26 @@ vi.mock("../../lib/api-client.js", async (importOriginal) => {
     getItem: vi.fn(),
     listMedia: vi.fn(),
     uploadMedia: vi.fn(),
+    reorderMedia: vi.fn(),
+    makeCover: vi.fn(),
+    deleteMedia: vi.fn(),
+    restoreMedia: vi.fn(),
     fetchMediaBlob: vi.fn(async () => new Blob(["webp"], { type: "image/webp" })),
     getToken: vi.fn(() => "test-token"),
   };
 });
 
-import { ApiError, getCollection, getItem, listMedia, uploadMedia } from "../../lib/api-client.js";
+import {
+  ApiError,
+  deleteMedia,
+  getCollection,
+  getItem,
+  listMedia,
+  makeCover,
+  reorderMedia,
+  restoreMedia,
+  uploadMedia,
+} from "../../lib/api-client.js";
 import { itemDetailRoute } from "./item.js";
 
 const C = "00000000-0000-4000-8000-0000000000c1";
@@ -243,5 +257,123 @@ describe("the item page (#37)", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent("Could not load this item");
     // Named as it is ever going to be: the route's own title, not a wait for one.
     await waitFor(() => expect(document.title).toMatch(/^Item\b/));
+  });
+});
+
+describe("the gallery's actions (#37)", () => {
+  const A = "00000000-0000-4000-8000-0000000000a1";
+  const B = "00000000-0000-4000-8000-0000000000b2";
+  const D = "00000000-0000-4000-8000-0000000000d3";
+
+  /** Each tile's photo name, in order, read from its Delete button. */
+  async function order(): Promise<string[]> {
+    const tiles = await screen.findAllByRole("listitem");
+    return tiles.map((tile) => tile.getAttribute("data-media-id") ?? "");
+  }
+
+  beforeEach(() => {
+    vi.mocked(listMedia).mockResolvedValue([media(A, 0), media(B, 1), media(D, 2)]);
+  });
+
+  it("names every action for its photo, offers no Make cover on the cover, and marks the moves at either end", async () => {
+    renderItemPage();
+    await screen.findByRole("button", { name: "Delete photo 1 of 3" });
+    expect(screen.queryByRole("button", { name: "Make cover: photo 1 of 3" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Make cover: photo 2 of 3" })).toHaveTextContent("Make cover");
+    expect(screen.getByRole("button", { name: "Move photo 1 of 3 earlier" })).toHaveAttribute("aria-disabled", "true");
+    expect(screen.getByRole("button", { name: "Move photo 1 of 3 later" })).not.toHaveAttribute("aria-disabled");
+    expect(screen.getByRole("button", { name: "Move photo 3 of 3 later" })).toHaveAttribute("aria-disabled", "true");
+    expect(screen.getByRole("button", { name: "Move photo 1 of 3 earlier" })).toBeEnabled();
+  });
+
+  it("moves a photo at once, sends the whole new order, and says where it went", async () => {
+    let answer: (value: Media[]) => void = () => {};
+    vi.mocked(reorderMedia).mockImplementation(() => new Promise<Media[]>((resolve) => (answer = resolve)));
+    renderItemPage();
+    fireEvent.click(await screen.findByRole("button", { name: "Move photo 1 of 3 later" }));
+    // Shown before the server answers.
+    await waitFor(async () => expect(await order()).toEqual([B, A, D]));
+    expect(reorderMedia).toHaveBeenCalledWith(C, I, [B, A, D]);
+    vi.mocked(listMedia).mockResolvedValue([media(B, 0), media(A, 1), media(D, 2)]);
+    answer([media(B, 0), media(A, 1), media(D, 2)]);
+    await waitFor(() => expect(announced()).toContain("Moved to position 2 of 3."));
+  });
+
+  it("puts the order back and says so when the server refuses a move", async () => {
+    vi.mocked(reorderMedia).mockRejectedValue(new ApiError(409));
+    renderItemPage();
+    fireEvent.click(await screen.findByRole("button", { name: "Move photo 3 of 3 earlier" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Could not change the photos. They are as they were");
+    expect(await order()).toEqual([A, B, D]);
+  });
+
+  it("refuses a move at the end, and any action while a change is in flight", async () => {
+    vi.mocked(reorderMedia).mockImplementation(() => new Promise<Media[]>(() => {}));
+    renderItemPage();
+    fireEvent.click(await screen.findByRole("button", { name: "Move photo 1 of 3 earlier" }));
+    expect(reorderMedia).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Move photo 1 of 3 later" }));
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Delete photo 1 of 3" })).toHaveAttribute("aria-disabled", "true"),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Delete photo 1 of 3" }));
+    expect(deleteMedia).not.toHaveBeenCalled();
+    expect(reorderMedia).toHaveBeenCalledTimes(1);
+  });
+
+  it("makes a photo the cover, moving it to the front, and keeps focus on that photo", async () => {
+    vi.mocked(makeCover).mockResolvedValue([media(D, 0), media(A, 1), media(B, 2)]);
+    renderItemPage();
+    const make = await screen.findByRole("button", { name: "Make cover: photo 3 of 3" });
+    make.focus();
+    fireEvent.click(make);
+    await waitFor(async () => expect(await order()).toEqual([D, A, B]));
+    expect(makeCover).toHaveBeenCalledWith(C, I, D);
+    await waitFor(() => expect(announced()).toContain("This photo is now the cover."));
+    // Its Make cover is gone with the change; focus is on its first remaining control.
+    await waitFor(() =>
+      expect(document.activeElement).toBe(screen.getByRole("button", { name: "Move photo 1 of 3 earlier" })),
+    );
+  });
+
+  it("deletes a photo with an Undo, and Undo brings it back with focus on it", async () => {
+    vi.mocked(deleteMedia).mockResolvedValue(undefined);
+    vi.mocked(restoreMedia).mockResolvedValue(media(B, 1));
+    renderItemPage();
+    const remove = await screen.findByRole("button", { name: "Delete photo 2 of 3" });
+    remove.focus();
+    vi.mocked(listMedia).mockResolvedValue([media(A, 0), media(D, 1)]);
+    fireEvent.click(remove);
+    const toast = await screen.findByText("Deleted a photo");
+    expect(toast.closest(".undo-toast-live")).not.toBeNull();
+    expect(deleteMedia).toHaveBeenCalledWith(C, I, B);
+    // Focus went to the photo now in its place, not to <body>.
+    await waitFor(() =>
+      expect(document.activeElement).toBe(screen.getByRole("button", { name: "Make cover: photo 2 of 2" })),
+    );
+
+    vi.mocked(listMedia).mockResolvedValue([media(A, 0), media(B, 1), media(D, 2)]);
+    // A click focuses the button it lands on (Safari's aside); fireEvent does not.
+    const undoButton = screen.getByRole("button", { name: "Undo" });
+    undoButton.focus();
+    fireEvent.click(undoButton);
+    await waitFor(() => expect(restoreMedia).toHaveBeenCalledWith(C, I, B));
+    await waitFor(() => expect(screen.queryByText("Deleted a photo")).toBeNull());
+    await waitFor(() =>
+      expect(document.activeElement).toBe(screen.getByRole("button", { name: "Make cover: photo 2 of 3" })),
+    );
+    expect(announced()).toContain("Photo restored.");
+  });
+
+  it("sends focus to Add photos when the last photo goes", async () => {
+    vi.mocked(listMedia).mockResolvedValue([media(A, 0)]);
+    vi.mocked(deleteMedia).mockResolvedValue(undefined);
+    renderItemPage();
+    const remove = await screen.findByRole("button", { name: "Delete photo 1 of 1" });
+    remove.focus();
+    vi.mocked(listMedia).mockResolvedValue([]);
+    fireEvent.click(remove);
+    await screen.findByText("No photos yet.");
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole("button", { name: "Add photos" })));
   });
 });

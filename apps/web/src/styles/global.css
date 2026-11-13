@@ -1641,7 +1641,8 @@ p[role="alert"] {
   margin: 0 0 var(--space-4);
   padding: 0;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(8rem, 1fr));
+  /* Wide enough for a tile's four 44px controls to sit in at most two rows. */
+  grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr));
   gap: var(--space-3);
 }
 
@@ -1677,6 +1678,12 @@ p[role="alert"] {
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--ink-muted);
+}
+
+.image-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
 }
 
 .image-uploader {
