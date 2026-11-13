@@ -25,11 +25,52 @@ function renderConfirm(pending = false) {
 const trigger = () => screen.getByRole("button", { name: "Delete forever" });
 
 describe("ConfirmButton", () => {
+  /**
+   * The question is spoken as part of landing on Cancel, not by a live region
+   * (#335). Focus moves to Cancel the moment the prompt opens, and a focused
+   * control's description is read with its name and role by every screen
+   * reader — no insert-timing race, and no `role="alert"` claiming a question
+   * is a failure. The confirm carries it too, so tabbing to the destructive
+   * button re-reads the consequence before it can be pressed.
+   */
+  it("speaks the question with the control focus lands on, and with the confirm", () => {
+    renderConfirm();
+    fireEvent.click(trigger());
+    expect(screen.getByRole("button", { name: "Cancel" })).toHaveAccessibleDescription(PROMPT);
+    expect(trigger()).toHaveAccessibleDescription(PROMPT);
+  });
+
+  it("is not an alert — a confirmation is a question, not a failure (#335)", () => {
+    renderConfirm();
+    fireEvent.click(trigger());
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(screen.getByText(PROMPT)).not.toHaveAttribute("aria-live");
+  });
+
+  it("gives each instance its own prompt id, so two open questions never describe each other's buttons", () => {
+    const props = {
+      label: "Delete forever",
+      confirmLabel: "Delete forever",
+      cancelLabel: "Cancel",
+      onConfirm: vi.fn(),
+    };
+    render(
+      <>
+        <ConfirmButton {...props} prompt="First question?" />
+        <ConfirmButton {...props} prompt="Second question?" />
+      </>,
+    );
+    for (const button of screen.getAllByRole("button", { name: "Delete forever" })) fireEvent.click(button);
+    const cancels = screen.getAllByRole("button", { name: "Cancel" });
+    expect(cancels[0]).toHaveAccessibleDescription("First question?");
+    expect(cancels[1]).toHaveAccessibleDescription("Second question?");
+  });
+
   it("does nothing on the first click — it asks", () => {
     const { onConfirm } = renderConfirm();
     fireEvent.click(trigger());
     expect(onConfirm).not.toHaveBeenCalled();
-    expect(screen.getByRole("alert")).toHaveTextContent(PROMPT);
+    expect(screen.getByText(PROMPT)).toBeInTheDocument();
   });
 
   it("acts only on the second, deliberate click", () => {
@@ -50,7 +91,7 @@ describe("ConfirmButton", () => {
     fireEvent.click(trigger());
     fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
     expect(onConfirm).not.toHaveBeenCalled();
-    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(screen.queryByText(PROMPT)).not.toBeInTheDocument();
     expect(trigger()).toHaveFocus();
   });
 
@@ -58,12 +99,12 @@ describe("ConfirmButton", () => {
     const { onConfirm } = renderConfirm();
     fireEvent.click(trigger());
     fireEvent.keyDown(screen.getByRole("button", { name: "Cancel" }), { key: "Escape" });
-    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(screen.queryByText(PROMPT)).not.toBeInTheDocument();
     expect(trigger()).toHaveFocus();
 
     fireEvent.click(trigger());
     fireEvent.keyDown(trigger(), { key: "Escape" });
-    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(screen.queryByText(PROMPT)).not.toBeInTheDocument();
     expect(trigger()).toHaveFocus();
     expect(onConfirm).not.toHaveBeenCalled();
   });
@@ -74,14 +115,14 @@ describe("ConfirmButton", () => {
     fireEvent.click(trigger());
     setPending(true);
     fireEvent.keyDown(trigger(), { key: "Escape" });
-    expect(screen.getByRole("alert")).toHaveTextContent(PROMPT);
+    expect(screen.getByText(PROMPT)).toBeInTheDocument();
   });
 
   it("leaves other keys alone", () => {
     renderConfirm();
     fireEvent.click(trigger());
     fireEvent.keyDown(screen.getByRole("button", { name: "Cancel" }), { key: "a" });
-    expect(screen.getByRole("alert")).toHaveTextContent(PROMPT);
+    expect(screen.getByText(PROMPT)).toBeInTheDocument();
   });
 
   // Marked rather than disabled (#368): Chrome drops focus to <body> the moment
@@ -96,7 +137,7 @@ describe("ConfirmButton", () => {
     expect(onConfirm).toHaveBeenCalledTimes(1);
 
     setPending(true);
-    expect(screen.getByRole("alert")).toHaveTextContent(PROMPT);
+    expect(screen.getByText(PROMPT)).toBeInTheDocument();
     expect(trigger()).toHaveAttribute("aria-disabled", "true");
     expect(trigger(), "`disabled` is what loses focus — the state is marked, not enforced").toBeEnabled();
 
@@ -112,7 +153,7 @@ describe("ConfirmButton", () => {
     fireEvent.click(trigger());
     setPending(true);
     setPending(false);
-    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(screen.queryByText(PROMPT)).not.toBeInTheDocument();
     expect(trigger()).toBeEnabled();
     expect(trigger()).not.toHaveAttribute("aria-disabled");
   });
@@ -122,6 +163,6 @@ describe("ConfirmButton", () => {
     const { setPending } = renderConfirm();
     setPending(true);
     setPending(false);
-    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(screen.queryByText(PROMPT)).not.toBeInTheDocument();
   });
 });

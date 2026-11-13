@@ -678,7 +678,14 @@ test.describe("accessibility", () => {
     await page.goto("/settings");
     await expect(page).toHaveURL(/\/settings$/);
     await page.getByRole("button", { name: "Delete forever “Kind of Blue”" }).click();
-    await expect(page.getByRole("alert")).toContainText("This cannot be undone.");
+    // The announcement's mechanism, computed by the browser (#335): focus lands
+    // on Cancel, and the question is that control's accessible description —
+    // what a screen reader speaks with "Cancel, button". Not a live region, so
+    // there is no alert on the page to find.
+    const focused = page.locator(":focus");
+    await expect(focused).toHaveAccessibleName("Cancel");
+    await expect(focused).toHaveAccessibleDescription(/This cannot be undone\.$/);
+    await expect(page.getByRole("alert")).toHaveCount(0);
 
     // The first thing this sweep found: at 390px the actions column sized itself
     // to the prompt, overflowed the card and squeezed the name to zero width, so
