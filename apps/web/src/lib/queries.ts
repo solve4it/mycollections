@@ -5,15 +5,19 @@ import {
   createItem,
   deleteItem,
   emptyTrash,
+  fetchMediaBlob,
   getCollection,
   getCollectionCounts,
+  getItem,
   getTagValues,
   type ItemInput,
   type ItemListQuery,
   importData,
   listCollections,
   listItems,
+  listMedia,
   listTrash,
+  type MediaVariant,
   purgeCollection,
   purgeItem,
   removeTag,
@@ -22,9 +26,12 @@ import {
   restoreItem,
   setItemStatus,
   type UpdateCollectionInput,
+  type UploadSource,
   updateCollection,
   updateItem,
+  uploadMedia,
 } from "./api-client.js";
+import { MEDIA_IMAGE_KEY } from "./query-client.js";
 
 export function useCollections() {
   return useQuery({ queryKey: ["collections"], queryFn: listCollections });
@@ -329,5 +336,74 @@ export function useRestoreItem(collectionId: string) {
       refreshDashboard(queryClient);
       return queryClient.invalidateQueries({ queryKey: ["collections", collectionId, "items"] });
     },
+  });
+}
+
+/**
+ * One item, for its own page (#37). Under the items prefix, so every item
+ * mutation refreshes it; an object rather than an array, so the status
+ * mutation's list patch above passes over it.
+ */
+export function useItem(collectionId: string, itemId: string) {
+  return useQuery({
+    queryKey: ["collections", collectionId, "items", "detail", itemId] as const,
+    queryFn: () => getItem(collectionId, itemId),
+  });
+}
+
+/**
+ * The cache key of an item's image list. Deliberately outside the items
+ * prefix: it is an array, and the status mutation patches every array there as
+ * an item list. Image changes invalidate it by name.
+ */
+export function mediaListQueryKey(collectionId: string, itemId: string) {
+  return ["media-list", collectionId, itemId] as const;
+}
+
+export function useMediaList(collectionId: string, itemId: string) {
+  return useQuery({
+    queryKey: mediaListQueryKey(collectionId, itemId),
+    queryFn: () => listMedia(collectionId, itemId),
+  });
+}
+
+/**
+ * After any change to an item's images: its list, and the items prefix, whose
+ * responses carry the primary image (a row's thumbnail, the item page).
+ */
+function afterMediaChange(queryClient: QueryClient, collectionId: string, itemId: string) {
+  void queryClient.invalidateQueries({ queryKey: ["collections", collectionId, "items"] });
+  return queryClient.invalidateQueries({ queryKey: mediaListQueryKey(collectionId, itemId) });
+}
+
+export function useUploadMedia(collectionId: string, itemId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ file, source }: { file: Blob; source: UploadSource }) =>
+      uploadMedia(collectionId, itemId, file, source),
+    onSuccess: () => afterMediaChange(queryClient, collectionId, itemId),
+  });
+}
+
+/**
+ * An image as an object URL, for an `<img src>`. Ids are never reused and
+ * files never rewritten, so a fetched image never goes stale; the URL is
+ * revoked when the query leaves the cache (`createQueryClient`). Kept a few
+ * minutes after its last viewer unmounts, so going back to a page does not
+ * fetch every image again — but not for good, since display images are large.
+ */
+export function useMediaImage(
+  collectionId: string,
+  itemId: string,
+  mediaId: string,
+  variant: MediaVariant,
+  options: { enabled?: boolean } = {},
+) {
+  return useQuery({
+    queryKey: [MEDIA_IMAGE_KEY, mediaId, variant] as const,
+    queryFn: async () => URL.createObjectURL(await fetchMediaBlob(collectionId, itemId, mediaId, variant)),
+    staleTime: Number.POSITIVE_INFINITY,
+    gcTime: 5 * 60 * 1000,
+    enabled: options.enabled ?? true,
   });
 }

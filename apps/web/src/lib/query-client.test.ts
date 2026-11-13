@@ -1,6 +1,6 @@
 import { onlineManager } from "@tanstack/react-query";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { createQueryClient } from "./query-client.js";
+import { createQueryClient, MEDIA_IMAGE_KEY } from "./query-client.js";
 
 afterEach(() => {
   onlineManager.setOnline(true);
@@ -92,5 +92,28 @@ describe("createQueryClient", () => {
 
     expect(onError).toHaveBeenCalledTimes(1);
     expect(onError.mock.calls[0]?.[0]).toMatchObject({ message: "write failed" });
+  });
+});
+
+describe("image object URLs (#37)", () => {
+  it("revokes an image's object URL when its query leaves the cache, and nothing else", async () => {
+    const revoke = vi.fn();
+    vi.stubGlobal(
+      "URL",
+      Object.assign(Object.create(URL), { revokeObjectURL: revoke, createObjectURL: URL.createObjectURL }),
+    );
+    try {
+      const client = createQueryClient(() => {});
+      await client.fetchQuery({
+        queryKey: [MEDIA_IMAGE_KEY, "m1", "thumb"],
+        queryFn: async () => "blob:http://app/one",
+      });
+      await client.fetchQuery({ queryKey: ["collections"], queryFn: async () => "blob:http://app/not-an-image-query" });
+      client.removeQueries({ queryKey: [MEDIA_IMAGE_KEY, "m1", "thumb"] });
+      client.removeQueries({ queryKey: ["collections"] });
+      expect(revoke.mock.calls).toEqual([["blob:http://app/one"]]);
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });
