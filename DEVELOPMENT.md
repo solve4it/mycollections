@@ -856,13 +856,29 @@ That default is right for the nav and wrong for everything else, which is the wh
   there the nav links are simply never current. Declared on the route rather than recognized in the
   shell for the same reason as `dynamicTitle` — the shell has to know during the same render as the
   route change, and a component-shaped answer arrives a commit after the nav has already spoken.
-- **The setup screen has no nav (#371).** Every screen but `/setup` guards on the token in
-  `beforeLoad` and redirects there without one, so on `/setup` each nav link was a silent no-op: the
+- **The setup screen has no nav (#371).** Every screen but `/setup` and the 404 is guarded on the
+  token and redirects to `/setup` without one, so on `/setup` each nav link was a silent no-op: the
   redirect left the page id unchanged, so nothing was announced and focus never moved. `/setup`
   declares `staticData: { bare: true }`, and the shell (`useIsBare`) leaves out the skip link and both
-  nav landmarks — `<main>` and the announcer stay. A new screen guards on the token like the others;
-  `/settings` was the one that did not, and rendered unauthenticated with a Disconnect for a token
-  that was never there.
+  nav landmarks — `<main>` and the announcer stay.
+- **One token guard, by position in the tree (#420).** The guard is the `beforeLoad` of
+  `authenticatedRoute` (`routes/_authenticated.tsx`), a pathless layout route — an `id`, no `path`,
+  no component — so its children keep their URLs and it adds nothing to the DOM or to what the shell
+  reads (its match has empty `staticData`, and the leaf is still the deepest match). Every screen that
+  needs the token is its child in `routeTree.ts`; none carries a guard of its own. It replaced five
+  copies of the same `beforeLoad`, one per screen, which is how `/settings` came to have none and
+  render unauthenticated with a Disconnect for a token that was never there. TanStack runs every
+  match's `beforeLoad` in order, parent first, on every navigation — including between two children
+  of the same layout — and on a redirect runs no child loader, so a token cleared mid-session stops
+  the next navigation. `src/routeTree.test.ts` pins all of this: the screens outside the guard are
+  exactly `/setup` and `/$`, no guarded screen has a `beforeLoad`, and the redirect happens on a fresh
+  load of each guarded path and on a client navigation after the token is gone. The id is
+  `authenticated` (route ids read `/authenticated/collections/$id`); nothing in `src` addresses a
+  route by id — `from:` options use `fullPath`, which the layout does not change. A unit test that
+  builds its own tree nests guarded screens the same way:
+  `rootRoute.addChildren([authenticatedRoute.addChildren([settingsRoute]), setupRoute])`. And a sweep
+  over the tree walks it recursively (`allRoutes()` in `Shell.navigation.test.tsx`) — the root's
+  children alone no longer include the screens.
 
 `Shell.navigation.test.tsx` sweeps every route for links that claim to be the current page and
 asserts the exact list — including the _value_, since a sweep that only listed the links would pass

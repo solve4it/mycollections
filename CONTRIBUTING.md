@@ -119,7 +119,7 @@ Before marking a PR ready for review, tick every item:
 - [ ] A new or renamed interactive control is reflected in `apps/web/e2e/keyboard.spec.ts` — a new screen gets its tab sequence, a new control gets its stop, and a rename changes the stop's expected accessible name. A control that is reachable only by pointer does not pass.
 - [ ] A control that appears once per row names the row it acts on, as `aria-label` from a locale key, with the visible verb first and the row name in curly quotes after it — WCAG 2.5.3 requires the visible label to be a contiguous run of the accessible name, and axe enforces it. See "Naming a control that acts on one row" in DEVELOPMENT.md.
 - [ ] A control that is unavailable while something is in flight says so with `aria-disabled` and refuses in its handler, never with `disabled`, which drops focus to `<body>`; and an action that removes the control holding focus hands focus to a named destination through `useFocusHandoff()`. Both get a spec in the last two blocks of `keyboard.spec.ts` — see "Focus has to survive the action" in DEVELOPMENT.md. A transient surface closes on Escape, and anything fixed over the page keeps focused controls clear of it through `useOverlayClearance()`.
-- [ ] A new screen guards on the token in `beforeLoad`, as every screen but `/setup` does.
+- [ ] A new screen that needs the token is a child of `authenticatedRoute` in `routeTree.ts` (the one token guard), not given a `beforeLoad` of its own; putting a screen outside it is a deliberate edit to `routeTree.test.ts`.
 - [ ] For new dependencies: `depscore` was checked (see CLAUDE.md)
 - [ ] CI is green on the PR
 
