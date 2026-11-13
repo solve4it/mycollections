@@ -678,6 +678,40 @@ test.describe("accessibility", () => {
     await expectNoAccessibilityViolations(page);
   });
 
+  /** A photo open full size (#37): the modal viewer over an item's page. */
+  test("a photo open in the viewer", async ({ page, api }) => {
+    await api.reset();
+    const collection = await api.createCollection({ name: "Vinyl records", fields: FIELDS });
+    const item = await api.createItem(collection.id, { title: "Kind of Blue", year: 1959, signed: true }, "owned");
+    await api.uploadImage(collection.id, item.id);
+    await api.uploadImage(collection.id, item.id);
+    await page.goto(`/collections/${collection.id}/items/${item.id}`);
+    await expect(page.locator(".image-gallery img")).toHaveCount(2);
+
+    await page.getByRole("button", { name: "Photo 2 of 2 of “Kind of Blue”" }).click();
+    const viewer = page.getByRole("dialog", { name: "Photo 2 of 2 of “Kind of Blue”" });
+    await expect(viewer).toBeVisible();
+    await expect(viewer.locator("img")).toHaveAttribute("src", /^blob:/);
+    await expectNoAccessibilityViolations(page);
+  });
+
+  /** A collection whose rows show their covers (#37): decorative pictures beside each row's name. */
+  test("a collection with covers on its rows", async ({ page, api }) => {
+    await api.reset();
+    const collection = await api.createCollection({ name: "Vinyl records", fields: FIELDS });
+    const covered = await api.createItem(collection.id, { title: "Kind of Blue", year: 1959, signed: true }, "owned");
+    await api.createItem(collection.id, { title: "Blue Train", year: 1957, signed: false }, "wanted");
+    await api.uploadImage(collection.id, covered.id);
+
+    await page.goto(`/collections/${collection.id}`);
+    await expect(page.getByRole("heading", { level: 1, name: "Vinyl records" })).toBeVisible();
+    const cover = page.locator(`[data-item-id="${covered.id}"] img.item-row-thumb`);
+    await expect(cover).toHaveAttribute("src", /^blob:/);
+    await expect(cover).toHaveAttribute("alt", "");
+    await expect(page.locator(".item-row-thumb")).toHaveCount(1);
+    await expectNoAccessibilityViolations(page);
+  });
+
   test("the collection editor", async ({ page, api }) => {
     await api.reset();
     const collection = await api.createCollection({ name: "Vinyl records", fields: FIELDS });
