@@ -1,0 +1,1 @@
+ALTER TABLE `collections` ADD `item_view` text DEFAULT 'list' NOT NULL;
