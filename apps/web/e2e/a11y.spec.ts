@@ -993,18 +993,7 @@ test.describe("accessibility", () => {
   /** Mirrors `CELEBRATION_MS` in `src/routes/collections/$id.tsx`, for the reason given above. */
   const CELEBRATION_MS = 10_000;
 
-  /**
-   * Seeds a set one item short of its target of 2, and opens it.
-   *
-   * The names are short on purpose: each of the message's two sentences has
-   * to fit on one line at 390px for axe to decide its contrast. axe works out
-   * a text element's background per line box, and under a fixed overlay the
-   * page content beneath differs from one line to the next — one over the
-   * list, the next over the add form — so an element whose text wraps is
-   * "could not decide" however it is painted (`elmPartiallyObscuring`). The
-   * colors are the toast's tokens, whose contrast `toast.integration.test.ts`
-   * computes for both themes.
-   */
+  /** Seeds a set one item short of its target of 2, and opens it. */
   async function oneShortOfComplete(page: Page, api: ApiFixture) {
     await api.reset();
     const collection = await api.createCollection({
@@ -1020,16 +1009,41 @@ test.describe("accessibility", () => {
     await expect(page.locator(".collection-progress")).toContainText("1 of 2 collected");
   }
 
-  /** How many lines each of the celebration's two sentences takes — one each, for the scan to decide (above). */
-  function messageLines(page: Page) {
-    return page.locator(".celebration-action, .celebration-complete").evaluateAll((elements) =>
-      elements.map((element) => {
-        const range = document.createRange();
-        range.selectNodeContents(element);
-        return new Set(Array.from(range.getClientRects(), (rect) => Math.round(rect.top))).size;
-      }),
-    );
+  /**
+   * The celebration's message has no control, so it must not take one away
+   * for ten seconds. Scrolls the add form's Title box under the middle of the
+   * message, then asks what the pointer would hit there: the box, not the
+   * message. Returns that point, for a real click to prove the same.
+   */
+  async function controlUnderMessage(page: Page) {
+    const title = page.locator(".add-item").getByRole("textbox", { name: "Title" });
+    return title.evaluate((input) => {
+      const message = document.querySelector(".celebration")?.getBoundingClientRect();
+      if (!message) throw new Error("no celebration on screen");
+      const x = message.left + message.width / 2;
+      const y = message.top + message.height / 2;
+      const box = input.getBoundingClientRect();
+      window.scrollBy(0, box.top + box.height / 2 - y);
+      const moved = input.getBoundingClientRect();
+      return {
+        x,
+        y,
+        covered: moved.left <= x && x <= moved.right && moved.top <= y && y <= moved.bottom,
+        hitsControl: document.elementFromPoint(x, y) === input,
+      };
+    });
   }
+
+  /**
+   * The scan of a celebrating page. `color-contrast` cannot run on the
+   * message: it has `pointer-events: none`, so `elementsFromPoint` — how axe
+   * finds a text's background — skips it, and the rule can only say "could
+   * not decide". Its contrast is computed instead, for both themes, in
+   * `toast.integration.test.ts` (the toast's ink and manila on `--cabinet`).
+   * Every other rule still runs on the message, and contrast still runs on
+   * the rest of the page.
+   */
+  const scanCelebrating = (page: Page) => expectNoAccessibilityViolations(page, { contrastExclude: ".celebration" });
 
   /** What the header's Complete badge is animating, if anything, and for how long. */
   function badgeMotion(page: Page) {
@@ -1070,18 +1084,21 @@ test.describe("accessibility", () => {
     // One message: the shell's announcer is not told about the mark as well.
     await expect(page.locator('.visually-hidden[aria-live="polite"]')).not.toContainText("Marked");
     expect(await badgeMotion(page)).toEqual({ name: "stamp-in", seconds: 0.48 });
-    // The region is layout and takes no pointer; the message takes it back, so
-    // hit testing — touch exploration, and axe — can find it.
-    expect(await region.evaluate((element) => getComputedStyle(element).pointerEvents)).toBe("none");
-    expect(await page.locator(".celebration").evaluate((element) => getComputedStyle(element).pointerEvents)).toBe(
-      "auto",
-    );
-
     // Settled pixels for the scan, as everywhere else in the suite: the toast
     // entrance's opacity fade would leave axe's contrast check undecided.
     await page.emulateMedia({ reducedMotion: "reduce" });
-    expect(await messageLines(page)).toEqual([1, 1]);
-    await expectNoAccessibilityViolations(page);
+    await scanCelebrating(page);
+
+    // Neither the region nor the message takes the pointer: what it covers
+    // stays usable for the whole window, at both viewports.
+    const point = await controlUnderMessage(page);
+    expect(point, "the Title box must be under the message, and be what the pointer hits").toMatchObject({
+      covered: true,
+      hitsControl: true,
+    });
+    await page.mouse.click(point.x, point.y);
+    await expect(page.locator(".add-item").getByRole("textbox", { name: "Title" })).toBeFocused();
+    await expect(region, "the click went through; the message is still up").toContainText("Coins is complete!");
 
     await page.clock.fastForward(CELEBRATION_MS + 1_000);
     await expect(region, "the celebration must not outlive its window").toBeEmpty();
@@ -1105,8 +1122,7 @@ test.describe("accessibility", () => {
     expect(motion.name).toBe("stamp-in");
     expect(motion.seconds).toBeLessThan(0.001);
 
-    expect(await messageLines(page)).toEqual([1, 1]);
-    await expectNoAccessibilityViolations(page);
+    await scanCelebrating(page);
   });
 
   test("the emptied trash, announced on Settings, and cleared when its window is up", async ({ page, api }) => {

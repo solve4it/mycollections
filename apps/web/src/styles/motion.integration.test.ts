@@ -183,11 +183,11 @@ describe("the completion stamp (#42)", () => {
     expect(declaration(body, "animation-fill-mode")).toBeUndefined();
   });
 
-  it("leaves the celebration region out of the pointer's way, but not the message, which hit testing must find", () => {
-    // The region is layout; the message is content. A pointer-events: none
-    // message is skipped by elementsFromPoint, which is how iOS VoiceOver's
-    // touch exploration and axe's contrast check locate it.
+  it("leaves the celebration, region and message alike, out of the pointer's way: it holds no control", () => {
+    // The message has no Undo and no close, so anything it took the pointer
+    // from would be dead for its whole ten seconds (#42 review). Screen
+    // readers get it from the live region, not from hit testing.
     expect(declaration(only(".celebration-live").body, "pointer-events")).toBe("none");
-    expect(declaration(only(".celebration").body, "pointer-events")).toBe("auto");
+    expect(declaration(only(".celebration").body, "pointer-events")).toBe("none");
   });
 });
