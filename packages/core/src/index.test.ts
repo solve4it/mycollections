@@ -18,6 +18,8 @@ describe("@mycollections/core public surface", () => {
       "ItemCountsSchema",
       "ItemSchema",
       "MediaSchema",
+      "MEDIA_SOURCES",
+      "MediaSourceSchema",
     ]) {
       expect(keys.has(name)).toBe(true);
     }

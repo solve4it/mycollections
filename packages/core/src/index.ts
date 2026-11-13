@@ -51,9 +51,12 @@ export {
 } from "./item-query.js";
 export {
   MEDIA_KINDS,
+  MEDIA_SOURCES,
   type Media,
   MediaKindSchema,
   MediaSchema,
+  type MediaSource,
+  MediaSourceSchema,
 } from "./media.js";
 export { PLUGIN_API_VERSION } from "./plugin-api.js";
 export {
