@@ -491,33 +491,35 @@ it, bounded by both a commit count and a deadline.
 The destinations are not this repo's invention — each follows an ARIA APG rule, and says which in
 its comment:
 
-| Action                                          | Destination                                                                    | Rule                              |
-| ----------------------------------------------- | ------------------------------------------------------------------------------ | --------------------------------- |
-| A row's Edit (opens the editor)                 | the editor's first control                                                     | disclosure: enter what you opened |
-| The editor's Cancel, or a successful Save       | the Edit that opened it                                                        | dialog: return to the invoker     |
-| A row's Delete                                  | the row that takes its place, else the one before, else the tab panel          | successor element                 |
-| The toast's Undo                                | the restored row's Edit, once it is back                                       | successor element                 |
-| The toast's Dismiss, or Escape on the toast     | wherever the delete handed focus                                               | — same answer as the delete       |
-| A second delete while focus is in the toast     | the row in the second deleted row's place (the toast remounts, #376)           | successor element                 |
-| Escape on a confirmation (`ConfirmButton`)      | the trigger that asked — as Cancel does (#376)                                 | dialog: return to the invoker     |
-| Remove field                                    | the next field's **label**, else Add field                                     | successor element                 |
-| A confirmed trash purge                         | the next row in the **same** list, else the one before, else the trash section | successor element                 |
-| Save, when a search or tab no longer shows it   | the row that takes its place — as for a Delete (#41, #42)                      | successor element                 |
-| A row's Mark collected, while the row is listed | the row's own Edit, wherever the row now is (#42)                              | return to the row acted on        |
-| Mark collected, when the tab no longer shows it | the row in its place, else the one before, else the tab panel (#42)            | successor element                 |
-| Mark collected on the last remaining item       | the tab panel, now described by "All collected" or "N more to find" (#42, R19) | successor element                 |
-| Undo, when a search or tab does not show it     | wherever the delete handed focus — as for Dismiss (#41, #42)                   | successor element                 |
-| Clear search (in the no-match state)            | the search box                                                                 | return to where the input began   |
-| Remove a filter chip                            | the chip now in its place, else the one before, else the Filters toggle        | successor element                 |
-| Clear filters                                   | the Filters toggle                                                             | return to where the filters began |
-| A tag's Rename (opens its box)                  | the rename box                                                                 | disclosure: enter what you opened |
-| A tag rename's Save, Cancel or Escape           | the renamed tag's Rename — or, after a merge, the Rename of the tag it joined  | dialog: return to the invoker     |
-| …when the new name is not in the list           | the tag search box — a search it no longer matches, or past the fifty shown    | where the tag can be found again  |
-| A confirmed tag removal                         | the next tag's Rename, else the one before, else the section heading           | successor element                 |
-| A photo's Move earlier or Move later            | the same control on the moved photo, wherever it now is (#37)                  | return to the item acted on       |
-| A photo's Make cover                            | the moved photo's first control (its Make cover goes with the change)          | return to the item acted on       |
-| A photo's Delete                                | the photo now in its place, else the one before, else Add photos               | successor element                 |
-| The photo toast's Undo                          | the restored photo's first control, once it is back                            | successor element                 |
+| Action                                          | Destination                                                                      | Rule                              |
+| ----------------------------------------------- | -------------------------------------------------------------------------------- | --------------------------------- |
+| A row's Edit (opens the editor)                 | the editor's first control                                                       | disclosure: enter what you opened |
+| The editor's Cancel, or a successful Save       | the Edit that opened it                                                          | dialog: return to the invoker     |
+| A row's Delete                                  | the row that takes its place, else the one before, else the tab panel            | successor element                 |
+| The toast's Undo                                | the restored row's Edit, once it is back                                         | successor element                 |
+| The toast's Dismiss, or Escape on the toast     | wherever the delete handed focus                                                 | — same answer as the delete       |
+| A second delete while focus is in the toast     | the row in the second deleted row's place (the toast remounts, #376)             | successor element                 |
+| Escape on a confirmation (`ConfirmButton`)      | the trigger that asked — as Cancel does (#376)                                   | dialog: return to the invoker     |
+| Remove field                                    | the next field's **label**, else Add field                                       | successor element                 |
+| A confirmed trash purge                         | the next row in the **same** list, else the one before, else the trash section   | successor element                 |
+| Save, when a search or tab no longer shows it   | the row that takes its place — as for a Delete (#41, #42)                        | successor element                 |
+| A row's Mark collected, while the row is listed | the row's own Edit, wherever the row now is (#42)                                | return to the row acted on        |
+| Mark collected, when the tab no longer shows it | the row in its place, else the one before, else the tab panel (#42)              | successor element                 |
+| Mark collected on the last remaining item       | the tab panel, now described by "All collected" or "N more to find" (#42, R19)   | successor element                 |
+| Undo, when a search or tab does not show it     | wherever the delete handed focus — as for Dismiss (#41, #42)                     | successor element                 |
+| Clear search (in the no-match state)            | the search box                                                                   | return to where the input began   |
+| Remove a filter chip                            | the chip now in its place, else the one before, else the Filters toggle          | successor element                 |
+| Clear filters                                   | the Filters toggle                                                               | return to where the filters began |
+| A tag's Rename (opens its box)                  | the rename box                                                                   | disclosure: enter what you opened |
+| A tag rename's Save, Cancel or Escape           | the renamed tag's Rename — or, after a merge, the Rename of the tag it joined    | dialog: return to the invoker     |
+| …when the new name is not in the list           | the tag search box — a search it no longer matches, or past the fifty shown      | where the tag can be found again  |
+| A confirmed tag removal                         | the next tag's Rename, else the one before, else the section heading             | successor element                 |
+| A photo's Move earlier or Move later            | the same control on the moved photo, wherever it now is (#37)                    | return to the item acted on       |
+| A photo's Make cover                            | the moved photo's first control (its Make cover goes with the change)            | return to the item acted on       |
+| A photo's Delete                                | the photo now in its place, else the one before, else Add photos                 | successor element                 |
+| The photo toast's Undo                          | the restored photo's first control, once it is back                              | successor element                 |
+| A photo's thumbnail (opens the viewer)          | the viewer's Close button — the first control in the dialog                      | dialog: enter the dialog          |
+| The viewer's Close, Escape or a backdrop click  | the thumbnail of the photo last on show, set in the same task as `close()` (#37) | dialog: return to the invoker     |
 
 Two things that look like details and are not. A destination has to be a control whose name says
 where the user now is, which is why Remove field goes to the next field's label rather than to its
