@@ -163,7 +163,7 @@ export async function getTagValues(collectionId: string, fieldId: string, q?: st
   return res.json() as Promise<TagValues>;
 }
 
-export async function listItems(collectionId: string, query: ItemListQuery = {}): Promise<Item[]> {
+export async function listItems(collectionId: string, query: ItemListQuery = {}): Promise<ItemWithMedia[]> {
   const params = new URLSearchParams();
   if (query.status) params.set("status", query.status);
   const q = query.q?.trim();
@@ -175,7 +175,7 @@ export async function listItems(collectionId: string, query: ItemListQuery = {})
   const search = encoded ? `?${encoded}` : "";
   const res = await request(`/api/collections/${collectionId}/items${search}`);
   if (!res.ok) throw new ApiError(res.status);
-  return res.json() as Promise<Item[]>;
+  return res.json() as Promise<ItemWithMedia[]>;
 }
 
 export async function createItem(collectionId: string, input: ItemInput): Promise<Item> {
@@ -308,8 +308,12 @@ export interface PrimaryMedia {
   height: number;
 }
 
-/** An item as the API answers with it: the stored item plus its primary image. */
-export type ItemWithMedia = Item & { primaryMedia: PrimaryMedia | null };
+/**
+ * An item as the API answers with it: the stored item plus its primary image.
+ * Optional in the type only so a stored `Item` (a test fixture, a cache entry
+ * written before #37) still fits; the server always sends it.
+ */
+export type ItemWithMedia = Item & { primaryMedia?: PrimaryMedia | null };
 
 export async function getItem(collectionId: string, itemId: string): Promise<ItemWithMedia> {
   const res = await request(`/api/collections/${collectionId}/items/${itemId}`);

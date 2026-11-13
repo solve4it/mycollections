@@ -176,5 +176,8 @@
   "photo_deleted_toast": "Deleted a photo",
   "photo_restored": "Photo restored.",
   "photos_change_error": "Could not change the photos. They are as they were — check that the app’s server is running, then try again.",
-  "photo_restore_error": "Could not restore the photo. Check that the app’s server is running, then try again."
+  "photo_restore_error": "Could not restore the photo. Check that the app’s server is running, then try again.",
+  "close_viewer": "Close photo",
+  "previous_photo": "Previous",
+  "next_photo": "Next"
 }

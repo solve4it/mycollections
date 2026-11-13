@@ -19,10 +19,12 @@ import { AppliedFilters, FilterPanel } from "../../components/FilterPanel.js";
 import { Icon } from "../../components/Icon.js";
 import { ItemSearchBox } from "../../components/ItemSearchBox.js";
 import { ItemSortSelect } from "../../components/ItemSortSelect.js";
+import { MediaImage } from "../../components/MediaImage.js";
 import { CollectionDetailSkeleton, ItemListSkeleton } from "../../components/Skeleton.js";
 import { StatusTabs } from "../../components/StatusTabs.js";
 import { UndoToast } from "../../components/UndoToast.js";
 import { useAnnounce } from "../../lib/announcer.js";
+import type { ItemWithMedia } from "../../lib/api-client.js";
 import { scopedId } from "../../lib/dom-id.js";
 import { type FocusDestination, useFocusHandoff } from "../../lib/focus-handoff.js";
 import { itemLabel, labelFieldId } from "../../lib/item-label.js";
@@ -986,7 +988,7 @@ function ItemList({
 
 interface ItemRowProps {
   collection: Collection;
-  item: Item;
+  item: ItemWithMedia;
   watchCompletion: () => CompletionWatch;
   onSaved: (item: Item, completed: CompletionCheck) => void;
   onMarked: (item: Item, completed: CompletionCheck) => void;
@@ -1085,6 +1087,22 @@ function ItemRow({ collection, item, watchCompletion, onDeleting, onDeleted, onS
   return (
     <li data-item-id={item.id}>
       <div className={remaining ? `item-row item-row-${item.status}` : "item-row"}>
+        {/* The item's cover (#37). Decorative: the row's name says what it is,
+            and the photo is one link away on the item's page. Fetched only as
+            the row nears the viewport. */}
+        {item.primaryMedia && (
+          <MediaImage
+            collectionId={collection.id}
+            itemId={item.id}
+            mediaId={item.primaryMedia.id}
+            variant="thumb"
+            width={item.primaryMedia.width}
+            height={item.primaryMedia.height}
+            alt=""
+            className="item-row-thumb"
+            lazy
+          />
+        )}
         <div className="item-fields">
           <span className={`item-status item-status-${item.status}`}>
             {/* The dot is redundant with the label beside it, so it is hidden

@@ -374,9 +374,11 @@ test.describe("keyboard traversal of every screen", () => {
 
     await expectTabOrder(page, "an item's page", [
       'link "Back to Vinyl records"',
+      'button "Photo 1 of 2 of “Kind of Blue”"',
       'button "Move photo 1 of 2 earlier" [disabled]',
       'button "Move photo 1 of 2 later"',
       'button "Delete photo 1 of 2": Delete',
+      'button "Photo 2 of 2 of “Kind of Blue”"',
       // Quoted whole by the snapshot, because the name holds ": ".
       `'button "Make cover: photo 2 of 2"': Make cover`,
       'button "Move photo 2 of 2 earlier"',
@@ -456,6 +458,57 @@ test.describe("no screen traps focus", () => {
 });
 
 test.describe("every action is operable without a pointer", () => {
+  /**
+   * The photo viewer by key (#37): a modal <dialog>, so focus goes in, stays
+   * in (the page behind is inert), the arrow keys step, Escape closes, and
+   * focus comes back to the photo last on show.
+   */
+  test("a photo opened full size, stepped through and closed, by key", async ({ page, api }) => {
+    await api.reset();
+    const collection = await api.createCollection({ name: "Vinyl records", fields: FIELDS });
+    const item = await api.createItem(collection.id, { title: "Kind of Blue", year: 1959 });
+    await api.uploadImage(collection.id, item.id);
+    await api.uploadImage(collection.id, item.id);
+    await page.goto(`/collections/${collection.id}/items/${item.id}`);
+    await expect(page.locator(".image-gallery img")).toHaveCount(2);
+
+    await page.getByRole("button", { name: "Photo 1 of 2 of “Kind of Blue”" }).focus();
+    await page.keyboard.press("Enter");
+    const viewer = page.getByRole("dialog", { name: "Photo 1 of 2 of “Kind of Blue”" });
+    await expect(viewer).toBeVisible();
+    await expect(viewer.locator("img")).toHaveAttribute("src", /^blob:/);
+    expect(await focusedControl(page), "focus must enter the dialog").toBe('button "Close photo"');
+
+    // The page behind is inert: Tab only ever reaches the dialog's own controls.
+    // Past the last one a native modal lets focus out to the browser itself —
+    // `<body>` here, the address bar in a real window — and the next Tab comes
+    // back in; that is the platform's behavior, not a leak into the page.
+    const stops: string[] = [];
+    for (let i = 0; i < 8; i++) {
+      await page.keyboard.press("Tab");
+      stops.push(await focusedControl(page));
+    }
+    const dialogStops = ['button "Close photo"', 'button "Previous" [disabled]', 'button "Next"'];
+    expect(
+      stops.filter((stop) => stop !== NOTHING_FOCUSED && !dialogStops.includes(stop)),
+      "nothing behind a modal dialog may take focus",
+    ).toEqual([]);
+    expect(stops.slice(0, 2), "the dialog's controls in order").toEqual([
+      'button "Previous" [disabled]',
+      'button "Next"',
+    ]);
+    expect(stops, "Tab must come back into the dialog").toContain('button "Close photo"');
+
+    await page.keyboard.press("ArrowRight");
+    await expect(page.getByRole("dialog", { name: "Photo 2 of 2 of “Kind of Blue”" })).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(page.getByRole("dialog")).toHaveCount(0);
+    // Read at once, not polled: focus must land there directly, never by way of the opener.
+    expect(await focusedControl(page), "closing must return to the photo last on show").toBe(
+      'button "Photo 2 of 2 of “Kind of Blue”"',
+    );
+  });
+
   /**
    * The gallery by key alone (#37): a move keeps focus on the photo it moved,
    * a delete hands focus to the photo now in its place, and Undo brings focus

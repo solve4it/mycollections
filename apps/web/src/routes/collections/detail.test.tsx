@@ -16,12 +16,14 @@ vi.mock("../../lib/api-client.js", () => ({
   deleteItem: vi.fn(),
   restoreItem: vi.fn(),
   getCollectionCounts: vi.fn(),
+  fetchMediaBlob: vi.fn(),
   getToken: vi.fn(() => "test-token"),
 }));
 
 import {
   createItem,
   deleteItem,
+  fetchMediaBlob,
   getCollection,
   getCollectionCounts,
   listItems,
@@ -151,6 +153,34 @@ describe("CollectionDetailPage", () => {
       "href",
       `/collections/${COLLECTION.id}/items/${OTHER_ITEM.id}`,
     );
+  });
+
+  it("shows an item's cover on its row as a decorative picture, and nothing for an item without one (#37)", async () => {
+    vi.mocked(listItems).mockResolvedValue([
+      { ...ITEM, primaryMedia: { id: "44444444-4444-4444-8444-444444444444", width: 640, height: 480 } },
+      { ...OTHER_ITEM, primaryMedia: null },
+    ]);
+    vi.mocked(fetchMediaBlob).mockResolvedValue(new Blob(["webp"], { type: "image/webp" }));
+    vi.stubGlobal(
+      "URL",
+      Object.assign(Object.create(URL), { createObjectURL: () => "blob:test/cover", revokeObjectURL: () => {} }),
+    );
+    try {
+      renderDetail();
+      const zelda = (await screen.findByRole("link", { name: "Zelda" })).closest(".item-row") as HTMLElement;
+      const mario = screen.getByRole("link", { name: "Mario" }).closest(".item-row") as HTMLElement;
+      await waitFor(() => expect(zelda.querySelector("img.item-row-thumb")).toHaveAttribute("src", "blob:test/cover"));
+      expect(zelda.querySelector("img.item-row-thumb")).toHaveAttribute("alt", "");
+      expect(fetchMediaBlob).toHaveBeenCalledWith(
+        COLLECTION.id,
+        ITEM.id,
+        "44444444-4444-4444-8444-444444444444",
+        "thumb",
+      );
+      expect(mario.querySelector(".item-row-thumb")).toBeNull();
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 
   it("renders an empty placeholder for a missing field value", async () => {
