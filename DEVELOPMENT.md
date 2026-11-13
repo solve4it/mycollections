@@ -755,6 +755,35 @@ switch from turning a half-typed Ordered item into an Owned one, and a refetch f
 row editor's draft. `keyboard.spec.ts` walks the stops and the arrow keys; `a11y.spec.ts` scans each
 tab, the three empty Remaining states, and the "matches only under another tab" state.
 
+### One list, two layouts
+
+A collection's **List / Grid** choice (#38) is the collection's own `itemView`, switched by a native
+`<select>` labelled "View" beside "Sort by" — the owner's call, so it reads like its neighbor and the
+theme choice in Settings. `useSetItemView` writes the new view into the cache at once and sends only
+`{ itemView }`; it invalidates nothing, because a layout changes no row, count or label. Switches
+share a mutation `scope`, so they reach the server in order, and while a later one is queued an
+earlier one's answer is not written back and its failure is not rolled back. A refused switch puts
+the old view back and shows a `role="alert"` with its message inside (a failure surface, announced
+on insertion); the select keeps focus throughout, and no announcement is needed — the select speaks
+the option chosen.
+
+The grid is the list restyled, never rebuilt: the same `<ul>` and `<li>`s, with `item-list-grid` on
+the list and the card's cover in the slot the row's thumbnail used. A different element type would
+remount every row, taking an open editor's draft with it and dropping focus to `<body>`;
+`detail.view.test.tsx` holds the row and the editor's input to the same DOM nodes across a switch.
+Every row control keeps its name and its `data-row-edit`, so each focus handoff in "Focus has to
+survive the action" works unchanged on cards.
+
+An open editor takes a whole row of the grid (`.item-editing`, `grid-column: 1 / -1`), which can
+leave a gap at the end of the row above. The gap stays. `grid-auto-flow: dense` would fill it by
+painting cards out of DOM order, and that order is what the tab sequence, a screen reader and
+`rowDestination` all follow (WCAG 1.3.2, 2.4.3); `rows.integration.test.ts` refuses any
+`grid-auto-flow`. The columns are `minmax(min(100%, 14rem), 1fr)`, so at 320px the grid is one
+column with no sideways scroll, which `a11y.spec.ts` measures.
+
+A card shows the item's name as its link and at most three fields with a value (`cardFields`), the
+sort field first even when empty — a grid ordered by a field it does not show reads as shuffled.
+
 ### Page titles and route announcements
 
 A client-side navigation replaces the content with no page load, so nothing reaches a screen
