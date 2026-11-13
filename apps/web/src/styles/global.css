@@ -1597,6 +1597,99 @@ p[role="alert"] {
   max-width: 640px;
 }
 
+/* An item's own page (#37). */
+.item-page {
+  max-width: 720px;
+}
+
+/* The row's name, linking to that page. Underlined, not colored: it sits in a
+   line of values in the same ink, and a link told apart by hue alone fails
+   WCAG 1.4.1 (axe's link-in-text-block). */
+.item-link {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
+}
+
+.item-details {
+  display: grid;
+  gap: var(--space-2);
+  margin: var(--space-4) 0 var(--space-5);
+}
+
+.item-details > div {
+  display: grid;
+  grid-template-columns: minmax(6rem, 12rem) 1fr;
+  gap: var(--space-3);
+}
+
+.item-details dt {
+  color: var(--ink-muted);
+}
+
+.item-details dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.item-photos h2 {
+  margin-bottom: var(--space-3);
+}
+
+.image-gallery {
+  list-style: none;
+  margin: 0 0 var(--space-4);
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(8rem, 1fr));
+  gap: var(--space-3);
+}
+
+.image-gallery-item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+/* Square tiles, the whole photo fitted inside rather than cropped: a cover
+   photo of a record sleeve or a book spine loses what it is for when cut. */
+.image-gallery-thumb {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 1;
+  object-fit: contain;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--card);
+}
+
+.media-image-placeholder {
+  display: block;
+  width: 100%;
+  border-radius: var(--radius-sm);
+  background: var(--line);
+}
+
+.image-cover-badge {
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+}
+
+.image-uploader {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.image-uploader [role="alert"] {
+  flex-basis: 100%;
+}
+
 /* Responsive: mobile (<768px) */
 @media (max-width: 767px) {
   .shell-sidebar {

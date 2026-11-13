@@ -1,5 +1,5 @@
 import type { Page } from "@playwright/test";
-import { type ApiFixture, expect, expectNoAccessibilityViolations, test } from "./fixtures.js";
+import { type ApiFixture, expect, expectNoAccessibilityViolations, TINY_PNG, test } from "./fixtures.js";
 
 /**
  * The WCAG 2.1 AA baseline for #24: every route the app has, scanned in a real
@@ -603,6 +603,60 @@ test.describe("accessibility", () => {
     await expect(page.getByRole("heading", { level: 1, name: "Board games" })).toBeVisible();
     await expect(page.getByText("No items yet")).toBeVisible();
 
+    await expectNoAccessibilityViolations(page);
+  });
+
+  /**
+   * An item's own page (#37), with no photos and then with two — the gallery,
+   * its cover badge and the uploader — scanned once the thumbnails have
+   * actually arrived: a placeholder would pass the scan without testing the
+   * images' alternative text at all.
+   */
+  test("an item's page, without photos and with them", async ({ page, api }) => {
+    await api.reset();
+    const collection = await api.createCollection({ name: "Vinyl records", fields: FIELDS });
+    const item = await api.createItem(collection.id, { title: "Kind of Blue", year: 1959, signed: true }, "owned");
+
+    await page.goto(`/collections/${collection.id}/items/${item.id}`);
+    await expect(page).toHaveURL(`/collections/${collection.id}/items/${item.id}`);
+    await expect(page.getByRole("heading", { level: 1, name: "Kind of Blue" })).toBeVisible();
+    await expect(page.getByText("No photos yet.")).toBeVisible();
+    await expect(page).toHaveTitle(/^Kind of Blue/);
+    await expectNoAccessibilityViolations(page);
+
+    await api.uploadImage(collection.id, item.id);
+    await api.uploadImage(collection.id, item.id);
+    await page.reload();
+    const photos = page.locator(".image-gallery img");
+    await expect(photos).toHaveCount(2);
+    await expect(photos.first()).toHaveAttribute("alt", "Photo 1 of 2 of “Kind of Blue”");
+    await expect(photos.first()).toHaveAttribute("src", /^blob:/);
+    await expectNoAccessibilityViolations(page);
+  });
+
+  /**
+   * An upload through the page itself, and one the server refuses (#37): the
+   * refusal is the state that adds an alert, and it only exists after a real
+   * round trip, since the format is judged from the file's bytes on the server.
+   */
+  test("an item's page after a photo is added, and after one is refused", async ({ page, api }) => {
+    await api.reset();
+    const collection = await api.createCollection({ name: "Vinyl records", fields: FIELDS });
+    const item = await api.createItem(collection.id, { title: "Kind of Blue", year: 1959, signed: true }, "owned");
+    await page.goto(`/collections/${collection.id}/items/${item.id}`);
+    await expect(page.getByText("No photos yet.")).toBeVisible();
+
+    const picker = page.locator('.image-uploader input[type="file"]:not([capture])');
+    await picker.setInputFiles({ name: "sleeve.png", mimeType: "image/png", buffer: TINY_PNG });
+    await expect(page.locator(".image-gallery img")).toHaveCount(1);
+    await expect(page.locator(".image-gallery")).toContainText("Cover");
+
+    // Claims to be a JPEG; the server reads the bytes, not the claim.
+    await picker.setInputFiles({ name: "notes.jpg", mimeType: "image/jpeg", buffer: Buffer.from("not an image") });
+    await expect(page.getByRole("alert")).toHaveText(
+      "1 file was not added: it is not a JPEG, PNG, GIF, WebP or AVIF image.",
+    );
+    await expect(page.locator(".image-gallery img")).toHaveCount(1);
     await expectNoAccessibilityViolations(page);
   });
 

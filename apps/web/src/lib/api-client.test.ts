@@ -4,16 +4,20 @@ import {
   createItem,
   deleteItem,
   emptyTrash,
+  fetchMediaBlob,
   getCollectionCounts,
+  getItem,
   getTagValues,
   listCollections,
   listItems,
+  listMedia,
   listTrash,
   purgeCollection,
   purgeItem,
   restoreCollection,
   restoreItem,
   setItemStatus,
+  uploadMedia,
 } from "./api-client.js";
 
 function mockFetch(status = 200, body: unknown = []) {
@@ -211,5 +215,60 @@ describe("api-client status-only update (#42, R14)", () => {
   it("rejects when the server refuses the change", async () => {
     mockFetch(404, { message: "Item not found" });
     await expect(setItemStatus("c1", "i1", "owned")).rejects.toEqual(new ApiError(404));
+  });
+});
+
+describe("api-client images (#37)", () => {
+  const C = "c1";
+  const I = "i1";
+
+  it("uploads one file as multipart form data, with the source in the query and no JSON Content-Type", async () => {
+    const created = { id: "m1", position: 0 };
+    const fetchMock = mockFetch(201, created);
+    const file = new File([new Uint8Array([0xff, 0xd8, 0xff])], "holiday.jpg", { type: "image/jpeg" });
+    expect(await uploadMedia(C, I, file, "user-camera")).toEqual(created);
+    expect(String(fetchMock.mock.calls[0]?.[0])).toMatch(
+      /\/api\/collections\/c1\/items\/i1\/media\?source=user-camera$/,
+    );
+    const init = initOf(fetchMock);
+    expect(init.method).toBe("POST");
+    expect(init.body).toBeInstanceOf(FormData);
+    expect((init.body as FormData).get("file")).toBe(file);
+    // The browser writes the multipart boundary itself; a hand-set type would lack it.
+    expect(headerOf(fetchMock, "Content-Type")).toBeNull();
+    expect(headerOf(fetchMock, "Authorization")).toBe("Bearer tok");
+  });
+
+  it("reports a refused upload by its status, which is what the page words its message from", async () => {
+    mockFetch(415, { message: "Unsupported image" });
+    const file = new File(["x"], "x.svg");
+    await expect(uploadMedia(C, I, file, "user-attached")).rejects.toMatchObject({ status: 415 });
+  });
+
+  it("fetches an image's bytes with the token, which an <img src> could not send", async () => {
+    const blob = new Blob(["webp"], { type: "image/webp" });
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => ({
+      ok: true,
+      status: 200,
+      blob: async () => blob,
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+    expect(await fetchMediaBlob(C, I, "m1", "thumb")).toBe(blob);
+    expect(String(fetchMock.mock.calls[0]?.[0])).toMatch(/\/api\/collections\/c1\/items\/i1\/media\/m1\/thumb$/);
+    expect(new Headers(fetchMock.mock.calls[0]?.[1]?.headers).get("Authorization")).toBe("Bearer tok");
+  });
+
+  it("lists an item's images and gets one item", async () => {
+    const fetchMock = mockFetch(200, [{ id: "m1" }]);
+    expect(await listMedia(C, I)).toEqual([{ id: "m1" }]);
+    expect(String(fetchMock.mock.calls[0]?.[0])).toMatch(/\/api\/collections\/c1\/items\/i1\/media$/);
+    const one = mockFetch(200, { id: I });
+    expect(await getItem(C, I)).toEqual({ id: I });
+    expect(String(one.mock.calls[0]?.[0])).toMatch(/\/api\/collections\/c1\/items\/i1$/);
+  });
+
+  it("rejects a missing item with its status", async () => {
+    mockFetch(404, {});
+    await expect(getItem(C, I)).rejects.toBeInstanceOf(ApiError);
   });
 });

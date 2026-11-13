@@ -501,7 +501,7 @@ describe("route titles as data", () => {
     // screen can only report upward after it has rendered, by which time the
     // announcement decision has already been made.
     const dynamic = allRoutes().filter((route) => route.options.staticData?.dynamicTitle === true);
-    expect(dynamic.map((route) => route.fullPath)).toEqual(["/collections/$id"]);
+    expect(dynamic.map((route) => route.fullPath)).toEqual(["/collections/$id", "/collections/$id/items/$itemId"]);
     for (const route of dynamic) {
       // Still a key, because the key is what the page is called until the name
       // lands and if it never does.

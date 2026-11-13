@@ -14,6 +14,7 @@ import { CollectionProgress } from "../../components/CollectionProgress.js";
 import { DynamicItemForm } from "../../components/DynamicItemForm.js";
 import { EmptyState } from "../../components/EmptyState.js";
 import { FailureSurface } from "../../components/ErrorScreen.js";
+import { FieldValue } from "../../components/FieldValue.js";
 import { AppliedFilters, FilterPanel } from "../../components/FilterPanel.js";
 import { Icon } from "../../components/Icon.js";
 import { ItemSearchBox } from "../../components/ItemSearchBox.js";
@@ -24,6 +25,7 @@ import { UndoToast } from "../../components/UndoToast.js";
 import { useAnnounce } from "../../lib/announcer.js";
 import { scopedId } from "../../lib/dom-id.js";
 import { type FocusDestination, useFocusHandoff } from "../../lib/focus-handoff.js";
+import { itemLabel, labelFieldId } from "../../lib/item-label.js";
 import {
   effectiveFilters,
   effectiveSort,
@@ -96,34 +98,6 @@ export const RESULT_ANNOUNCE_DELAY_MS = 1_000;
  * it holds no control to reach in time.
  */
 export const CELEBRATION_MS = 10_000;
-
-/**
- * Renders a stored field value. Booleans become a labelled icon rather than the
- * check/cross glyphs used before: the icon is the whole value, so it carries its
- * own accessible name instead of leaving screen readers to announce a unicode
- * character under whatever name they have for it (#221).
- */
-function FieldValue({ value }: { value: unknown }) {
-  const { t } = useTranslation("items");
-  if (value == null || value === "") return <>—</>;
-  if (typeof value === "boolean")
-    return value ? <Icon name="check" label={t("value_yes")} /> : <Icon name="cross" label={t("value_no")} />;
-  if (Array.isArray(value)) return <>{value.join(", ")}</>;
-  return <>{String(value)}</>;
-}
-
-/**
- * What to call an item in a message about it. The first field carrying a value
- * is the item's name in practice — collections put the title-ish field first —
- * and an item with nothing filled in still has to be nameable.
- */
-function itemLabel(collection: Collection, item: Item, untitled: string): string {
-  for (const field of collection.fields) {
-    const value = item.fields[field.id];
-    if (value != null && value !== "" && !Array.isArray(value)) return String(value);
-  }
-  return untitled;
-}
 
 /** What the item list says when it has nothing to show, and which ways out it offers (#41, #42). */
 interface EmptyView {
@@ -1042,6 +1016,7 @@ function ItemRow({ collection, item, watchCompletion, onDeleting, onDeleted, onS
   // What this row is called, which four things need: the editor's name, both of
   // the row's controls (#375), and the toast if it is deleted.
   const name = itemLabel(collection, item, t("untitled"));
+  const nameField = labelFieldId(collection, item);
   const handOffFocus = useFocusHandoff();
   const editRef = useRef<HTMLButtonElement>(null);
   // The APG dialog rule, return-to-invoker: whatever closes the editor — Cancel
@@ -1117,9 +1092,33 @@ function ItemRow({ collection, item, watchCompletion, onDeleting, onDeleted, onS
             <span className="status-dot" aria-hidden="true" />
             {t(`status_${item.status}`)}
           </span>
+          {/* The value the item is named by links to the item's own page, where
+              its photos are (#37) — the list-to-detail convention, and a link
+              whose name is simply the item's. An item with nothing filled in is
+              still reachable, through a link named "(untitled)". */}
+          {nameField === null && (
+            <Link
+              to="/collections/$id/items/$itemId"
+              params={{ id: collection.id, itemId: item.id }}
+              className="item-link"
+            >
+              {name}
+            </Link>
+          )}
           {collection.fields.map((field) => (
             <span key={field.id} className="item-field">
-              <span className="item-field-label">{field.label}:</span> <FieldValue value={item.fields[field.id]} />
+              <span className="item-field-label">{field.label}:</span>{" "}
+              {field.id === nameField ? (
+                <Link
+                  to="/collections/$id/items/$itemId"
+                  params={{ id: collection.id, itemId: item.id }}
+                  className="item-link"
+                >
+                  {name}
+                </Link>
+              ) : (
+                <FieldValue value={item.fields[field.id]} />
+              )}
             </span>
           ))}
         </div>

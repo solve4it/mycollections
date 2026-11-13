@@ -6,6 +6,7 @@ import type {
   Item,
   ItemCounts,
   ItemStatus,
+  Media,
 } from "@mycollections/core";
 import { getToken } from "./token.js";
 
@@ -55,8 +56,10 @@ async function request(path: string, init?: RequestInit): Promise<Response> {
   const headers = new Headers(init?.headers);
   // Only declare a JSON body when there is one: sending Content-Type:
   // application/json on a request with no body (e.g. DELETE) makes the server
-  // reject it as an empty JSON body.
-  if (init?.body != null) headers.set("Content-Type", "application/json");
+  // reject it as an empty JSON body. Every JSON body here is a string; a
+  // FormData upload (#37) must carry the browser's own multipart type, boundary
+  // included, so it is left alone.
+  if (typeof init?.body === "string") headers.set("Content-Type", "application/json");
   if (token) headers.set("Authorization", `Bearer ${token}`);
   const res = await fetch(`${BASE_URL}${path}`, { ...init, headers });
   if (res.status === 401) throw new UnauthorizedError();
@@ -293,4 +296,70 @@ export async function importData(document: unknown): Promise<ImportSummary> {
   const res = await request("/api/import", { method: "POST", body: JSON.stringify(document) });
   if (!res.ok) throw new ApiError(res.status);
   return res.json() as Promise<ImportSummary>;
+}
+
+/**
+ * What an item response carries about the item's primary image (#37): enough
+ * for a row to reserve the thumbnail's space before the bytes arrive.
+ */
+export interface PrimaryMedia {
+  id: string;
+  width: number;
+  height: number;
+}
+
+/** An item as the API answers with it: the stored item plus its primary image. */
+export type ItemWithMedia = Item & { primaryMedia: PrimaryMedia | null };
+
+export async function getItem(collectionId: string, itemId: string): Promise<ItemWithMedia> {
+  const res = await request(`/api/collections/${collectionId}/items/${itemId}`);
+  if (!res.ok) throw new ApiError(res.status);
+  return res.json() as Promise<ItemWithMedia>;
+}
+
+/** An item's live images in order; the first is its primary. */
+export async function listMedia(collectionId: string, itemId: string): Promise<Media[]> {
+  const res = await request(`/api/collections/${collectionId}/items/${itemId}/media`);
+  if (!res.ok) throw new ApiError(res.status);
+  return res.json() as Promise<Media[]>;
+}
+
+export type UploadSource = "user-attached" | "user-camera";
+
+/**
+ * Uploads one image. A refusal rejects with its status, which the page words
+ * its message from: 415 not an image it accepts, 413 too large, 409 the item
+ * is full, 503 the server is busy with other images.
+ */
+export async function uploadMedia(
+  collectionId: string,
+  itemId: string,
+  file: Blob,
+  source: UploadSource,
+): Promise<Media> {
+  const body = new FormData();
+  body.append("file", file);
+  const res = await request(`/api/collections/${collectionId}/items/${itemId}/media?source=${source}`, {
+    method: "POST",
+    body,
+  });
+  if (!res.ok) throw new ApiError(res.status);
+  return res.json() as Promise<Media>;
+}
+
+export type MediaVariant = "display" | "thumb";
+
+/**
+ * An image's bytes. Fetched rather than pointed at by an `<img src>`, which
+ * cannot send the token; the caller turns the blob into an object URL.
+ */
+export async function fetchMediaBlob(
+  collectionId: string,
+  itemId: string,
+  mediaId: string,
+  variant: MediaVariant,
+): Promise<Blob> {
+  const res = await request(`/api/collections/${collectionId}/items/${itemId}/media/${mediaId}/${variant}`);
+  if (!res.ok) throw new ApiError(res.status);
+  return res.blob();
 }

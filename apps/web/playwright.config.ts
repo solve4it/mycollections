@@ -131,6 +131,11 @@ export default defineConfig({
         HOST: "127.0.0.1",
         NODE_ENV: "development",
         LOG_LEVEL: "silent",
+        // Empty is unset, so with the in-memory database the server uses a
+        // temporary folder for the run's images (#37). Pinned anyway: an
+        // exported MEDIA_DIR would otherwise point the fixtures' uploads at
+        // a real image folder.
+        MEDIA_DIR: "",
       },
       // Never attach to something already on this port: it would be a server
       // this config did not configure, backed by a database it did not choose,

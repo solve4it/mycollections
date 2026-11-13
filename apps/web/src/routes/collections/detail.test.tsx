@@ -139,6 +139,20 @@ describe("CollectionDetailPage", () => {
     expect(dot).toHaveAttribute("aria-hidden", "true");
   });
 
+  it("links each row's name to the item's own page, where its photos are (#37)", async () => {
+    vi.mocked(listItems).mockResolvedValue([ITEM, { ...OTHER_ITEM, fields: { title: "", year: null } }]);
+    renderDetail();
+    const named = await screen.findByRole("link", { name: "Zelda" });
+    expect(named).toHaveAttribute("href", `/collections/${COLLECTION.id}/items/${ITEM.id}`);
+    // Inside its field, in place of the bare value: the value is the link.
+    expect(named.closest(".item-field")).toHaveTextContent("Title: Zelda");
+    // An item named by nothing is still reachable, as "(untitled)".
+    expect(screen.getByRole("link", { name: "(untitled)" })).toHaveAttribute(
+      "href",
+      `/collections/${COLLECTION.id}/items/${OTHER_ITEM.id}`,
+    );
+  });
+
   it("renders an empty placeholder for a missing field value", async () => {
     vi.mocked(listItems).mockResolvedValue([{ ...ITEM, fields: { title: "Mario" } }]);
     renderDetail();
