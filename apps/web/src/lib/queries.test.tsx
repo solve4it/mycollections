@@ -201,7 +201,7 @@ describe("item changes refresh the dashboard list, though it is not on screen (#
 });
 
 describe("useSetItemView (#38)", () => {
-  const COLLECTION = (({ itemCount, ownedCount, ...rest }) => (void itemCount, void ownedCount, rest))(LISTED);
+  const { itemCount: _itemCount, ownedCount: _ownedCount, ...COLLECTION } = LISTED;
   const OTHER = { ...LISTED, id: "33333333-3333-3333-3333-333333333333", name: "Coins" };
 
   function deferred<T>() {
