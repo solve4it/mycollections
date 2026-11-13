@@ -106,7 +106,7 @@ function acceptSaves() {
   });
 }
 
-function renderAt(path: string, collection: Collection = COLLECTION) {
+function renderAt(path: string, collection: Collection = COLLECTION, seed?: (qc: QueryClient) => void) {
   vi.mocked(getCollection).mockResolvedValue(collection);
   const history = createMemoryHistory({ initialEntries: [path] });
   const router = createRouter({
@@ -116,6 +116,7 @@ function renderAt(path: string, collection: Collection = COLLECTION) {
     stringifySearch,
   });
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
+  seed?.(qc);
   const view = render(
     <QueryClientProvider client={qc}>
       <RouterProvider router={router} />
@@ -328,6 +329,87 @@ describe("what completes a set (#42)", () => {
 });
 
 describe("what does not celebrate (#42, R8)", () => {
+  it.each([
+    ["a rename saved (the review's probe)", "rename"],
+    ["Mark collected", "mark"],
+  ] as const)(
+    "%s over counts left from an earlier visit: stale is not known, so no completion is claimed",
+    async (_name, action) => {
+      // The set was completed elsewhere — a Settings restore, an import, another
+      // device — while the cache still holds the counts from the last visit.
+      // Those are served at once (status success) while the mount refetch is in
+      // flight, and must not be read as "it was incomplete before this change".
+      stored = [PENNY, QUARTER, HALF, NICKEL];
+      acceptSaves();
+      acceptMarks();
+      vi.mocked(getCollectionCounts)
+        .mockImplementationOnce(() => new Promise<ItemCounts>(() => {}))
+        .mockImplementation(async () => countsOf(stored));
+      renderAt(BASE, COLLECTION, (qc) => {
+        qc.setQueryData(["collections", COLLECTION.id, "items", "counts"], {
+          total: 4,
+          owned: 2,
+          wanted: 1,
+          ordered: 0,
+        } satisfies ItemCounts);
+      });
+      await ready("2 of 3 collected");
+
+      if (action === "rename") {
+        fireEvent.click(screen.getByRole("button", { name: "Edit “Nickel”" }));
+        const editor = await screen.findByRole("form", { name: "Editing “Nickel”" });
+        fireEvent.change(within(editor).getByRole("textbox", { name: "Title" }), {
+          target: { value: "Buffalo nickel" },
+        });
+        fireEvent.click(within(editor).getByRole("button", { name: "Save" }));
+        await waitFor(() => expect(screen.getByRole("button", { name: "Edit “Buffalo nickel”" })).toHaveFocus());
+        await waitFor(() => expect(progress()).toHaveTextContent("3 of 3 collected"));
+      } else {
+        fireEvent.click(markButton("Nickel"));
+        await waitFor(() => expect(announcer()).toHaveTextContent("Marked “Nickel” as collected."));
+        await waitFor(() => expect(progress()).toHaveTextContent("4 of 3 collected"));
+      }
+      expect(celebration()).toBeEmptyDOMElement();
+    },
+  );
+
+  it("two changes in flight together: neither the rename nor the mark sent during its refetch claims the completion", async () => {
+    // A rename adds no owned item, so it is never the change that completed
+    // the set — even though the counts it reads afterwards (moved by the mark)
+    // say complete. And the trade the freshness rule makes: counts mid-fetch
+    // are not known, so the mark sent while the rename's refetch is in flight
+    // is missed rather than risk a false claim.
+    stored = [PENNY, NICKEL, DIME];
+    renderAt(BASE, { ...COLLECTION, targetCount: 2 });
+    await ready("1 of 2 collected");
+    acceptMarks();
+    let answer: () => void = () => {};
+    vi.mocked(getCollectionCounts)
+      .mockImplementationOnce(
+        () =>
+          new Promise<ItemCounts>((resolve) => {
+            answer = () => resolve(countsOf(stored));
+          }),
+      )
+      .mockImplementation(async () => countsOf(stored));
+    acceptSaves();
+
+    // A rename sets off a counts refetch that is held …
+    fireEvent.click(screen.getByRole("button", { name: "Edit “Penny”" }));
+    const editor = await screen.findByRole("form", { name: "Editing “Penny”" });
+    fireEvent.change(within(editor).getByRole("textbox", { name: "Title" }), { target: { value: "Wheat penny" } });
+    fireEvent.click(within(editor).getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(getCollectionCounts).toHaveBeenCalledTimes(2));
+    // … and the mark that completes the set is sent meanwhile.
+    fireEvent.click(markButton("Nickel"));
+    await waitFor(() => expect(setItemStatus).toHaveBeenCalledTimes(1));
+    await act(async () => answer());
+
+    await waitFor(() => expect(progress()).toHaveTextContent("2 of 2 collected"));
+    await waitFor(() => expect(announcer()).toHaveTextContent("Marked “Nickel” as collected."));
+    expect(celebration()).toBeEmptyDOMElement();
+  });
+
   it("an action on a set that was already complete: the usual message instead", async () => {
     stored = [PENNY, QUARTER, HALF, NICKEL];
     acceptMarks();
