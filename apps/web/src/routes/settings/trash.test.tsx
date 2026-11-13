@@ -206,7 +206,7 @@ describe("Settings trash permanent delete", () => {
     renderSettings();
     const records = await row("Records");
     fireEvent.click(within(records).getByRole("button", { name: /^Delete forever/ }));
-    expect(within(records).getByRole("alert")).toHaveTextContent(
+    expect(within(records).getByRole("button", { name: "Cancel" })).toHaveAccessibleDescription(
       "Permanently delete “Records” and every item in it? This cannot be undone.",
     );
     expect(purgeCollection).not.toHaveBeenCalled();
@@ -224,7 +224,9 @@ describe("Settings trash permanent delete", () => {
     renderSettings();
     const dune = await row("Dune");
     fireEvent.click(within(dune).getByRole("button", { name: /^Delete forever/ }));
-    expect(within(dune).getByRole("alert")).toHaveTextContent("Permanently delete “Dune”? This cannot be undone.");
+    expect(within(dune).getByRole("button", { name: "Cancel" })).toHaveAccessibleDescription(
+      "Permanently delete “Dune”? This cannot be undone.",
+    );
     fireEvent.click(within(dune).getByRole("button", { name: /^Delete forever/ }));
     await waitFor(() => expect(purgeItem).toHaveBeenCalledWith("item-dune"));
   });
@@ -244,7 +246,7 @@ describe("Settings empty trash", () => {
     renderSettings();
     const section = await trashSection();
     fireEvent.click(await within(section).findByRole("button", { name: "Empty trash" }));
-    expect(within(section).getByRole("alert")).toHaveTextContent(
+    expect(within(section).getByRole("button", { name: "Cancel" })).toHaveAccessibleDescription(
       "Permanently delete 1 collection and 1 item? This cannot be undone.",
     );
     expect(emptyTrash).not.toHaveBeenCalled();

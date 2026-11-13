@@ -678,7 +678,31 @@ test.describe("accessibility", () => {
     await page.goto("/settings");
     await expect(page).toHaveURL(/\/settings$/);
     await page.getByRole("button", { name: "Delete forever “Kind of Blue”" }).click();
-    await expect(page.getByRole("alert")).toContainText("This cannot be undone.");
+    // The announcement's mechanism, computed by the browser (#335): focus lands
+    // on Cancel, and the question is that control's accessible description —
+    // what a screen reader speaks with "Cancel, button". Not a live region, so
+    // there is no alert on the page to find.
+    const cancel = page.getByRole("button", { name: "Cancel" });
+    await expect(cancel).toBeFocused();
+    await expect(cancel).toHaveAccessibleDescription(/This cannot be undone\.$/);
+    await expect(page.locator(".confirm-prompt")).toHaveText(
+      "Permanently delete “Kind of Blue”? This cannot be undone.",
+    );
+    await expect(page.getByRole("alert")).toHaveCount(0);
+    // Playwright computes that description itself; Chrome's own accessibility
+    // tree — what it hands a screen reader — is the authority, so ask it too.
+    const cdp = await page.context().newCDPSession(page);
+    const { nodes } = await cdp.send("Accessibility.getFullAXTree");
+    // The root web area reports `focused` too (the document has focus), so the
+    // node wanted is the focused *button*.
+    const focusedNode = nodes.find(
+      (node) =>
+        node.role?.value === "button" &&
+        node.properties?.some((property) => property.name === "focused" && property.value.value === true),
+    );
+    expect(focusedNode?.name?.value).toBe("Cancel");
+    expect(focusedNode?.description?.value).toBe("Permanently delete “Kind of Blue”? This cannot be undone.");
+    await cdp.detach();
 
     // The first thing this sweep found: at 390px the actions column sized itself
     // to the prompt, overflowed the card and squeezed the name to zero width, so

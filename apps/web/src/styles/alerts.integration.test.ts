@@ -59,6 +59,17 @@ describe("alert styling", () => {
     }
   });
 
+  it("keeps a destructive confirmation's question out of the failure treatment (#335)", () => {
+    // "Permanently delete … ? This cannot be undone." is a question, not an
+    // error, and used to wear the same red strip as "Import failed." because it
+    // was a <p role="alert">. It no longer carries the role; the danger signal
+    // belongs to the confirm button (`button-danger`), not to the sentence.
+    const prompt = only(".confirm-prompt");
+    for (const property of ["color", "background", "border-left"]) {
+      expect(declaration(prompt.body, property) ?? "", `.confirm-prompt ${property}`).not.toMatch(/--danger/);
+    }
+  });
+
   it("leaves the status role alone — progress is not a failure", () => {
     // role="status" carries loading and success messages (import pending,
     // import succeeded). Danger styling on those would be a lie.

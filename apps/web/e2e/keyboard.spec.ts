@@ -535,7 +535,7 @@ test.describe("every action is operable without a pointer", () => {
 
     await trigger.focus();
     await page.keyboard.press(" ");
-    await expect(page.getByRole("alert")).toContainText("Permanently delete 0 collections and 1 item?");
+    await expect(page.locator(".confirm-prompt")).toContainText("Permanently delete 0 collections and 1 item?");
     expect(await focusedControl(page), "the question must open on its safe option").toBe('button "Cancel"');
 
     // The destructive option is reachable, one stop back.
@@ -545,7 +545,7 @@ test.describe("every action is operable without a pointer", () => {
     // Cancelling hands focus back to the button that asked.
     await page.getByRole("button", { name: "Cancel" }).focus();
     await page.keyboard.press("Enter");
-    await expect(page.getByRole("alert")).toHaveCount(0);
+    await expect(page.locator(".confirm-prompt")).toHaveCount(0);
     expect(await focusedControl(page), "cancelling must return focus to the trigger").toBe('button "Empty trash"');
   });
 
@@ -1207,11 +1207,11 @@ test.describe("Escape dismisses what is transient (#376)", () => {
     const trigger = page.getByRole("button", { name: purgeName("Kind of Blue") });
     await trigger.focus();
     await page.keyboard.press("Enter");
-    await expect(page.getByRole("alert")).toBeVisible();
+    await expect(page.locator(".confirm-prompt")).toBeVisible();
     expect(await focusedControl(page)).toBe('button "Cancel"');
 
     await page.keyboard.press("Escape");
-    await expect(page.getByRole("alert"), "Escape must close the question").toHaveCount(0);
+    await expect(page.locator(".confirm-prompt"), "Escape must close the question").toHaveCount(0);
     await expect(trigger, "Escape must hand focus back to the button that asked").toBeFocused();
     // And it answered "no": the row is still in the trash.
     await expect(page.getByRole("button", { name: restoreName("Kind of Blue") })).toHaveCount(1);
@@ -1221,7 +1221,7 @@ test.describe("Escape dismisses what is transient (#376)", () => {
     await page.keyboard.press("Shift+Tab");
     expect(await focusedControl(page)).toBe(purgeStop("Kind of Blue"));
     await page.keyboard.press("Escape");
-    await expect(page.getByRole("alert")).toHaveCount(0);
+    await expect(page.locator(".confirm-prompt")).toHaveCount(0);
     await expect(trigger).toBeFocused();
     await expect(page.getByRole("button", { name: restoreName("Kind of Blue") })).toHaveCount(1);
   });
