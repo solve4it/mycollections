@@ -28,7 +28,6 @@ const I = "00000000-0000-4000-8000-0000000000a1";
 const collection: Collection = {
   id: C,
   name: "Vinyl records",
-  description: null,
   fields: [
     { id: "title", type: "text", label: "Title", required: true },
     { id: "year", type: "number", label: "Year", required: false },
@@ -38,7 +37,7 @@ const collection: Collection = {
   createdAt: "2026-01-01T00:00:00.000Z",
   updatedAt: "2026-01-01T00:00:00.000Z",
   deletedAt: null,
-} as Collection;
+};
 
 const item = {
   id: I,
