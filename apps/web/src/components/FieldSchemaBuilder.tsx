@@ -1,6 +1,7 @@
 import { BUILT_IN_FIELD_TYPES, type BuiltInFieldType, type FieldDefinition } from "@mycollections/core";
 import { type RefObject, useId, useRef } from "react";
 import { useTranslation } from "react-i18next";
+import { useAnnounce } from "../lib/announcer.js";
 import { scopedId } from "../lib/dom-id.js";
 import { useFocusHandoff } from "../lib/focus-handoff.js";
 import { Icon } from "./Icon.js";
@@ -94,6 +95,10 @@ export function FieldSchemaBuilder({
   // Held here rather than in the row: the row is what gets removed, and a
   // handoff asked for from inside it would be unmounted before it could finish.
   const handOffFocus = useFocusHandoff();
+  // A row appearing or going is plain to see; to a screen-reader user it is
+  // only a move of focus (#377). Said through the shell's announcer, which is
+  // on the page from first paint — never a region of this component's own.
+  const announce = useAnnounce();
   const ownAddFieldRef = useRef<HTMLButtonElement>(null);
   const addFieldRef = givenAddFieldRef ?? ownAddFieldRef;
 
@@ -221,6 +226,8 @@ export function FieldSchemaBuilder({
                   () => (next ? document.getElementById(rowId(next.key, "label")) : null) ?? addFieldRef.current,
                 );
                 onChange(fields.filter((f) => f.key !== field.key));
+                const name = field.label.trim();
+                announce(name ? t("field_removed", { name }) : t("field_removed_unnamed"));
               }}
             >
               <Icon name="delete" />
@@ -233,7 +240,10 @@ export function FieldSchemaBuilder({
         type="button"
         ref={addFieldRef}
         className="touch-target button-quiet"
-        onClick={() => onChange([...fields, emptyField()])}
+        onClick={() => {
+          onChange([...fields, emptyField()]);
+          announce(t("field_added"));
+        }}
         aria-describedby={noFieldsError ? noFieldsId : undefined}
       >
         <Icon name="add" />

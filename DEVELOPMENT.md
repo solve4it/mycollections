@@ -496,7 +496,8 @@ its comment:
 Two things that look like details and are not. A destination has to be a control whose name says
 where the user now is, which is why Remove field goes to the next field's label rather than to its
 Remove button: "Field label, edit, Year" places you, "Remove field, button" does not, and parks you
-on a destructive control. And when a list empties there is no control left worth landing on, so the
+on a destructive control. Arrival places you but does not say what happened, so the builder also
+speaks through the announcer — "Removed field “Year”", and "Added a field" for the opposite (#377). And when a list empties there is no control left worth landing on, so the
 destination is a focusable container — the collection's tab panel, which is already a tab stop
 (`tabIndex={0}`, see below) and now holds the empty state that replaced the list, or the trash
 `<section>` with `tabIndex={-1}` and `aria-labelledby` pointing at its heading, which is the pattern

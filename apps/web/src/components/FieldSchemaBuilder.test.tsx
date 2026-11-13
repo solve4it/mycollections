@@ -1,7 +1,8 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { useState } from "react";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import "../i18n/index.js";
+import { AnnouncerProvider } from "../lib/announcer.js";
 import { type FieldDraft, FieldSchemaBuilder } from "./FieldSchemaBuilder.js";
 
 afterEach(cleanup);
@@ -163,6 +164,45 @@ describe("FieldSchemaBuilder", () => {
       expect(screen.getByRole("button", { name: "Add field" })).toHaveAccessibleDescription(
         "A collection needs at least one field. Add one to continue.",
       );
+    });
+  });
+
+  // #377: a sighted user sees the row appear or go; a screen-reader user was
+  // only ever moved, and had to infer the rest.
+  describe("announces", () => {
+    function announced(initial: FieldDraft[]) {
+      const announce = vi.fn();
+      render(
+        <AnnouncerProvider value={announce}>
+          <Harness initial={initial} />
+        </AnnouncerProvider>,
+      );
+      return announce;
+    }
+
+    it("a removal, naming the field", () => {
+      const announce = announced([draft("a", "Title"), draft("b", "Year")]);
+      fireEvent.click(screen.getAllByRole("button", { name: "Remove field" })[1] as HTMLElement);
+      expect(announce.mock.calls).toEqual([["Removed field “Year”"]]);
+    });
+
+    it("a removal of a field with no label yet, without an empty name", () => {
+      const announce = announced([draft("a", "Title"), draft("b", "   ")]);
+      fireEvent.click(screen.getAllByRole("button", { name: "Remove field" })[1] as HTMLElement);
+      expect(announce.mock.calls).toEqual([["Removed a field"]]);
+    });
+
+    it("a removal by the label as it reads, not padded with spaces", () => {
+      const announce = announced([draft("a", "  Title ")]);
+      fireEvent.click(screen.getByRole("button", { name: "Remove field" }));
+      expect(announce.mock.calls).toEqual([["Removed field “Title”"]]);
+    });
+
+    it("an addition", () => {
+      const announce = announced([draft("a", "Title")]);
+      fireEvent.click(screen.getByRole("button", { name: "Add field" }));
+      expect(labelInputs()).toHaveLength(2);
+      expect(announce.mock.calls).toEqual([["Added a field"]]);
     });
   });
 });
