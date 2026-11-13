@@ -299,6 +299,24 @@ describe("useSetItemView (#38)", () => {
     expect(qc.getQueryData<typeof COLLECTION>(["collections", ID])?.itemView).toBe("list");
   });
 
+  it("goes back to the view the server holds when two queued switches both fail", async () => {
+    const { qc, wrapper } = seeded();
+    const first = deferred<typeof COLLECTION>();
+    const second = deferred<typeof COLLECTION>();
+    vi.mocked(updateCollection).mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise);
+    const { result } = renderHook(() => useSetItemView(ID), { wrapper });
+
+    act(() => result.current.mutate("grid"));
+    act(() => result.current.mutate("list"));
+    await act(async () => first.reject(new Error("offline")));
+    await waitFor(() => expect(updateCollection).toHaveBeenCalledTimes(2));
+    await act(async () => second.reject(new Error("offline")));
+
+    await waitFor(() => expect(result.current.isError).toBe(true));
+    // The server never stored anything but list, so list is what shows.
+    expect(qc.getQueryData<typeof COLLECTION>(["collections", ID])?.itemView).toBe("list");
+  });
+
   it("does not undo a later choice when an earlier switch fails", async () => {
     const { qc, wrapper } = seeded();
     const first = deferred<typeof COLLECTION>();

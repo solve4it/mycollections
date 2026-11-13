@@ -1,5 +1,6 @@
 import type { Collection, CollectionWithItemCount, Item, ItemStatus, ItemView, Media } from "@mycollections/core";
 import { keepPreviousData, type QueryClient, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useRef } from "react";
 import {
   createCollection,
   createItem,
@@ -123,6 +124,11 @@ export function useSetItemView(id: string) {
   const mutationKey = ["collections", id, "item-view"];
   /** Whether a switch made after this one is still to land. */
   const superseded = () => queryClient.isMutating({ mutationKey }) > 1;
+  // The last view the server is known to hold. Not each switch's own snapshot:
+  // `onMutate` runs at once even for a switch queued behind another, so its
+  // snapshot is the earlier switch's optimistic view, which the server may never
+  // have stored (#38 review: grid then list, both refused, left grid showing).
+  const confirmed = useRef<ItemView | undefined>(undefined);
   return useMutation({
     mutationKey,
     scope: { id: `item-view:${id}` },
@@ -130,14 +136,15 @@ export function useSetItemView(id: string) {
     onMutate: async (itemView: ItemView) => {
       // A collection fetch landing after this would paint the old view back.
       await queryClient.cancelQueries({ queryKey: ["collections", id], exact: true });
-      const previous = queryClient.getQueryData<Collection>(["collections", id])?.itemView;
+      // Only the first switch of a run sees the server's view in the cache.
+      if (!superseded()) confirmed.current = queryClient.getQueryData<Collection>(["collections", id])?.itemView;
       writeItemView(queryClient, id, itemView);
-      return { previous };
     },
-    onError: (_error, _itemView, context) => {
-      if (context?.previous && !superseded()) writeItemView(queryClient, id, context.previous);
+    onError: () => {
+      if (confirmed.current && !superseded()) writeItemView(queryClient, id, confirmed.current);
     },
     onSuccess: (saved) => {
+      confirmed.current = saved.itemView;
       if (superseded()) return;
       queryClient.setQueryData<Collection>(["collections", id], saved);
       writeItemView(queryClient, id, saved.itemView);
