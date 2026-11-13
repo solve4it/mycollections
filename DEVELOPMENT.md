@@ -266,6 +266,21 @@ A screen's search state lives in the URL (#41), and three rules come with it:
   the next one loads. Check `isPlaceholderData` before treating `data` as the answer to the current
   search.
 
+Images (#37) follow three more rules:
+
+- **Fetched, never linked.** An `<img src>` pointing at the API cannot send the token, so
+  `useMediaImage` fetches the bytes with it and shows them through `URL.createObjectURL`. Those
+  queries are keyed under `MEDIA_IMAGE_KEY`, and `createQueryClient` revokes the object URL when one
+  leaves the cache: an object URL holds its blob in memory until it is revoked. Images never go
+  stale (ids are never reused), but leave the cache five minutes after their last viewer. If
+  anything ever serves the built web app under a Content-Security-Policy, it needs `img-src blob:`.
+- **An item's image list is outside the items prefix** (`mediaListQueryKey`). `useSetItemStatus`
+  patches every array under `["collections", id, "items"]` as an item list, so an image array there
+  would be walked as one. Image changes invalidate it by name, and the items prefix too, because
+  every item response carries `primaryMedia`.
+- **Uploads use `FormData` and set no Content-Type.** `request()` declares JSON only for a string
+  body; the browser writes the multipart type and its boundary itself.
+
 Two consequences for how a failure is verified, both learned the hard way (#347):
 
 - **A failure surface arrives about seven seconds after the navigation, not with it.** Nothing overrides `retry`, so React Query's default three attempts run at 1s, 2s and 4s first. Any test or manual check that gives up sooner concludes the screen has no error state. It is also why those screens announce themselves with `role="alert"` rather than by taking focus — by the time they mount, focus has long since settled somewhere else.
