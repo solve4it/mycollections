@@ -5,6 +5,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testi
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { TRASH_CONFIRMATION_MS } from "../../components/TrashSection.js";
 import { rootRoute } from "../__root.js";
+import { authenticatedRoute } from "../_authenticated.js";
 import { setupRoute } from "../setup/index.js";
 import { settingsRoute } from "./index.js";
 
@@ -31,7 +32,7 @@ import {
   restoreItem,
 } from "../../lib/api-client.js";
 
-const testRouteTree = rootRoute.addChildren([settingsRoute, setupRoute]);
+const testRouteTree = rootRoute.addChildren([authenticatedRoute.addChildren([settingsRoute]), setupRoute]);
 
 const RECORDS: Collection = {
   id: "col-records",

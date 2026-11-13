@@ -1,20 +1,16 @@
 import { COLLECTION_DESCRIPTION_MAX, COLLECTION_NAME_MAX } from "@mycollections/core";
-import { createRoute, redirect, useNavigate } from "@tanstack/react-router";
+import { createRoute, useNavigate } from "@tanstack/react-router";
 import { type FormEvent, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { buildField, emptyField, type FieldDraft, FieldSchemaBuilder } from "../../components/FieldSchemaBuilder.js";
 import { FiniteSetFields, targetCountFromDraft } from "../../components/FiniteSetFields.js";
-import { getToken } from "../../lib/api-client.js";
 import { useCreateCollection } from "../../lib/queries.js";
-import { rootRoute } from "../__root.js";
+import { authenticatedRoute } from "../_authenticated.js";
 
 export const newCollectionRoute = createRoute({
-  getParentRoute: () => rootRoute,
+  getParentRoute: () => authenticatedRoute,
   path: "/collections/new",
   staticData: { titleKey: "collections:new_title" },
-  beforeLoad: () => {
-    if (!getToken()) throw redirect({ to: "/setup" });
-  },
   component: NewCollectionPage,
 });
 

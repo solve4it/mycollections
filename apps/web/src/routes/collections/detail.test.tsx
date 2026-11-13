@@ -4,6 +4,7 @@ import { createMemoryHistory, createRouter, RouterProvider } from "@tanstack/rea
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { rootRoute } from "../__root.js";
+import { authenticatedRoute } from "../_authenticated.js";
 import { collectionDetailRoute } from "./$id.js";
 import { editCollectionRoute } from "./edit.js";
 
@@ -28,7 +29,9 @@ import {
   updateItem,
 } from "../../lib/api-client.js";
 
-const testRouteTree = rootRoute.addChildren([collectionDetailRoute, editCollectionRoute]);
+const testRouteTree = rootRoute.addChildren([
+  authenticatedRoute.addChildren([collectionDetailRoute, editCollectionRoute]),
+]);
 
 const COLLECTION: Collection = {
   id: "11111111-1111-1111-1111-111111111111",

@@ -5,6 +5,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testi
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { parseSearch, stringifySearch } from "../../lib/search-params.js";
 import { rootRoute } from "../__root.js";
+import { authenticatedRoute } from "../_authenticated.js";
 import { CELEBRATION_MS, collectionDetailRoute } from "./$id.js";
 
 vi.mock("../../lib/api-client.js", () => ({
@@ -110,7 +111,7 @@ function renderAt(path: string, collection: Collection = COLLECTION, seed?: (qc:
   vi.mocked(getCollection).mockResolvedValue(collection);
   const history = createMemoryHistory({ initialEntries: [path] });
   const router = createRouter({
-    routeTree: rootRoute.addChildren([collectionDetailRoute]),
+    routeTree: rootRoute.addChildren([authenticatedRoute.addChildren([collectionDetailRoute])]),
     history,
     parseSearch,
     stringifySearch,

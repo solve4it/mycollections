@@ -1,6 +1,6 @@
 import type { Collection } from "@mycollections/core";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { createMemoryHistory, createRouter, RouterProvider } from "@tanstack/react-router";
+import { type AnyRoute, createMemoryHistory, createRouter, RouterProvider } from "@tanstack/react-router";
 import { act, cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { routeTree } from "../routeTree.js";
@@ -473,11 +473,22 @@ describe("where focus goes on a route change", () => {
   });
 });
 
+/**
+ * Every route in the tree, not just the root's children: guarded screens sit
+ * under the pathless token-guard route (#420), and a sweep of the top level
+ * alone would quietly stop seeing them.
+ */
+function allRoutes(): AnyRoute[] {
+  const walk = (route: AnyRoute): AnyRoute[] =>
+    ((route.children ?? []) as AnyRoute[]).flatMap((child) => [child, ...walk(child)]);
+  return walk(routeTree);
+}
+
 describe("route titles as data", () => {
   it("gives every route that renders a screen a title key", () => {
     // A route added without one would silently keep whatever title the previous
     // screen left behind, which is worse than the static title it replaces.
-    const named = (routeTree.children ?? []).filter((route) => route.options.component !== undefined);
+    const named = allRoutes().filter((route) => route.options.component !== undefined);
     expect(named.length, "the route tree should still have screens in it").toBeGreaterThan(5);
     for (const route of named) {
       expect(route.options.staticData?.titleKey, `${route.fullPath} needs a staticData.titleKey`).toBeTruthy();
@@ -489,7 +500,7 @@ describe("route titles as data", () => {
     // it has to be readable from the route rather than from the screen: the
     // screen can only report upward after it has rendered, by which time the
     // announcement decision has already been made.
-    const dynamic = (routeTree.children ?? []).filter((route) => route.options.staticData?.dynamicTitle === true);
+    const dynamic = allRoutes().filter((route) => route.options.staticData?.dynamicTitle === true);
     expect(dynamic.map((route) => route.fullPath)).toEqual(["/collections/$id"]);
     for (const route of dynamic) {
       // Still a key, because the key is what the page is called until the name
@@ -505,7 +516,7 @@ describe("route titles as data", () => {
    * test of the 404 would see it.
    */
   it("declares the one route that means the address matched nothing", () => {
-    const notFound = (routeTree.children ?? []).filter((route) => route.options.staticData?.notFound === true);
+    const notFound = allRoutes().filter((route) => route.options.staticData?.notFound === true);
     expect(notFound.map((route) => route.fullPath)).toEqual(["/$"]);
   });
 });

@@ -1,21 +1,17 @@
-import { createRoute, Link, redirect } from "@tanstack/react-router";
+import { createRoute, Link } from "@tanstack/react-router";
 import { useTranslation } from "react-i18next";
 import { CollectionCard } from "../../components/CollectionCard.js";
 import { EmptyState } from "../../components/EmptyState.js";
 import { FailureSurface } from "../../components/ErrorScreen.js";
 import { Icon } from "../../components/Icon.js";
 import { CollectionGridSkeleton } from "../../components/Skeleton.js";
-import { getToken } from "../../lib/api-client.js";
 import { useCollections } from "../../lib/queries.js";
-import { rootRoute } from "../__root.js";
+import { authenticatedRoute } from "../_authenticated.js";
 
 export const collectionsRoute = createRoute({
-  getParentRoute: () => rootRoute,
+  getParentRoute: () => authenticatedRoute,
   path: "/collections",
   staticData: { titleKey: "collections:title" },
-  beforeLoad: () => {
-    if (!getToken()) throw redirect({ to: "/setup" });
-  },
   component: CollectionsPage,
 });
 

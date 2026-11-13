@@ -4,6 +4,7 @@ import { createMemoryHistory, createRoute, createRouter, RouterProvider } from "
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { rootRoute } from "../__root.js";
+import { authenticatedRoute } from "../_authenticated.js";
 import { collectionsRoute } from "./index.js";
 
 vi.mock("../../lib/api-client.js", () => ({
@@ -59,7 +60,10 @@ const detailStubRoute = createRoute({
   component: () => <p>Collection detail</p>,
 });
 
-const testRouteTree = rootRoute.addChildren([editCollectionRoute, collectionsRoute, detailStubRoute]);
+const testRouteTree = rootRoute.addChildren([
+  authenticatedRoute.addChildren([editCollectionRoute, collectionsRoute]),
+  detailStubRoute,
+]);
 
 function renderEdit() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });

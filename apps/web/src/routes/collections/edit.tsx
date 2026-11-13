@@ -1,5 +1,5 @@
 import { COLLECTION_DESCRIPTION_MAX, COLLECTION_NAME_MAX } from "@mycollections/core";
-import { createRoute, Link, redirect, useNavigate } from "@tanstack/react-router";
+import { createRoute, Link, useNavigate } from "@tanstack/react-router";
 import { type FormEvent, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { FailureSurface } from "../../components/ErrorScreen.js";
@@ -8,18 +8,14 @@ import { FiniteSetFields, targetCountFromDraft, targetCountToDraft } from "../..
 import { Icon } from "../../components/Icon.js";
 import { CollectionDetailSkeleton } from "../../components/Skeleton.js";
 import { TagManager } from "../../components/TagManager.js";
-import { getToken } from "../../lib/api-client.js";
 import { CONTENT_LINK_ACTIVE_OPTIONS } from "../../lib/links.js";
 import { useCollection, useItems, useTrash, useUpdateCollection } from "../../lib/queries.js";
-import { rootRoute } from "../__root.js";
+import { authenticatedRoute } from "../_authenticated.js";
 
 export const editCollectionRoute = createRoute({
-  getParentRoute: () => rootRoute,
+  getParentRoute: () => authenticatedRoute,
   path: "/collections/$id/edit",
   staticData: { titleKey: "collections:edit_title" },
-  beforeLoad: () => {
-    if (!getToken()) throw redirect({ to: "/setup" });
-  },
   component: EditCollectionPage,
 });
 

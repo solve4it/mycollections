@@ -3,6 +3,7 @@ import { createMemoryHistory, createRouter, RouterProvider } from "@tanstack/rea
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { rootRoute } from "../__root.js";
+import { authenticatedRoute } from "../_authenticated.js";
 import { setupRoute } from "../setup/index.js";
 import { settingsRoute } from "./index.js";
 
@@ -32,7 +33,7 @@ import {
 import { isErrorReportingEnabled, setErrorReportingEnabled } from "../../lib/error-reporter.js";
 import { getThemePreference, setThemePreference } from "../../lib/theme.js";
 
-const testRouteTree = rootRoute.addChildren([settingsRoute, setupRoute]);
+const testRouteTree = rootRoute.addChildren([authenticatedRoute.addChildren([settingsRoute]), setupRoute]);
 
 function renderSettings() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
