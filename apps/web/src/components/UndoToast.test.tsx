@@ -109,6 +109,22 @@ describe("UndoToast", () => {
     expect(onDismiss).toHaveBeenCalledTimes(1);
   });
 
+  it("Escape on either control dismisses without running the action (#376)", () => {
+    for (const name of ["Undo", "Dismiss"]) {
+      const { onAction, onDismiss } = renderToast();
+      fireEvent.keyDown(screen.getByRole("button", { name }), { key: "Escape" });
+      expect(onDismiss, name).toHaveBeenCalledTimes(1);
+      expect(onAction, name).not.toHaveBeenCalled();
+      cleanup();
+    }
+  });
+
+  it("leaves other keys alone", () => {
+    const { onDismiss } = renderToast();
+    fireEvent.keyDown(screen.getByRole("button", { name: "Undo" }), { key: "Enter" });
+    expect(onDismiss).not.toHaveBeenCalled();
+  });
+
   it("gives both controls a 44px touch target", () => {
     renderToast();
     expect(screen.getByRole("button", { name: "Undo" })).toHaveClass("touch-target");

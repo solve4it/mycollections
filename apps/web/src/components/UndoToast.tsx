@@ -74,9 +74,19 @@ export function UndoToast({
     // have (#308) — it would make the toast the nearest live region for its own
     // insertion and silence the page's region.
     //
-    // biome-ignore lint/a11y/noStaticElementInteractions: see above — timer only
+    // Escape is the other handler here (#376), and it is the keyboard's way
+    // out rather than an extra: focus inside the toast holds its timer open, so
+    // for a keyboard user the toast never leaves by itself. It listens on the
+    // wrapper because both controls inside take it, and it means Dismiss.
+    //
+    // biome-ignore lint/a11y/noStaticElementInteractions: see above — timer and Escape only
     <div
       className="undo-toast"
+      onKeyDown={(event) => {
+        if (event.key !== "Escape") return;
+        event.preventDefault();
+        onDismiss();
+      }}
       onMouseEnter={() => setHeld(true)}
       onMouseLeave={() => setHeld(false)}
       onFocus={() => setHeld(true)}

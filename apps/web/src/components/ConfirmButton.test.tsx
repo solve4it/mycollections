@@ -54,6 +54,36 @@ describe("ConfirmButton", () => {
     expect(trigger()).toHaveFocus();
   });
 
+  it("Escape withdraws the question from either button, calls nothing, and hands focus back (#376)", () => {
+    const { onConfirm } = renderConfirm();
+    fireEvent.click(trigger());
+    fireEvent.keyDown(screen.getByRole("button", { name: "Cancel" }), { key: "Escape" });
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(trigger()).toHaveFocus();
+
+    fireEvent.click(trigger());
+    fireEvent.keyDown(trigger(), { key: "Escape" });
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(trigger()).toHaveFocus();
+    expect(onConfirm).not.toHaveBeenCalled();
+  });
+
+  it("ignores Escape while the confirmed action is in flight, as the confirm ignores a second press (#376)", () => {
+    const { setPending } = renderConfirm();
+    fireEvent.click(trigger());
+    fireEvent.click(trigger());
+    setPending(true);
+    fireEvent.keyDown(trigger(), { key: "Escape" });
+    expect(screen.getByRole("alert")).toHaveTextContent(PROMPT);
+  });
+
+  it("leaves other keys alone", () => {
+    renderConfirm();
+    fireEvent.click(trigger());
+    fireEvent.keyDown(screen.getByRole("button", { name: "Cancel" }), { key: "a" });
+    expect(screen.getByRole("alert")).toHaveTextContent(PROMPT);
+  });
+
   // Marked rather than disabled (#368): Chrome drops focus to <body> the moment
   // the focused control becomes disabled, so the confirm the user just pressed
   // would take their place on the page with it. `aria-disabled` announces the

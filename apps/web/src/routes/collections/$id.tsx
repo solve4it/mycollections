@@ -727,6 +727,15 @@ function CollectionDetailPage() {
             // Drop any failure from a previous undo: the new toast is about a new
             // deletion, and must not open carrying the last one's error.
             restoreItem.reset();
+            // A second delete inside the window replaces the toast rather than
+            // rebinding it (#376: it is keyed on the item below), so a user
+            // standing on the old Undo would lose focus with it. Hand it where
+            // this delete sends focus — named now, because the delete's own
+            // request was dropped the moment focus left its Delete for the toast.
+            // `mutateAsync` resolves after the list is fetched again, so the row
+            // is already gone and the index already names the row in its place.
+            const focused = document.activeElement;
+            if (focused?.closest(".undo-toast")) handOffFocus(rowDestination(index), { removing: focused });
             setUndo({ itemId: item.id, name: itemLabel(collection, item, t("untitled")), index });
           }}
         />
@@ -779,6 +788,10 @@ function CollectionDetailPage() {
         <div className="undo-toast-live" aria-live="polite">
           {undo && (
             <UndoToast
+              // Keyed on the item (#376). Without a key, a second delete inside the
+              // window reused the same DOM: focus stayed on Undo while Undo
+              // quietly changed which item it would restore.
+              key={undo.itemId}
               message={t("deleted_toast", { name: undo.name })}
               actionLabel={t("undo")}
               dismissLabel={t("dismiss_undo")}
@@ -807,6 +820,11 @@ function CollectionDetailPage() {
                 })
               }
               onDismiss={() => {
+                // Not mid-restore: the restore's own success hands focus and
+                // closes the toast, and a dismiss racing it would send focus to
+                // where the item was while the item comes back. This covers the
+                // timer, Dismiss and Escape (#376) alike.
+                if (restoreItem.isPending) return;
                 handOffFocus(rowDestination(undo.index));
                 setUndo(null);
               }}
