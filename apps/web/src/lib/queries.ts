@@ -1,9 +1,10 @@
-import type { Item, ItemStatus } from "@mycollections/core";
+import type { Item, ItemStatus, Media } from "@mycollections/core";
 import { keepPreviousData, type QueryClient, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   createCollection,
   createItem,
   deleteItem,
+  deleteMedia,
   emptyTrash,
   fetchMediaBlob,
   getCollection,
@@ -18,12 +19,15 @@ import {
   listMedia,
   listTrash,
   type MediaVariant,
+  makeCover,
   purgeCollection,
   purgeItem,
   removeTag,
   renameTag,
+  reorderMedia,
   restoreCollection,
   restoreItem,
+  restoreMedia,
   setItemStatus,
   type UpdateCollectionInput,
   type UploadSource,
@@ -405,5 +409,77 @@ export function useMediaImage(
     staleTime: Number.POSITIVE_INFINITY,
     gcTime: 5 * 60 * 1000,
     enabled: options.enabled ?? true,
+  });
+}
+
+/**
+ * A change to an item's image order, shown at once and taken back if the
+ * server refuses it (#37). The order is what the user just arranged; waiting a
+ * round trip to show it would make every move feel broken.
+ */
+function useOptimisticOrder<TVariables>(
+  collectionId: string,
+  itemId: string,
+  send: (variables: TVariables) => Promise<Media[]>,
+  arrange: (current: Media[], variables: TVariables) => Media[],
+) {
+  const queryClient = useQueryClient();
+  const key = mediaListQueryKey(collectionId, itemId);
+  return useMutation({
+    mutationFn: send,
+    onMutate: async (variables: TVariables) => {
+      // A list fetch landing after this would paint the old order over the new.
+      await queryClient.cancelQueries({ queryKey: key });
+      const previous = queryClient.getQueryData<Media[]>(key);
+      if (previous) queryClient.setQueryData<Media[]>(key, arrange(previous, variables));
+      return { previous };
+    },
+    onError: (_error, _variables, context) => {
+      if (context?.previous) queryClient.setQueryData(key, context.previous);
+    },
+    onSuccess: (ordered) => {
+      queryClient.setQueryData(key, ordered);
+      // The cover may have changed, and every item response carries it.
+      void queryClient.invalidateQueries({ queryKey: ["collections", collectionId, "items"] });
+    },
+  });
+}
+
+/** Puts the images in the order of `ids`. */
+export function useReorderMedia(collectionId: string, itemId: string) {
+  return useOptimisticOrder(
+    collectionId,
+    itemId,
+    (ids: string[]) => reorderMedia(collectionId, itemId, ids),
+    (current, ids) => ids.flatMap((id) => current.filter((media) => media.id === id)),
+  );
+}
+
+/** Makes an image the cover: moves it to the front, the rest keeping their order. */
+export function useMakeCover(collectionId: string, itemId: string) {
+  return useOptimisticOrder(
+    collectionId,
+    itemId,
+    (mediaId: string) => makeCover(collectionId, itemId, mediaId),
+    (current, mediaId) => [
+      ...current.filter((media) => media.id === mediaId),
+      ...current.filter((media) => media.id !== mediaId),
+    ],
+  );
+}
+
+export function useDeleteMedia(collectionId: string, itemId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (mediaId: string) => deleteMedia(collectionId, itemId, mediaId),
+    onSuccess: () => afterMediaChange(queryClient, collectionId, itemId),
+  });
+}
+
+export function useRestoreMedia(collectionId: string, itemId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (mediaId: string) => restoreMedia(collectionId, itemId, mediaId),
+    onSuccess: () => afterMediaChange(queryClient, collectionId, itemId),
   });
 }

@@ -24,6 +24,8 @@ export const ICON_NAMES = [
   "logo",
   "check",
   "cross",
+  "earlier",
+  "later",
 ] as const;
 
 export type IconName = (typeof ICON_NAMES)[number];
@@ -110,6 +112,9 @@ const SHAPES: Record<IconName, ReactElement> = {
     </>
   ),
   check: <polyline points="5 12.5 10 17.5 19 7" />,
+  // Moving a photo one place along the gallery (#37): a chevron each way.
+  earlier: <polyline points="15 5 8 12 15 19" />,
+  later: <polyline points="9 5 16 12 9 19" />,
   cross: (
     <>
       <line x1="6" y1="6" x2="18" y2="18" />

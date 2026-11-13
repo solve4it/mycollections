@@ -363,3 +363,40 @@ export async function fetchMediaBlob(
   if (!res.ok) throw new ApiError(res.status);
   return res.blob();
 }
+
+/**
+ * Puts an item's live images in this order (#37). Every live image exactly
+ * once, or the server answers 409: the list on screen was stale.
+ */
+export async function reorderMedia(collectionId: string, itemId: string, ids: string[]): Promise<Media[]> {
+  const res = await request(`/api/collections/${collectionId}/items/${itemId}/media/order`, {
+    method: "PUT",
+    body: JSON.stringify({ ids }),
+  });
+  if (!res.ok) throw new ApiError(res.status);
+  return res.json() as Promise<Media[]>;
+}
+
+/** Moves an image to the front, which is what makes it the cover. Answers the new order. */
+export async function makeCover(collectionId: string, itemId: string, mediaId: string): Promise<Media[]> {
+  const res = await request(`/api/collections/${collectionId}/items/${itemId}/media/${mediaId}/make-primary`, {
+    method: "POST",
+  });
+  if (!res.ok) throw new ApiError(res.status);
+  return res.json() as Promise<Media[]>;
+}
+
+/** A soft delete: the server keeps the files until the trash is emptied, so Undo can bring it back. */
+export async function deleteMedia(collectionId: string, itemId: string, mediaId: string): Promise<void> {
+  const res = await request(`/api/collections/${collectionId}/items/${itemId}/media/${mediaId}`, { method: "DELETE" });
+  if (!res.ok) throw new ApiError(res.status);
+}
+
+/** Undoes `deleteMedia`, putting the image back in its place. */
+export async function restoreMedia(collectionId: string, itemId: string, mediaId: string): Promise<Media> {
+  const res = await request(`/api/collections/${collectionId}/items/${itemId}/media/${mediaId}/restore`, {
+    method: "POST",
+  });
+  if (!res.ok) throw new ApiError(res.status);
+  return res.json() as Promise<Media>;
+}

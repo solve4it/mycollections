@@ -3,6 +3,7 @@ import {
   ApiError,
   createItem,
   deleteItem,
+  deleteMedia,
   emptyTrash,
   fetchMediaBlob,
   getCollectionCounts,
@@ -12,10 +13,13 @@ import {
   listItems,
   listMedia,
   listTrash,
+  makeCover,
   purgeCollection,
   purgeItem,
+  reorderMedia,
   restoreCollection,
   restoreItem,
+  restoreMedia,
   setItemStatus,
   uploadMedia,
 } from "./api-client.js";
@@ -270,5 +274,41 @@ describe("api-client images (#37)", () => {
   it("rejects a missing item with its status", async () => {
     mockFetch(404, {});
     await expect(getItem(C, I)).rejects.toBeInstanceOf(ApiError);
+  });
+});
+
+describe("api-client image actions (#37)", () => {
+  const base = /\/api\/collections\/c1\/items\/i1\/media/;
+
+  it("puts a new order with the ids in it, and answers the list", async () => {
+    const fetchMock = mockFetch(200, [{ id: "b" }, { id: "a" }]);
+    expect(await reorderMedia("c1", "i1", ["b", "a"])).toEqual([{ id: "b" }, { id: "a" }]);
+    expect(String(fetchMock.mock.calls[0]?.[0])).toMatch(new RegExp(`${base.source}/order$`));
+    expect(initOf(fetchMock).method).toBe("PUT");
+    expect(JSON.parse(String(initOf(fetchMock).body))).toEqual({ ids: ["b", "a"] });
+    expect(headerOf(fetchMock, "Content-Type")).toBe("application/json");
+  });
+
+  it("makes an image the cover with a bodiless POST", async () => {
+    const fetchMock = mockFetch(200, [{ id: "m2" }]);
+    await makeCover("c1", "i1", "m2");
+    expect(String(fetchMock.mock.calls[0]?.[0])).toMatch(new RegExp(`${base.source}/m2/make-primary$`));
+    expect(initOf(fetchMock).method).toBe("POST");
+    expect(headerOf(fetchMock, "Content-Type")).toBeNull();
+  });
+
+  it("deletes and restores an image", async () => {
+    const del = mockFetch(204);
+    await deleteMedia("c1", "i1", "m2");
+    expect(String(del.mock.calls[0]?.[0])).toMatch(new RegExp(`${base.source}/m2$`));
+    expect(initOf(del).method).toBe("DELETE");
+    const restore = mockFetch(200, { id: "m2" });
+    expect(await restoreMedia("c1", "i1", "m2")).toEqual({ id: "m2" });
+    expect(String(restore.mock.calls[0]?.[0])).toMatch(new RegExp(`${base.source}/m2/restore$`));
+  });
+
+  it("rejects a stale order with its status", async () => {
+    mockFetch(409, {});
+    await expect(reorderMedia("c1", "i1", ["a"])).rejects.toMatchObject({ status: 409 });
   });
 });

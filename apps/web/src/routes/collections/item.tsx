@@ -95,7 +95,12 @@ function ItemDetailPage() {
       </dl>
       <section className="item-photos" aria-labelledby={photosHeadingId}>
         <h2 id={photosHeadingId}>{t("photos_heading")}</h2>
-        <ImageGallery collectionId={id} itemId={itemId} itemName={name} />
+        <ImageGallery
+          collectionId={id}
+          itemId={itemId}
+          itemName={name}
+          emptyDestination={() => document.querySelector<HTMLElement>(".image-uploader button")}
+        />
         <ImageUploader collectionId={id} itemId={itemId} />
       </section>
     </div>

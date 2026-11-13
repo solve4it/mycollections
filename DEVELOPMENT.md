@@ -507,6 +507,10 @@ its comment:
 | A tag rename's Save, Cancel or Escape           | the renamed tag's Rename — or, after a merge, the Rename of the tag it joined  | dialog: return to the invoker     |
 | …when the new name is not in the list           | the tag search box — a search it no longer matches, or past the fifty shown    | where the tag can be found again  |
 | A confirmed tag removal                         | the next tag's Rename, else the one before, else the section heading           | successor element                 |
+| A photo's Move earlier or Move later            | the same control on the moved photo, wherever it now is (#37)                  | return to the item acted on       |
+| A photo's Make cover                            | the moved photo's first control (its Make cover goes with the change)          | return to the item acted on       |
+| A photo's Delete                                | the photo now in its place, else the one before, else Add photos               | successor element                 |
+| The photo toast's Undo                          | the restored photo's first control, once it is back                            | successor element                 |
 
 Two things that look like details and are not. A destination has to be a control whose name says
 where the user now is, which is why Remove field goes to the next field's label rather than to its
