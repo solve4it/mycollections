@@ -1,3 +1,15 @@
+import {
+  type Announcements,
+  closestCenter,
+  DndContext,
+  type DragEndEvent,
+  type DraggableSyntheticListeners,
+  MouseSensor,
+  TouchSensor,
+  useSensor,
+  useSensors,
+} from "@dnd-kit/core";
+import { rectSortingStrategy, SortableContext, useSortable } from "@dnd-kit/sortable";
 import type { Media } from "@mycollections/core";
 import { type MouseEvent, type ReactNode, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -5,6 +17,7 @@ import { useAnnounce } from "../lib/announcer.js";
 import { type FocusDestination, useFocusHandoff } from "../lib/focus-handoff.js";
 import { useOverlayClearance } from "../lib/overlay-clearance.js";
 import { useDeleteMedia, useMakeCover, useMediaList, useReorderMedia, useRestoreMedia } from "../lib/queries.js";
+import { moveOnto } from "../lib/reorder.js";
 import { Icon } from "./Icon.js";
 import { MediaImage } from "./MediaImage.js";
 import { UndoToast } from "./UndoToast.js";
@@ -21,6 +34,60 @@ interface ImageGalleryProps {
 /** The first of a tile's action buttons, which is where a move, a cover change or an Undo hands focus. */
 function tileFocus(mediaId: string): FocusDestination {
   return () => document.querySelector<HTMLElement>(`[data-media-id="${mediaId}"] .image-actions button`);
+}
+
+/**
+ * dnd-kit's own announcements, switched off. Dragging is a pointer-only layer
+ * over the same order the Move buttons change; those buttons are the keyboard
+ * and screen-reader path, and their results are spoken through the shell's
+ * announcer, like every other message in the app. Left on, dnd-kit would speak
+ * "Picked up draggable item…" through a second live region for a mouse drag.
+ */
+const SILENT: Announcements = {
+  onDragStart: () => undefined,
+  onDragMove: () => undefined,
+  onDragOver: () => undefined,
+  onDragEnd: () => undefined,
+  onDragCancel: () => undefined,
+};
+
+function prefersReducedMotion(): boolean {
+  return typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches === true;
+}
+
+interface SortableTileProps {
+  id: string;
+  disabled: boolean;
+  reduceMotion: boolean;
+  children: (handle: { ref: (node: HTMLElement | null) => void; listeners: DraggableSyntheticListeners }) => ReactNode;
+}
+
+/**
+ * One tile, draggable by its photo (#37). Only the listeners are spread, onto
+ * the photo, never dnd-kit's `attributes`: those would make the tile a
+ * focusable `role="button"` with a second keyboard model — space to lift —
+ * beside the Move buttons, which are the keyboard path.
+ */
+function SortableTile({ id, disabled, reduceMotion, children }: SortableTileProps) {
+  const { setNodeRef, setActivatorNodeRef, listeners, transform, transition, isDragging } = useSortable({
+    id,
+    disabled,
+    // The neighbors sliding aside is motion; under reduced motion they jump.
+    transition: reduceMotion ? null : undefined,
+  });
+  return (
+    <li
+      ref={setNodeRef}
+      className={isDragging ? "image-gallery-item image-gallery-item-dragging" : "image-gallery-item"}
+      data-media-id={id}
+      style={{
+        transform: transform ? `translate3d(${Math.round(transform.x)}px, ${Math.round(transform.y)}px, 0)` : undefined,
+        transition: transition ?? undefined,
+      }}
+    >
+      {children({ ref: setActivatorNodeRef, listeners })}
+    </li>
+  );
 }
 
 /**
@@ -46,6 +113,14 @@ export function ImageGallery({ collectionId, itemId, itemName, emptyDestination 
   const handOffFocus = useFocusHandoff();
   const toastRegionRef = useOverlayClearance();
   const [undo, setUndo] = useState<{ mediaId: string; index: number } | null>(null);
+  const [reduceMotion] = useState(prefersReducedMotion);
+  // A mouse drag starts after 8px of movement, so a click on a tile's buttons
+  // is still a click. A touch drag starts after a 250ms press, so a swipe across
+  // the photos still scrolls the page.
+  const sensors = useSensors(
+    useSensor(MouseSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 250, tolerance: 5 } }),
+  );
 
   const busy = reorder.isPending || makeCover.isPending || deleteMedia.isPending || restoreMedia.isPending;
   const failed = reorder.isError || makeCover.isError || deleteMedia.isError;
@@ -80,6 +155,22 @@ export function ImageGallery({ collectionId, itemId, itemName, emptyDestination 
     handOffFocus(tileFocus(moved));
     reorder.mutateAsync(ids).then(
       () => announce(t("photo_moved", { position: target + 1, count: list.length })),
+      () => {},
+    );
+  }
+
+  function drop(list: Media[], { active, over }: DragEndEvent) {
+    if (busy) return;
+    const moved = String(active.id);
+    const ids = moveOnto(
+      list.map((image) => image.id),
+      moved,
+      over ? String(over.id) : null,
+    );
+    if (!ids) return;
+    resetFailures();
+    reorder.mutateAsync(ids).then(
+      () => announce(t("photo_moved", { position: ids.indexOf(moved) + 1, count: list.length })),
       () => {},
     );
   }
@@ -121,70 +212,88 @@ export function ImageGallery({ collectionId, itemId, itemName, emptyDestination 
     const list = media.data;
     const count = list.length;
     content = (
-      <ul className="image-gallery">
-        {list.map((image, index) => {
-          const photo = t("photo_name", { position: index + 1, count });
-          return (
-            <li key={image.id} className="image-gallery-item" data-media-id={image.id}>
-              <MediaImage
-                collectionId={collectionId}
-                itemId={itemId}
-                mediaId={image.id}
-                variant="thumb"
-                width={image.width}
-                height={image.height}
-                alt={t("photo_alt", { name: itemName, position: index + 1, count })}
-                className="image-gallery-thumb"
-              />
-              {index === 0 && <span className="image-cover-badge">{t("photo_cover")}</span>}
-              <div className="image-actions">
-                {index > 0 && (
-                  <button
-                    type="button"
-                    className="touch-target button-quiet"
-                    aria-label={t("make_cover_photo", { photo })}
-                    aria-disabled={busy || undefined}
-                    onClick={() => cover(image)}
-                  >
-                    {t("make_cover")}
-                  </button>
-                )}
-                {/* At either end the move is not removed but marked: a button
+      <DndContext
+        sensors={sensors}
+        collisionDetection={closestCenter}
+        onDragEnd={(event) => drop(list, event)}
+        accessibility={{ announcements: SILENT, screenReaderInstructions: { draggable: "" } }}
+      >
+        <SortableContext items={list.map((image) => image.id)} strategy={rectSortingStrategy}>
+          <ul className="image-gallery">
+            {list.map((image, index) => {
+              const photo = t("photo_name", { position: index + 1, count });
+              return (
+                <SortableTile key={image.id} id={image.id} disabled={busy} reduceMotion={reduceMotion}>
+                  {(handle) => (
+                    <>
+                      {/* The photo is the drag handle, for a pointer only — the
+                          Move buttons below are the keyboard path, so this
+                          wrapper takes no role and no tab stop. */}
+                      <div className="image-drag-handle" ref={handle.ref} {...handle.listeners}>
+                        <MediaImage
+                          collectionId={collectionId}
+                          itemId={itemId}
+                          mediaId={image.id}
+                          variant="thumb"
+                          width={image.width}
+                          height={image.height}
+                          alt={t("photo_alt", { name: itemName, position: index + 1, count })}
+                          className="image-gallery-thumb"
+                        />
+                      </div>
+                      {index === 0 && <span className="image-cover-badge">{t("photo_cover")}</span>}
+                      <div className="image-actions">
+                        {index > 0 && (
+                          <button
+                            type="button"
+                            className="touch-target button-quiet"
+                            aria-label={t("make_cover_photo", { photo })}
+                            aria-disabled={busy || undefined}
+                            onClick={() => cover(image)}
+                          >
+                            {t("make_cover")}
+                          </button>
+                        )}
+                        {/* At either end the move is not removed but marked: a button
                     that vanished would take focus with it, and one that stays
                     says plainly that this way is not possible. */}
-                <button
-                  type="button"
-                  className="touch-target button-quiet"
-                  aria-label={t("move_earlier_photo", { photo })}
-                  aria-disabled={busy || index === 0 || undefined}
-                  onClick={() => move(list, index, -1)}
-                >
-                  <Icon name="earlier" />
-                </button>
-                <button
-                  type="button"
-                  className="touch-target button-quiet"
-                  aria-label={t("move_later_photo", { photo })}
-                  aria-disabled={busy || index === count - 1 || undefined}
-                  onClick={() => move(list, index, 1)}
-                >
-                  <Icon name="later" />
-                </button>
-                <button
-                  type="button"
-                  className="touch-target button-quiet"
-                  aria-label={t("delete_photo", { photo })}
-                  aria-disabled={busy || undefined}
-                  onClick={(event) => remove(image, index, event)}
-                >
-                  <Icon name="delete" />
-                  {t("delete")}
-                </button>
-              </div>
-            </li>
-          );
-        })}
-      </ul>
+                        <button
+                          type="button"
+                          className="touch-target button-quiet"
+                          aria-label={t("move_earlier_photo", { photo })}
+                          aria-disabled={busy || index === 0 || undefined}
+                          onClick={() => move(list, index, -1)}
+                        >
+                          <Icon name="earlier" />
+                        </button>
+                        <button
+                          type="button"
+                          className="touch-target button-quiet"
+                          aria-label={t("move_later_photo", { photo })}
+                          aria-disabled={busy || index === count - 1 || undefined}
+                          onClick={() => move(list, index, 1)}
+                        >
+                          <Icon name="later" />
+                        </button>
+                        <button
+                          type="button"
+                          className="touch-target button-quiet"
+                          aria-label={t("delete_photo", { photo })}
+                          aria-disabled={busy || undefined}
+                          onClick={(event) => remove(image, index, event)}
+                        >
+                          <Icon name="delete" />
+                          {t("delete")}
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </SortableTile>
+              );
+            })}
+          </ul>
+        </SortableContext>
+      </DndContext>
     );
   }
 
