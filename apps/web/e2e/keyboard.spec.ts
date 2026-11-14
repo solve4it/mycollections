@@ -1049,7 +1049,7 @@ test.describe("focus while an action is in flight", () => {
     await api.reset();
     const collection = await api.createCollection({ name: "Vinyl records", fields: FIELDS });
     await api.createItem(collection.id, { title: "Kind of Blue", year: 1959 });
-    const backup = await api.exportDocument();
+    const backup = await api.exportArchive();
 
     await page.goto("/settings");
     const picker = page.getByRole("button", { name: "Choose backup file" });
@@ -1057,7 +1057,7 @@ test.describe("focus while an action is in flight", () => {
 
     const held = await holdRequest(page, "**/api/import", "POST");
     await picker.focus();
-    await picker.setInputFiles({ name: "backup.json", mimeType: "application/json", buffer: Buffer.from(backup) });
+    await picker.setInputFiles({ name: "backup.zip", mimeType: "application/zip", buffer: backup });
 
     await held.arrived;
     await expectMarkedBusy(picker);

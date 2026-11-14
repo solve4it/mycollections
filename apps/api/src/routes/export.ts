@@ -1,8 +1,10 @@
 import { open, rm } from "node:fs/promises";
 import type { Readable } from "node:stream";
+import type { ExportDocument } from "@mycollections/core";
 import {
   type DatabaseHandle,
   exportBackup,
+  exportCollection,
   type ImportMode,
   type ImportSummary,
   importDocument,
@@ -15,6 +17,7 @@ import {
   DEFAULT_ARCHIVE_LIMITS,
   validateDocument,
 } from "../archive/read-export-archive.js";
+import { attachmentDisposition, writeExportArchive } from "../archive/write-export-archive.js";
 import type { JobLimiter } from "../media/job-limiter.js";
 import type { MediaStore } from "../media/media-store.js";
 
@@ -68,6 +71,12 @@ const importQuerySchema = {
   },
 } as const;
 
+const collectionParams = {
+  type: "object",
+  required: ["id"],
+  properties: { id: { type: "string", pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$" } },
+} as const;
+
 /** The first four bytes of every zip that starts with a file entry. */
 const ZIP_MAGIC = Buffer.from([0x50, 0x4b, 0x03, 0x04]);
 
@@ -80,14 +89,33 @@ export async function registerExportRoutes(app: FastifyInstance, db: DatabaseHan
   // of #449). Per app, which is per server.
   let importing = false;
 
-  app.get("/api/export", async (_request, reply) => {
-    // A JSON response cannot carry image files, and a row without its file is one
-    // the import refuses — so the image rows stay out until the export becomes an
-    // archive that carries both (#45).
-    const document = { ...(await exportBackup(db)), media: [] };
-    const filename = `mycollections-export-${new Date().toISOString().slice(0, 10)}.json`;
-    return reply.header("Content-Disposition", `attachment; filename="${filename}"`).send(document);
-  });
+  async function sendArchive(request: FastifyRequest, reply: FastifyReply, document: ExportDocument, name: string) {
+    const stream = await writeExportArchive(document, options.media?.store, (row) =>
+      // Ids only: a row whose file is gone is worth knowing about, and nothing in
+      // it is user data.
+      request.log.warn({ itemId: row.itemId, mediaId: row.id }, "export left out an image whose file is missing"),
+    );
+    return reply
+      .header("Content-Type", "application/zip")
+      .header("Cache-Control", "no-store")
+      .header("Content-Disposition", attachmentDisposition(name))
+      .send(stream);
+  }
+
+  // The whole database, images included, as an archive (#45).
+  app.get("/api/export", async (request, reply) => sendArchive(request, reply, await exportBackup(db), "export"));
+
+  // One live collection in the same format, from its own page (#45). A trashed one
+  // answers 404, as the collection itself does.
+  app.get<{ Params: { id: string } }>(
+    "/api/collections/:id/export",
+    { schema: { params: collectionParams } },
+    async (request, reply) => {
+      const document = await exportCollection(db, request.params.id);
+      if (document === null) throw app.httpErrors.notFound("Collection not found");
+      return sendArchive(request, reply, document, document.collections[0]?.name ?? "collection");
+    },
+  );
 
   await app.register(async (scope) => {
     // The archive arrives as the raw request stream; this route counts its bytes

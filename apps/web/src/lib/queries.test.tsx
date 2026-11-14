@@ -177,7 +177,7 @@ describe("item changes refresh the dashboard list, though it is not on screen (#
         "an import",
         async (_qc, wrapper) => {
           const { result } = renderHook(() => useImportData(), { wrapper });
-          await act(() => result.current.mutateAsync({}));
+          await act(() => result.current.mutateAsync({ document: {} }));
         },
       ],
     ];

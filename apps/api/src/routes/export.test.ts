@@ -1,7 +1,11 @@
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { EXPORT_VERSION, type ExportDocument, type FieldDefinition } from "@mycollections/core";
 import { type DatabaseHandle, openDatabase } from "@mycollections/db";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { buildApp } from "../app.js";
+import { DEFAULT_ARCHIVE_LIMITS, openExportArchive } from "../archive/read-export-archive.js";
 
 const TOKEN = "test-token";
 const auth = { Authorization: `Bearer ${TOKEN}` };
@@ -20,6 +24,23 @@ beforeEach(async () => {
 afterEach(() => {
   handle.close();
 });
+
+/**
+ * The document inside an export archive (#45), read with the import's own reader.
+ * These tests seed no images, so it re-imports as a JSON body unchanged.
+ */
+async function documentOf(archive: Buffer): Promise<ExportDocument> {
+  const dir = mkdtempSync(join(tmpdir(), "export-test-"));
+  const path = join(dir, "export.zip");
+  writeFileSync(path, archive);
+  const opened = await openExportArchive(path, DEFAULT_ARCHIVE_LIMITS);
+  try {
+    return opened.document;
+  } finally {
+    await opened.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
 
 async function makeApp() {
   return buildApp({ db: handle, token: TOKEN });
@@ -44,7 +65,7 @@ describe("GET /api/export", () => {
     const res = await app.inject({ method: "GET", url: "/api/export", headers: auth });
 
     expect(res.statusCode).toBe(200);
-    const doc = res.json<ExportDocument>();
+    const doc = await documentOf(res.rawPayload);
     expect(doc.version).toBe(EXPORT_VERSION);
     expect(doc.collections).toEqual([collection]);
     expect(doc.items).toEqual([item]);
@@ -54,34 +75,8 @@ describe("GET /api/export", () => {
     const app = await makeApp();
     const res = await app.inject({ method: "GET", url: "/api/export", headers: auth });
     expect(res.headers["content-disposition"]).toMatch(
-      /attachment; filename="mycollections-export-\d{4}-\d{2}-\d{2}\.json"/,
+      /attachment; filename="mycollections-export-\d{4}-\d{2}-\d{2}\.zip"/,
     );
-  });
-});
-
-describe("GET /api/export before it carries files (#45)", () => {
-  it("leaves image rows out of the JSON, which cannot carry their files, so the file re-imports", async () => {
-    const { item } = await seed();
-    await handle.media.create({
-      itemId: item.id,
-      source: "user-attached",
-      mimeType: "image/webp",
-      bytes: 10,
-      width: 1,
-      height: 1,
-    });
-    const app = await makeApp();
-    const exported = (await app.inject({ method: "GET", url: "/api/export", headers: auth })).json();
-    expect(exported.media).toEqual([]);
-
-    const fresh = await openDatabase({ path: ":memory:" });
-    try {
-      const target = await buildApp({ db: fresh, token: TOKEN });
-      const res = await target.inject({ method: "POST", url: "/api/import", headers: jsonAuth, payload: exported });
-      expect(res.statusCode).toBe(200);
-    } finally {
-      fresh.close();
-    }
   });
 });
 
@@ -89,7 +84,9 @@ describe("POST /api/import", () => {
   it("round-trips an exported document into an empty database", async () => {
     const { collection, item } = await seed();
     const sourceApp = await makeApp();
-    const exported = (await sourceApp.inject({ method: "GET", url: "/api/export", headers: auth })).json();
+    const exported = await documentOf(
+      (await sourceApp.inject({ method: "GET", url: "/api/export", headers: auth })).rawPayload,
+    );
 
     const fresh = await openDatabase({ path: ":memory:" });
     try {
@@ -115,7 +112,9 @@ describe("POST /api/import", () => {
   it("is idempotent across repeated imports", async () => {
     await seed();
     const sourceApp = await makeApp();
-    const exported = (await sourceApp.inject({ method: "GET", url: "/api/export", headers: auth })).json();
+    const exported = await documentOf(
+      (await sourceApp.inject({ method: "GET", url: "/api/export", headers: auth })).rawPayload,
+    );
 
     const fresh = await openDatabase({ path: ":memory:" });
     try {
@@ -215,7 +214,9 @@ describe("export and import of a finite set's target (#42)", () => {
       targetCount: 50,
     });
     const sourceApp = await makeApp();
-    const exported = (await sourceApp.inject({ method: "GET", url: "/api/export", headers: auth })).json();
+    const exported = await documentOf(
+      (await sourceApp.inject({ method: "GET", url: "/api/export", headers: auth })).rawPayload,
+    );
     expect(exported.collections.map((c: { targetCount: unknown }) => c.targetCount)).toEqual([50]);
 
     const fresh = await openDatabase({ path: ":memory:" });
@@ -233,8 +234,11 @@ describe("export and import of a finite set's target (#42)", () => {
     await handle.collections.create({ name: "Quarters", fields: baseFields, isFiniteSet: true, targetCount: 50 });
     const { collection } = await seed();
     const sourceApp = await makeApp();
-    const exported = (await sourceApp.inject({ method: "GET", url: "/api/export", headers: auth })).json();
-    const bad = exported.collections.find((c: { id: string }) => c.id === collection.id);
+    const exported = await documentOf(
+      (await sourceApp.inject({ method: "GET", url: "/api/export", headers: auth })).rawPayload,
+    );
+    const bad = exported.collections.find((c) => c.id === collection.id);
+    if (!bad) throw new Error("the seeded collection is missing from the export");
     bad.targetCount = 5;
 
     const fresh = await openDatabase({ path: ":memory:" });
@@ -259,7 +263,9 @@ describe("export and import of a collection's view (#38)", () => {
       itemView: "grid",
     });
     const sourceApp = await makeApp();
-    const exported = (await sourceApp.inject({ method: "GET", url: "/api/export", headers: auth })).json();
+    const exported = await documentOf(
+      (await sourceApp.inject({ method: "GET", url: "/api/export", headers: auth })).rawPayload,
+    );
     expect(exported.collections.map((c: { itemView: unknown }) => c.itemView)).toEqual(["grid"]);
 
     const fresh = await openDatabase({ path: ":memory:" });

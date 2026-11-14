@@ -7,6 +7,7 @@ import { clearToken, exportData, isTokenSessionOnly } from "../../lib/api-client
 import { isErrorReportingEnabled, setErrorReportingEnabled } from "../../lib/error-reporter.js";
 import { useImportData } from "../../lib/queries.js";
 import { getThemePreference, isThemePreference, setThemePreference } from "../../lib/theme.js";
+import { isZipFile } from "../../lib/zip-file.js";
 import { authenticatedRoute } from "../_authenticated.js";
 
 export const settingsRoute = createRoute({
@@ -30,6 +31,7 @@ function SettingsPage() {
   const navigate = useNavigate();
   const importData = useImportData();
   const [exportError, setExportError] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const [importInvalid, setImportInvalid] = useState(false);
   const [errorReporting, setErrorReporting] = useState(isErrorReportingEnabled);
   const [theme, setTheme] = useState(getThemePreference);
@@ -52,17 +54,23 @@ function SettingsPage() {
   }
 
   async function handleExport() {
+    // What `disabled` would do, without dropping focus to <body> (#45): a second
+    // press while an export is building is ignored rather than starting another.
+    if (exporting) return;
+    setExporting(true);
     setExportError(false);
     try {
       const blob = await exportData();
       const url = URL.createObjectURL(blob);
       const anchor = document.createElement("a");
       anchor.href = url;
-      anchor.download = `mycollections-export-${new Date().toISOString().slice(0, 10)}.json`;
+      anchor.download = `mycollections-export-${new Date().toISOString().slice(0, 10)}.zip`;
       anchor.click();
       URL.revokeObjectURL(url);
     } catch {
       setExportError(true);
+    } finally {
+      setExporting(false);
     }
   }
 
@@ -79,15 +87,24 @@ function SettingsPage() {
 
     setImportInvalid(false);
     importData.reset();
+    // An export archive (#45) goes as it is; anything else must be a JSON backup.
+    if (await isZipFile(file)) {
+      importData.mutate({ archive: file });
+      return;
+    }
     try {
-      const document = JSON.parse(await file.text());
-      importData.mutate(document);
+      importData.mutate({ document: JSON.parse(await file.text()) });
     } catch {
       setImportInvalid(true);
     }
   }
 
   const importFailed = importInvalid || importData.isError;
+  // Too large and busy are not "your file is broken", so they say what they are.
+  // Read by status, as `ApiError` carries it; anything without one is a plain failure.
+  const importStatus = (importData.error as { status?: unknown } | null)?.status;
+  const importErrorKey =
+    importStatus === 413 ? "import_too_large" : importStatus === 409 ? "import_busy" : "import_error";
 
   return (
     <div>
@@ -132,7 +149,12 @@ function SettingsPage() {
       <section className="settings-data">
         <h2>{t("data_label")}</h2>
         <p>{t("export_description")}</p>
-        <button type="button" className="touch-target button-quiet" onClick={handleExport}>
+        <button
+          type="button"
+          className="touch-target button-quiet"
+          aria-disabled={exporting || undefined}
+          onClick={handleExport}
+        >
           <Icon name="export" />
           {t("export_button")}
         </button>
@@ -146,7 +168,7 @@ function SettingsPage() {
           <input
             id="import-file"
             type="file"
-            accept="application/json,.json"
+            accept=".zip,application/zip,.json,application/json"
             className="touch-target"
             aria-label={t("import_button")}
             aria-disabled={importData.isPending || undefined}
@@ -178,7 +200,7 @@ function SettingsPage() {
           {importData.isPending && <p>{t("import_pending")}</p>}
           {importData.isSuccess && <p>{t("import_success", { ...importData.data })}</p>}
         </div>
-        {importFailed && <p role="alert">{t("import_error")}</p>}
+        {importFailed && <p role="alert">{t(importErrorKey)}</p>}
       </section>
 
       {/* Trash sits under Data: both are about what the app is holding, and the

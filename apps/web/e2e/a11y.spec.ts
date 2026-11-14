@@ -1265,7 +1265,7 @@ test.describe("accessibility", () => {
     await api.createItem(collection.id, { title: "Kind of Blue", year: 1959, signed: true }, "owned");
     // Taken from the server, then restored into an empty database, so the file
     // the picker is handed is one the app itself produced.
-    const backup = await api.exportDocument();
+    const backup = await api.exportArchive();
     await api.reset();
 
     await page.goto("/settings");
@@ -1276,12 +1276,12 @@ test.describe("accessibility", () => {
     await expect(region, "the region must be on the page, and empty, before the import").toBeEmpty();
 
     await page.getByLabel("Choose backup file").setInputFiles({
-      name: "mycollections-export.json",
-      mimeType: "application/json",
-      buffer: Buffer.from(backup),
+      name: "mycollections-export.zip",
+      mimeType: "application/zip",
+      buffer: backup,
     });
 
-    await expect(region).toContainText("Imported 1 collections and 1 items");
+    await expect(region).toContainText("Imported 1 collections, 1 items and 0 images");
     await expectNoAccessibilityViolations(page);
   });
 

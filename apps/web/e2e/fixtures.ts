@@ -78,10 +78,12 @@ export class ApiFixture {
    * the import UI feeds it a document the server actually produced rather than
    * a hand-built one that could drift from the schema.
    */
-  async exportDocument(): Promise<string> {
+  /** The export archive's bytes (#45): binary, so never read as text. */
+  async exportArchive(): Promise<Buffer> {
     const res = await this.request.get(`${API_URL}/api/export`, { headers: this.headers });
     expect(res.status(), "exporting a backup").toBe(200);
-    return await res.text();
+    expect(res.headers()["content-type"]).toBe("application/zip");
+    return await res.body();
   }
 
   /**
