@@ -69,7 +69,7 @@ Tests passing is CI's evidence, not yours. Before "done" or "fixed":
   VITE_API_URL=http://localhost:3111 pnpm --filter @mycollections/web dev   # → :5173
   ```
 
-  Paste the token on the setup screen. NEVER use the default DB path when testing — the
+  Open the `Pair a browser` link the API prints (or paste the token) on the setup screen. NEVER use the default DB path when testing — the
   working-tree `data/app.db` holds real collections. Never delete it.
 - **A query-failure screen cannot be reached by driving Chrome from a tool.** React Query
   pauses retries while `document.visibilityState` is `"hidden"`, which a driven tab always
