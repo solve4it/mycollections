@@ -103,7 +103,9 @@ gh project item-edit --project-id PVT_kwDOEDb4es4BTKDH --id "$ITEM_ID" --field-i
 - **Linting**: Biome (spaces, indent 2, line width 120, built-in a11y rules — no ESLint needed). `pnpm lint` is
   `biome check .`, so it reports formatting too. `CHANGELOG.md` is excluded from the formatter in `biome.json` —
   release-please owns that file and writes `*` bullets where Biome wants `-`; never reformat it by hand.
-- **Spell check**: cSpell
+- **Spell check**: cSpell. `CHANGELOG.md` is excluded too (`ignorePaths` in `cspell.json`): release-please copies
+  commit subjects into it, and commit messages are never spell-checked, so a word that passed on its own PR would fail
+  the release PR instead (#456). Spell your commit subjects as carefully as your code; American spelling.
 - **Node**: Version pinned in `.nvmrc`, use fnm
 
 ## Project skill
