@@ -1,4 +1,3 @@
-import { randomUUID } from "node:crypto";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -19,7 +18,13 @@ export interface ServerConfig {
   mediaDir: string | null;
   port: number;
   host: string;
-  token: string;
+  /**
+   * The explicit `API_TOKEN`, or undefined. An unset token is not generated here: the
+   * entrypoint resolves it through `resolveDeviceToken`, which keeps it in a file
+   * beside the database so it survives a restart (#241). Reading files does not belong
+   * in this pure function.
+   */
+  token: string | undefined;
   isDev: boolean;
   /**
    * Passed straight to `buildApp`. `undefined` keeps the default loopback-only Host
@@ -175,21 +180,22 @@ export function resolveServerConfig(env: NodeJS.ProcessEnv = process.env): Serve
   const explicitToken = read(env.API_TOKEN);
   const isDev = env.NODE_ENV !== "production";
 
-  // The generated fallback token is only printed on a development startup. Outside
-  // development it would be known to nobody, so the server would bind, look healthy,
-  // and answer 401 to every authenticated request — unusable by construction, not
-  // merely misconfigured. Refuse rather than start something that cannot work (#241).
+  // The token file beside the database, and the pairing that hands it to a browser,
+  // are development conveniences (#241): outside development nothing tells anyone a
+  // token exists or where it is, so the server would bind, look healthy, and answer
+  // 401 to every authenticated request — unusable by construction, not merely
+  // misconfigured. Refuse rather than start something that cannot work (#248).
   if (!isDev && explicitToken === undefined) {
     throw new Error(
-      "API_TOKEN must be set outside development: the generated fallback is never printed there, " +
+      "API_TOKEN must be set outside development: the token file and pairing are development-only, " +
         "so every authenticated request would fail with 401.",
     );
   }
 
   if (!isLoopbackHost(host)) {
-    // Binding beyond loopback publishes every collection to the network. A token
-    // generated at startup would be printed to a console nobody is watching, so
-    // require the operator to have chosen one deliberately.
+    // Binding beyond loopback publishes every collection to the network. A token the
+    // server chose for itself is one nobody watching the network side knows about,
+    // so require the operator to have chosen one deliberately.
     if (explicitToken === undefined) {
       throw new Error(`Refusing to bind non-loopback HOST "${host}" without an explicit API_TOKEN.`);
     }
@@ -217,7 +223,7 @@ export function resolveServerConfig(env: NodeJS.ProcessEnv = process.env): Serve
         : join(dirname(dbPath), "media"),
     port: parsePort(read(env.PORT)),
     host,
-    token: explicitToken ?? randomUUID(),
+    token: explicitToken,
     isDev,
     // Host pinning defends the loopback default against DNS rebinding. On a LAN bind
     // there is no way to know which name a client will use, so pin nothing rather than

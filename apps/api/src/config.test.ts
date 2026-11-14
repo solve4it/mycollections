@@ -7,17 +7,15 @@ function resolve(env: Record<string, string | undefined> = {}) {
 }
 
 describe("resolveServerConfig", () => {
-  it("defaults to a loopback bind on port 3001 with a generated token", () => {
+  it("defaults to a loopback bind on port 3001, leaving the token to the token file", () => {
     const config = resolve();
     expect(config.host).toBe("127.0.0.1");
     expect(config.port).toBe(3001);
     expect(config.isDev).toBe(true);
-    expect(config.token).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
+    // No longer generated here (#241): a token minted per call is what signed every
+    // browser out on restart. `resolveDeviceToken` reads or creates the persisted one.
+    expect(config.token).toBeUndefined();
     expect(config.dbPath.endsWith("/data/app.db")).toBe(true);
-  });
-
-  it("generates a different token on each call", () => {
-    expect(resolve().token).not.toBe(resolve().token);
   });
 
   it("reads the supported overrides", () => {
@@ -75,7 +73,7 @@ describe("resolveServerConfig", () => {
     const config = resolve({ [name]: "" });
     expect(config.host).toBe("127.0.0.1");
     expect(config.port).toBe(3001);
-    expect(config.token).toHaveLength(36);
+    expect(config.token).toBeUndefined();
     expect(config.dbPath.endsWith("/data/app.db")).toBe(true);
   });
 
@@ -148,8 +146,8 @@ describe("resolveServerConfig", () => {
       expect(() => resolve({ NODE_ENV: "production", API_TOKEN: "short" })).not.toThrow();
     });
 
-    it("still generates a token in development, where it is printed on startup", () => {
-      expect(resolve().token).toHaveLength(36);
+    it("leaves an unset token to the token file in development", () => {
+      expect(resolve().token).toBeUndefined();
     });
   });
 });
