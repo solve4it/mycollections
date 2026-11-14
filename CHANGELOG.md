@@ -1,5 +1,29 @@
 # Changelog
 
+## [0.0.8](https://github.com/solve4it/mycollections/compare/mycollections-v0.0.7...mycollections-v0.0.8) (2026-11-14)
+
+
+### Features
+
+* **api:** accept and return a collection's item view [#38](https://github.com/solve4it/mycollections/issues/38) ([4e5e6cb](https://github.com/solve4it/mycollections/commit/4e5e6cb0487b58ae0263a261c979d1bb5e794bad))
+* **api:** one-time pairing link and POST /api/pair ([#241](https://github.com/solve4it/mycollections/issues/241), 2/4) ([#438](https://github.com/solve4it/mycollections/issues/438)) ([d0e18f7](https://github.com/solve4it/mycollections/commit/d0e18f7e6fbf9c1093806789e5f8da64fed57870))
+* **api:** open the pairing link on a first run ([#241](https://github.com/solve4it/mycollections/issues/241), 3/4) ([#440](https://github.com/solve4it/mycollections/issues/440)) ([c57977a](https://github.com/solve4it/mycollections/commit/c57977ac8af2522625e71ae6f026cb353d4fcb48))
+* **api:** persist the API token across restarts ([#241](https://github.com/solve4it/mycollections/issues/241), 1/4) ([#437](https://github.com/solve4it/mycollections/issues/437)) ([3927406](https://github.com/solve4it/mycollections/commit/3927406401c1453fdf78cf314abfbded92e664b8))
+* **core,db,api:** a collection's item view, list or grid ([#38](https://github.com/solve4it/mycollections/issues/38), 1/2) ([#432](https://github.com/solve4it/mycollections/issues/432)) ([7f23f3f](https://github.com/solve4it/mycollections/commit/7f23f3f432534c01eb655bde92e63e0217b801a5))
+* **core:** a collection's item view, list or grid [#38](https://github.com/solve4it/mycollections/issues/38) ([0c4c058](https://github.com/solve4it/mycollections/commit/0c4c058ed430115d7c482338c09645cefdfb68a8))
+* **db:** store a collection's item view, list by default [#38](https://github.com/solve4it/mycollections/issues/38) ([88f7fa6](https://github.com/solve4it/mycollections/commit/88f7fa66a9f4d32b0ed33d4bd44e951387da2ec6))
+* **web:** a view select and grid cards on a collection's page [#38](https://github.com/solve4it/mycollections/issues/38) ([1247549](https://github.com/solve4it/mycollections/commit/1247549aab13248f4f7e2796e90e8ac1df00ef2c))
+* **web:** list or grid, chosen per collection ([#38](https://github.com/solve4it/mycollections/issues/38), 2/2) ([05b4282](https://github.com/solve4it/mycollections/commit/05b4282cf242fbe8a71918bb2068fd13d90ad9ab))
+* **web:** pair a browser from the link, Unpair in Settings ([#241](https://github.com/solve4it/mycollections/issues/241), 4/4) ([#441](https://github.com/solve4it/mycollections/issues/441)) ([78e5ae2](https://github.com/solve4it/mycollections/commit/78e5ae25ee8f57e311177f5960434a1b81473b54))
+* **web:** placeholder cards while a grid collection's items load [#38](https://github.com/solve4it/mycollections/issues/38) ([bbc405e](https://github.com/solve4it/mycollections/commit/bbc405e2bc4c5c55fe9a05fab3fce2f49cf691ee))
+* **web:** switch a collection's view, shown at once and serialised [#38](https://github.com/solve4it/mycollections/issues/38) ([a9e10dc](https://github.com/solve4it/mycollections/commit/a9e10dcace41c400f8e2d9dcb891beaf8fc7d43b))
+
+
+### Bug Fixes
+
+* **web:** a refused view switch goes back to the view the server holds [#38](https://github.com/solve4it/mycollections/issues/38) ([7d1966f](https://github.com/solve4it/mycollections/commit/7d1966f1047f39e0950dc6fb36e050136e76b134))
+* **web:** keep a grid card's failure alert inside its cell [#38](https://github.com/solve4it/mycollections/issues/38) ([33026df](https://github.com/solve4it/mycollections/commit/33026df9d646409c795b38e7ae47c9f91f6605b1))
+
 ## [0.0.7](https://github.com/solve4it/mycollections/compare/mycollections-v0.0.6...mycollections-v0.0.7) (2026-11-13)
 
 
