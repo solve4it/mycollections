@@ -199,3 +199,80 @@ describe("0003_media (#37)", () => {
     }
   });
 });
+
+describe("0004_item_view (#38)", () => {
+  it("only adds a column with a default — no table rebuild that could fire the cascade to items", () => {
+    const sql = readFileSync(join(SHIPPED, "0004_item_view.sql"), "utf8");
+    expect(sql.trim()).toBe("ALTER TABLE `collections` ADD `item_view` text DEFAULT 'list' NOT NULL;");
+  });
+
+  it("follows the media migration in the journal", () => {
+    const { entries } = readJournal(SHIPPED);
+    const index = entries.findIndex((entry) => entry.tag === "0004_item_view");
+    expect(index).toBe(4);
+    const [previous, current] = [entries[index - 1], entries[index]];
+    expect(previous?.tag).toBe("0003_media");
+    expect(current && previous && current.when > previous.when).toBe(true);
+  });
+
+  it("upgrades a database holding collections, items and photos, giving every collection the list view", async () => {
+    const dir = makeTmpDir();
+    const path = join(dir, "app.db");
+    const before = await openDatabase({ path, migrationsFolder: migrationsBefore(dir, "0004_item_view") });
+    const stamp = "2026-01-01T00:00:00.000Z";
+    const quarters = "11111111-1111-4111-8111-111111111111";
+    const trashed = "33333333-3333-4333-8333-333333333333";
+    const item = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+    const fields = JSON.stringify([{ id: "title", type: "text", label: "Title", required: true }]);
+    const insertCollection = before.sqlite.prepare(
+      "INSERT INTO collections (id, name, description, fields, is_finite_set, target_count, created_at, updated_at, deleted_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+    );
+    insertCollection.run(quarters, "Quarters", null, fields, 1, 50, stamp, stamp, null);
+    insertCollection.run(trashed, "Old", null, fields, 0, null, stamp, stamp, stamp);
+    before.sqlite
+      .prepare(
+        "INSERT INTO items (id, collection_id, status, fields, created_at, updated_at, deleted_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+      )
+      .run(item, quarters, "owned", '{"title":"Delaware"}', stamp, stamp, null);
+    before.sqlite
+      .prepare(
+        "INSERT INTO media (id, item_id, kind, source, mime_type, bytes, width, height, position, created_at, deleted_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+      )
+      .run(
+        "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee",
+        item,
+        "image",
+        "user-attached",
+        "image/webp",
+        10,
+        4,
+        3,
+        0,
+        stamp,
+        null,
+      );
+    before.close();
+
+    const after = await openDatabase({ path });
+    try {
+      const collections = await after.collections.list({ includeDeleted: true });
+      expect(collections.map((c) => [c.id, c.targetCount, c.itemView, c.updatedAt, c.deletedAt])).toEqual([
+        [quarters, 50, "list", stamp, null],
+        [trashed, null, "list", stamp, stamp],
+      ]);
+      const counts = after.sqlite
+        .prepare(
+          "SELECT (SELECT count(*) FROM collections) AS collections, (SELECT count(*) FROM items) AS items, (SELECT count(*) FROM media) AS media",
+        )
+        .get();
+      expect(counts).toEqual({ collections: 2, items: 1, media: 1 });
+      const found = await after.items.listByCollection(quarters, { q: "delaware" });
+      expect(found.map((i) => i.id)).toEqual([item]);
+    } finally {
+      after.close();
+    }
+
+    const backups = readdirSync(dir).filter((name) => name.endsWith(".bak"));
+    expect(backups).toHaveLength(1);
+  });
+});

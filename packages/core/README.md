@@ -12,6 +12,7 @@ This is a private, pure-TypeScript package — no runtime concerns beyond [Zod](
 | ---------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
 | `CollectionSchema` / `Collection`                    | A user-defined collection (records, LEGO sets, audio gear, …) and its field schema                                         |
 | `TARGET_COUNT_MAX`                                   | The largest `targetCount` a finite set may declare (`100_000`)                                                             |
+| `ItemViewSchema` / `ItemView` / `ITEM_VIEWS`         | `"list" \| "grid"` — how a collection's page lays out its items; see below                                                 |
 | `COLLECTION_NAME_MAX` / `COLLECTION_DESCRIPTION_MAX` | The longest collection name (`120`) and description (`2000`); the API's body schema and the web forms cap at these         |
 | `CollectionWithItemCount`                            | A collection as the dashboard lists it, with `itemCount` (live items) and `ownedCount` (live owned items)                  |
 | `ItemCountsSchema` / `ItemCounts`                    | `{ total, owned, wanted, ordered }` — a collection's live items, counted per status                                        |
@@ -25,6 +26,10 @@ This is a private, pure-TypeScript package — no runtime concerns beyond [Zod](
 ### Finite sets and their target (#42)
 
 A collection with `isFiniteSet: true` is a set with a known end — the 50 state quarters, a LEGO wave. `targetCount` is how many items complete it: an integer from 1 to `TARGET_COUNT_MAX`, or `null` when the size is not known yet. It defaults to `null`, so documents written before the field existed (version 1 backups among them) still parse. Only a finite set may carry a target: `targetCount` set on a collection with `isFiniteSet: false` fails validation with the fixed message `targetCount requires isFiniteSet` at the `targetCount` path. The schema never coerces — `"5"`, `true` and `2.5` are all rejected.
+
+### A collection's view (#38)
+
+`itemView` is how the collection's page lays out its items: `"list"` (compact rows) or `"grid"` (cards led by each item's cover). It belongs to the collection, not to a browser, so the choice is the same on every device and travels in a backup. It defaults to `"list"` — the layout every collection had before the choice existed — so documents written before the field existed still parse, and `EXPORT_VERSION` stays 1. Any other value, `null` included, fails validation; the schema never coerces.
 
 `collectionProgress(collection, ownedCount)` is the one place progress is worked out. It returns `null` unless the collection is a finite set with a target — no target means no bar, never "0 of ?". Otherwise it returns `{ owned, target, fraction, complete }`:
 

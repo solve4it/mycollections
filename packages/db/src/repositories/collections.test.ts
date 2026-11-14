@@ -261,3 +261,61 @@ describe("CollectionsRepository targetCount (#42)", () => {
     expect((await handle.collections.list({ includeDeleted: true })).map((c) => c.targetCount)).toEqual([null]);
   });
 });
+
+describe("CollectionsRepository itemView (#38)", () => {
+  it("gives a new collection the list view", async () => {
+    const created = await handle.collections.create({ name: "Records", fields, isFiniteSet: false });
+    expect(created.itemView).toBe("list");
+    expect((await handle.collections.getById(created.id))?.itemView).toBe("list");
+  });
+
+  it("creates a collection in the grid view and reads it back", async () => {
+    const created = await handle.collections.create({ name: "Records", fields, isFiniteSet: false, itemView: "grid" });
+    expect(created.itemView).toBe("grid");
+    expect(await handle.collections.getById(created.id)).toEqual(created);
+  });
+
+  it("switches the view and keeps it when a patch omits it", async () => {
+    const created = await handle.collections.create({ name: "Quarters", fields, isFiniteSet: true, targetCount: 50 });
+    const switched = await handle.collections.update(created.id, { itemView: "grid" });
+    expect(switched).toEqual({ ...created, itemView: "grid", updatedAt: switched?.updatedAt });
+    expect((await handle.collections.update(created.id, { name: "State quarters" }))?.itemView).toBe("grid");
+    expect((await handle.collections.list()).map((c) => [c.name, c.itemView, c.targetCount])).toEqual([
+      ["State quarters", "grid", 50],
+    ]);
+    expect((await handle.collections.update(created.id, { itemView: "list" }))?.itemView).toBe("list");
+  });
+
+  it("refuses a view that is not list or grid, writing nothing", async () => {
+    const created = await handle.collections.create({ name: "Records", fields, isFiniteSet: false });
+    await expect(
+      // @ts-expect-error — the point is a value the type would not allow.
+      handle.collections.update(created.id, { itemView: "table" }),
+    ).rejects.toThrow();
+    expect(await handle.collections.getById(created.id)).toEqual(created);
+  });
+
+  it("keeps an imported collection's view", async () => {
+    const created = await handle.collections.create({ name: "Records", fields, isFiniteSet: false, itemView: "grid" });
+    const fresh = await openDatabase({ path: ":memory:" });
+    try {
+      expect(fresh.collections.insertImported(created)).toBe(true);
+      expect((await fresh.collections.getById(created.id))?.itemView).toBe("grid");
+    } finally {
+      fresh.close();
+    }
+  });
+
+  // As for a target: a row no current write path could produce must not turn
+  // every list and export into a 500 — a view is the least of what is at stake.
+  it.each([
+    ["an unknown view", "table"],
+    ["a different case", "Grid"],
+    ["an empty string", ""],
+  ])("reads %s stored in the row as the list view", async (_label, stored) => {
+    const created = await handle.collections.create({ name: "Odd", fields, isFiniteSet: false });
+    handle.sqlite.prepare("UPDATE collections SET item_view = ? WHERE id = ?").run(stored, created.id);
+    expect((await handle.collections.getById(created.id))?.itemView).toBe("list");
+    expect((await handle.collections.list({ includeDeleted: true })).map((c) => c.itemView)).toEqual(["list"]);
+  });
+});

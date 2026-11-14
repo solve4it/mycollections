@@ -173,3 +173,54 @@ describe("backups and a finite set's target (#42)", () => {
     }
   });
 });
+
+describe("backups and a collection's view (#38)", () => {
+  it("round-trips a grid collection beside a list one", async () => {
+    const records = await handle.collections.create({ name: "Records", fields, isFiniteSet: false, itemView: "grid" });
+    const books = await handle.collections.create({ name: "Books", fields, isFiniteSet: false });
+    const doc = await exportBackup(handle);
+    expect(doc.collections.map((c) => [c.name, c.itemView])).toEqual([
+      ["Records", "grid"],
+      ["Books", "list"],
+    ]);
+
+    const fresh = await openDatabase({ path: ":memory:" });
+    try {
+      importBackup(fresh, JSON.parse(JSON.stringify(doc)));
+      expect(await fresh.collections.getById(records.id)).toEqual(records);
+      expect(await fresh.collections.getById(books.id)).toEqual(books);
+    } finally {
+      fresh.close();
+    }
+  });
+
+  it("imports a backup written before views existed in the list view", async () => {
+    const { collection, item } = await seed();
+    const doc = JSON.parse(JSON.stringify(await exportBackup(handle)));
+    for (const c of doc.collections) delete c.itemView;
+
+    const fresh = await openDatabase({ path: ":memory:" });
+    try {
+      importBackup(fresh, doc);
+      expect((await fresh.collections.getById(collection.id))?.itemView).toBe("list");
+      expect(await fresh.items.listByCollection(collection.id)).toEqual([item]);
+    } finally {
+      fresh.close();
+    }
+  });
+
+  it("rejects the whole file when one collection names a view that does not exist", async () => {
+    await handle.collections.create({ name: "Records", fields, isFiniteSet: false, itemView: "grid" });
+    const { collection } = await seed();
+    const doc = JSON.parse(JSON.stringify(await exportBackup(handle)));
+    doc.collections.find((c: { id: string }) => c.id === collection.id).itemView = "table";
+
+    const fresh = await openDatabase({ path: ":memory:" });
+    try {
+      expect(() => importBackup(fresh, doc)).toThrow();
+      expect(await fresh.collections.list({ includeDeleted: true })).toEqual([]);
+    } finally {
+      fresh.close();
+    }
+  });
+});

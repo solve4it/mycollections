@@ -1,5 +1,12 @@
 import { randomUUID } from "node:crypto";
-import { type Collection, CollectionSchema, type FieldDefinition, TARGET_COUNT_MAX } from "@mycollections/core";
+import {
+  type Collection,
+  CollectionSchema,
+  type FieldDefinition,
+  type ItemView,
+  ItemViewSchema,
+  TARGET_COUNT_MAX,
+} from "@mycollections/core";
 import { and, asc, desc, eq, isNotNull, isNull } from "drizzle-orm";
 import type { BetterSQLite3Database } from "drizzle-orm/better-sqlite3";
 import * as schema from "../schema.js";
@@ -15,6 +22,8 @@ export interface CreateCollectionInput {
   isFiniteSet: boolean;
   /** How many items complete a finite set (#42); only a finite set may carry one. */
   targetCount?: number | null;
+  /** How the collection's page lays out its items (#38); "list" when omitted. */
+  itemView?: ItemView;
 }
 
 export type UpdateCollectionInput = Partial<CreateCollectionInput>;
@@ -40,6 +49,15 @@ function readTargetCount(row: CollectionRow): number | null {
     : null;
 }
 
+/**
+ * The stored view, or "list" — the same protection as `readTargetCount`: a row
+ * nothing current could have written must not fail the list or the export.
+ */
+function readItemView(row: CollectionRow): ItemView {
+  const parsed = ItemViewSchema.safeParse(row.itemView);
+  return parsed.success ? parsed.data : "list";
+}
+
 function rowToCollection(row: CollectionRow): Collection {
   return CollectionSchema.parse({
     id: row.id,
@@ -48,6 +66,7 @@ function rowToCollection(row: CollectionRow): Collection {
     fields: JSON.parse(row.fields),
     isFiniteSet: row.isFiniteSet,
     targetCount: readTargetCount(row),
+    itemView: readItemView(row),
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
     deletedAt: row.deletedAt,
@@ -62,6 +81,7 @@ function collectionToRow(collection: Collection): CollectionRow {
     fields: JSON.stringify(collection.fields),
     isFiniteSet: collection.isFiniteSet,
     targetCount: collection.targetCount,
+    itemView: collection.itemView,
     createdAt: collection.createdAt,
     updatedAt: collection.updatedAt,
     deletedAt: collection.deletedAt,

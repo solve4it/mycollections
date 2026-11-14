@@ -9,6 +9,7 @@ const collection: Collection = {
   fields: [{ id: "title", label: "Title", type: "text", required: true }],
   isFiniteSet: false,
   targetCount: null,
+  itemView: "list",
   createdAt: "2026-01-01T00:00:00.000Z",
   updatedAt: "2026-01-01T00:00:00.000Z",
   deletedAt: null,
@@ -68,6 +69,21 @@ describe("ExportDocumentSchema", () => {
 
   it("rejects a malformed collection", () => {
     expect(() => ExportDocumentSchema.parse({ ...validDocument(), collections: [{ id: "not-a-uuid" }] })).toThrow();
+  });
+
+  it("reads a version 1 backup written before views existed, defaulting itemView to list (#38)", () => {
+    const { itemView, ...older } = { ...collection, itemView: "grid" };
+    void itemView;
+    const parsed = ExportDocumentSchema.parse({ ...validDocument(), collections: [older] });
+    expect(parsed.collections[0]?.itemView).toBe("list");
+  });
+
+  it("round-trips a collection's grid view (#38)", () => {
+    const parsed = ExportDocumentSchema.parse({
+      ...validDocument(),
+      collections: [{ ...collection, itemView: "grid" }],
+    });
+    expect(parsed.collections[0]?.itemView).toBe("grid");
   });
 
   it("reads a version 1 backup written before targets existed, defaulting targetCount to null (#42)", () => {

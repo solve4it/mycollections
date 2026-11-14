@@ -27,6 +27,13 @@ export const collections = sqliteTable("collections", {
    * rebuilding the table, and the repository already normalizes every read.
    */
   targetCount: integer("target_count"),
+  /**
+   * How the collection's page lays out its items (#38): "list" or "grid". Not
+   * null with a default, so the migration that adds it fills every existing row
+   * and no table rebuild is needed. No check(), for the same reason as above —
+   * the repository reads anything else as "list".
+   */
+  itemView: text("item_view").notNull().default("list"),
   createdAt: text("created_at").notNull(),
   updatedAt: text("updated_at").notNull(),
   deletedAt: text("deleted_at"),

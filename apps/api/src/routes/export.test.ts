@@ -176,3 +176,27 @@ describe("export and import of a finite set's target (#42)", () => {
     }
   });
 });
+
+describe("export and import of a collection's view (#38)", () => {
+  it("round-trips a grid view through export and import", async () => {
+    const records = await handle.collections.create({
+      name: "Records",
+      fields: baseFields,
+      isFiniteSet: false,
+      itemView: "grid",
+    });
+    const sourceApp = await makeApp();
+    const exported = (await sourceApp.inject({ method: "GET", url: "/api/export", headers: auth })).json();
+    expect(exported.collections.map((c: { itemView: unknown }) => c.itemView)).toEqual(["grid"]);
+
+    const fresh = await openDatabase({ path: ":memory:" });
+    try {
+      const app = await buildApp({ db: fresh, token: TOKEN });
+      const res = await app.inject({ method: "POST", url: "/api/import", headers: jsonAuth, payload: exported });
+      expect(res.statusCode).toBe(200);
+      expect(await fresh.collections.getById(records.id)).toEqual(records);
+    } finally {
+      fresh.close();
+    }
+  });
+});

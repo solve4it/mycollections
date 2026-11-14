@@ -707,3 +707,114 @@ describe("a finite set's target count (#42)", () => {
     expect(res.statusCode).toBe(404);
   });
 });
+
+describe("a collection's view (#38)", () => {
+  const json = { ...auth, "Content-Type": "application/json" };
+
+  // Declared as `{}` like targetCount, so Ajv never coerces: each is a 400, nothing written.
+  const rejectedViews: [string, unknown][] = [
+    ['"table"', "table"],
+    ['"Grid"', "Grid"],
+    ['""', ""],
+    ["null", null],
+    ["true", true],
+    ["1", 1],
+    ['["grid"]', ["grid"]],
+  ];
+
+  it("creates a collection in the list view when none is named", async () => {
+    const app = await makeApp();
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/collections",
+      headers: json,
+      payload: { name: "Books", fields: baseFields, isFiniteSet: false },
+    });
+    expect(res.statusCode).toBe(201);
+    expect(res.json<Collection>().itemView).toBe("list");
+  });
+
+  it("creates a collection in the grid view", async () => {
+    const app = await makeApp();
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/collections",
+      headers: json,
+      payload: { name: "Records", fields: baseFields, isFiniteSet: false, itemView: "grid" },
+    });
+    expect(res.statusCode).toBe(201);
+    const body = res.json<Collection>();
+    expect(body.itemView).toBe("grid");
+    expect((await handle.collections.getById(body.id))?.itemView).toBe("grid");
+  });
+
+  it.each(rejectedViews)("refuses to create with itemView %s, writing nothing", async (_label, itemView) => {
+    const app = await makeApp();
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/collections",
+      headers: json,
+      payload: { name: "Records", fields: baseFields, isFiniteSet: false, itemView },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(await handle.collections.list({ includeDeleted: true })).toEqual([]);
+  });
+
+  it("switches the view with a patch naming only the view, keeping everything else", async () => {
+    const col = await handle.collections.create({
+      name: "Quarters",
+      description: "State quarters",
+      fields: baseFields,
+      isFiniteSet: true,
+      targetCount: 50,
+    });
+    const app = await makeApp();
+    const res = await app.inject({
+      method: "PATCH",
+      url: `/api/collections/${col.id}`,
+      headers: json,
+      payload: { itemView: "grid" },
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json<Collection>();
+    expect(body).toEqual({ ...col, itemView: "grid", updatedAt: body.updatedAt });
+
+    const list = await app.inject({ method: "GET", url: "/api/collections", headers: auth });
+    expect(list.json().map((c: Collection) => [c.name, c.itemView])).toEqual([["Quarters", "grid"]]);
+    const one = await app.inject({ method: "GET", url: `/api/collections/${col.id}`, headers: auth });
+    expect(one.json<Collection>().itemView).toBe("grid");
+
+    // A later edit that does not name the view leaves it alone.
+    const renamed = await app.inject({
+      method: "PATCH",
+      url: `/api/collections/${col.id}`,
+      headers: json,
+      payload: { name: "Quarters, 1999–2008" },
+    });
+    expect(renamed.json<Collection>().itemView).toBe("grid");
+  });
+
+  it.each(rejectedViews)("refuses to patch itemView %s, leaving the row unchanged", async (_label, itemView) => {
+    const col = await handle.collections.create({ name: "Records", fields: baseFields, isFiniteSet: false });
+    const app = await makeApp();
+    const res = await app.inject({
+      method: "PATCH",
+      url: `/api/collections/${col.id}`,
+      headers: json,
+      payload: { name: "Renamed", itemView },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(await handle.collections.getById(col.id)).toEqual(col);
+  });
+
+  it("answers 404 for a view on an unknown collection", async () => {
+    const app = await makeApp();
+    const res = await app.inject({
+      method: "PATCH",
+      url: "/api/collections/00000000-0000-4000-8000-000000000000",
+      headers: json,
+      payload: { itemView: "grid" },
+    });
+    expect(res.statusCode).toBe(404);
+  });
+});
