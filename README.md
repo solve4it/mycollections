@@ -10,12 +10,22 @@ MyCollections helps you catalog, organize, and explore the things you collect �
 - **Local-first** — Your data lives on your machine. Works fully offline; no account or cloud required to get started.
 - **Search, filter & sort** — Find items by any word in their text, choices, tags or numbers (accents and case ignored), narrow a collection by its choices, tags (any or all), number and date ranges and yes/no fields, and order it by date, name, status (collected first or remaining first) or any field. The view lives in the address, so it can be bookmarked. Rename, merge or remove a tag across a whole collection from its editor.
 - **List or grid** — Show a collection as compact rows or as a grid of cards led by each item's cover, with its name and a few key fields — the field you sort by first. The choice belongs to the collection, so it is the same on every device and is kept in backups.
-- **Photos** — Every item has its own page with its photos: add several at once, or take one with the camera on a phone. Thumbnails are made for you, the first photo is the item's cover and shows on its row, a photo opens full size to step through the rest, and location and other metadata are stripped from every photo before it is stored. (Photos are not in backups yet.)
-- **Backup & restore** — Export all your collections and items to a portable JSON file, and import it back to recover or move your data between machines.
+- **Photos** — Every item has its own page with its photos: add several at once, or take one with the camera on a phone. Thumbnails are made for you, the first photo is the item's cover and shows on its row, a photo opens full size to step through the rest, and location and other metadata are stripped from every photo before it is stored. Photos are included in exports and backups.
+- **Backup & restore** — Export everything to a single `.zip` file holding your data as readable JSON plus your photos, and import it back to recover or move your data between machines. Older `.json` backups still import.
 - **Optional cloud sync** — Opt in to encrypted sync across devices when you want it.
 - **Barcode & identifier scanning** — Add items by scanning barcodes, matrix codes, or images instead of typing everything.
 - **External lookups** — Enrich your catalog by pulling metadata from plugin-specific sources (catalogs, marketplaces, databases).
 - **Accessible by default** — Built with Biome's a11y rules enforced, keyboard-first navigation, and screen-reader-friendly components.
+
+## Your data
+
+Everything you put into MyCollections can be taken out, in full, in formats other software can read:
+
+- **What an export holds:** every collection with its fields, finite-set target and list or grid view; every item with its status and values; every photo; and what is in the trash, so a restore keeps your deletion history. The data is a versioned JSON file, `export.json` (its schema is in [`packages/core/src/export-document.ts`](packages/core/src/export-document.ts)), and the photos are standard WebP image files, all in one `.zip`.
+- **What it does not hold:** settings kept only in your browser (language, theme, error reporting) and the API token.
+- **Where to get one:** Settings → Export data for everything, or `GET /api/export` and `GET /api/collections/:id/export` directly ([API reference](apps/api/README.md#backup-format)).
+
+This is the data-portability mechanism. Legal statements about it belong to the privacy policy (#67) and the GDPR audit (#68), not here.
 
 ## Tech Stack
 

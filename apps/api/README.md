@@ -46,7 +46,8 @@ All routes require `Authorization: Bearer <token>` except `GET /api/health` and 
 | `DELETE` | `/api/trash`                                                     | Empty the trash — permanently delete everything in it; returns `{ items, collections }` counts                                                                         |
 | `DELETE` | `/api/trash/items/:itemId`                                       | Permanently delete a trashed item                                                                                                                                      |
 | `DELETE` | `/api/trash/collections/:id`                                     | Permanently delete a trashed collection and its items                                                                                                                  |
-| `GET`    | `/api/export`                                                    | Download a JSON backup of all collections and items                                                                                                                    |
+| `GET`    | `/api/export`                                                    | Download an export archive (`.zip`) of every collection, item and image                                                                                                |
+| `GET`    | `/api/collections/:id/export`                                    | Download one live collection's archive, same format (404 if missing or trashed)                                                                                        |
 | `POST`   | `/api/import`                                                    | Restore a backup document (`?mode=skip`)                                                                                                                               |
 
 ### Searching and sorting items (#41, #42)
@@ -213,7 +214,14 @@ back everything it held. Consequently:
 
 ### Backup format
 
-`GET /api/export` returns a versioned, human-readable JSON document:
+`GET /api/export`, and `GET /api/collections/:id/export` for one live collection, return an **archive** (`application/zip`, `Cache-Control: no-store`):
+
+- `export.json`, deflated: the document below.
+- `media/<itemId>/<mediaId>.webp`, stored: each image's display file. Thumbnails are rebuilt on import.
+
+The images are read one at a time as the zip streams, so a large collection neither sits in memory nor holds many files open. A row whose file is missing on disk is left out of the archive and logged by id, so an archive never names a file it does not hold. The download name is an RFC 6266 `Content-Disposition`: an ASCII `filename` plus the collection's real name in `filename*` (RFC 5987), with control characters, quotes and path separators stripped.
+
+`export.json` is a versioned, human-readable JSON document:
 
 ```json
 {
@@ -226,8 +234,6 @@ back everything it held. Consequently:
 ```
 
 **Version 2** (#45) adds `media`, one row per image, soft-deleted ones included. The image files travel beside the document in the export archive; the document never embeds them. A version 1 document (no `media` key) is still read, as version 2 with no images. Version 2 refuses a repeated image id, and an image whose item is not in the document. Images are a version bump rather than an additive field because the top level is strict: an older app refuses an unknown top-level key instead of ignoring it.
-
-Until the export becomes an archive that carries the files, `GET /api/export` writes `"media": []`, because a JSON response cannot carry an image and the import refuses an image row without its file.
 
 `POST /api/import` accepts either version, and answers with counts: `collectionsImported`, `collectionsSkipped`, `itemsImported`, `itemsSkipped`, `mediaImported` and `mediaSkipped`. The import plans which images to bring in before anything is written: only images of items it adds, never those of an item already here, and never an id already in use. An added item holding more live images than one item may (50) refuses the whole file. The whole import runs in a single
 transaction, so an invalid payload is rejected with `400` and leaves the database
@@ -312,7 +318,7 @@ The archive is treated as untrusted input:
 - **Files first, then the row**, so a row never names a missing file; if the row cannot be written (the item was purged meanwhile) the files are removed.
 - **Item responses** — list, get, create, PATCH, restore — carry `primaryMedia: { id, width, height } | null`, added in one helper (`routes/item-response.ts`) so no route can answer without it. It is not part of `Item`, so the JSON export is unchanged.
 - **Purges** remove the files of exactly the image rows they took — diffed before and after, so an upload landing meanwhile is untouched — after the commit. Emptying the trash also takes images trashed on their own; the counts it returns are unchanged, since the trash lists items and collections only. A file that will not go is logged and left for the startup sweep.
-- **Imported from an export archive** (#45): see [Importing an archive](#importing-an-archive-45). The export does not yet write archives, so an export taken today still has no images; automated backups (#47) don't carry them either.
+- **In export archives** (#45): `GET /api/export` carries every image's display file; see [Backup format](#backup-format) and [Importing an archive](#importing-an-archive-45). Automated backups (#47) don't carry them yet.
 
 - **Accepted formats** are decided by the file's own first bytes, before sharp parses anything: JPEG, PNG, GIF, WebP and AVIF. The decoded format must agree. Everything else is refused, including SVG and TIFF, which the bundled libvips _can_ read: "sharp could decode it" is not an allowlist.
 - **Limits:** an upload may declare at most 50 megapixels (`MAX_INPUT_PIXELS`), which sharp checks from the header before decoding. libvips runs one thread with no operation cache, and `createJobLimiter` caps how many images are processed at once, refusing the rest with `QueueFullError` (a 503) instead of queueing without bound.
