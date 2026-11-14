@@ -99,6 +99,51 @@ export class MediaRepository {
       .map(rowToMedia);
   }
 
+  /**
+   * Every row of these items, trashed ones included, for an export (#45). In
+   * display order per item. Queried in chunks so a large collection stays under
+   * SQLite's bound-parameter limit.
+   */
+  async listForItems(itemIds: readonly string[]): Promise<Media[]> {
+    const rows: MediaRow[] = [];
+    for (const ids of chunks(itemIds)) {
+      rows.push(
+        ...this.#db
+          .select()
+          .from(schema.media)
+          .where(inArray(schema.media.itemId, ids))
+          .orderBy(asc(schema.media.itemId), asc(schema.media.position), asc(schema.media.createdAt))
+          .all(),
+      );
+    }
+    return rows.map(rowToMedia);
+  }
+
+  /** Which of these ids already name a row, under any item. */
+  existingIds(ids: readonly string[]): Set<string> {
+    const found = new Set<string>();
+    for (const chunk of chunks(ids)) {
+      for (const row of this.#db
+        .select({ id: schema.media.id })
+        .from(schema.media)
+        .where(inArray(schema.media.id, chunk))
+        .all()) {
+        found.add(row.id);
+      }
+    }
+    return found;
+  }
+
+  /**
+   * Inserts a row from a backup exactly as it was — position, source, trash and
+   * all — unlike `create`, which appends. False when the id is already taken, in
+   * which case nothing changes. The caller must have written the files first.
+   */
+  insertImported(media: Media): boolean {
+    const validated = MediaSchema.parse(media);
+    return this.#db.insert(schema.media).values(validated).onConflictDoNothing().run().changes > 0;
+  }
+
   async countLive(itemId: string): Promise<number> {
     const row = this.#db
       .select({ n: sql<number>`count(*)` })
@@ -202,5 +247,14 @@ export class MediaRepository {
    */
   async listFileRefs(): Promise<MediaFileRef[]> {
     return this.#db.select({ itemId: schema.media.itemId, id: schema.media.id }).from(schema.media).all();
+  }
+}
+
+/** SQLite binds at most 32766 parameters; stay far below it. */
+const CHUNK_SIZE = 500;
+
+function* chunks<T>(values: readonly T[]): Generator<T[]> {
+  for (let start = 0; start < values.length; start += CHUNK_SIZE) {
+    yield values.slice(start, start + CHUNK_SIZE);
   }
 }

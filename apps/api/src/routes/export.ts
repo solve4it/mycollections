@@ -13,7 +13,10 @@ const importQuerySchema = {
 
 export async function registerExportRoutes(app: FastifyInstance, db: DatabaseHandle) {
   app.get("/api/export", async (_request, reply) => {
-    const document = await exportBackup(db);
+    // A JSON response cannot carry image files, and a row without its file is one
+    // the import refuses — so the image rows stay out until the export becomes an
+    // archive that carries both (#45).
+    const document = { ...(await exportBackup(db)), media: [] };
     const filename = `mycollections-export-${new Date().toISOString().slice(0, 10)}.json`;
     return reply.header("Content-Disposition", `attachment; filename="${filename}"`).send(document);
   });

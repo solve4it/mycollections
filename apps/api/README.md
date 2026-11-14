@@ -227,7 +227,9 @@ back everything it held. Consequently:
 
 **Version 2** (#45) adds `media`, one row per image, soft-deleted ones included. The image files travel beside the document in the export archive; the document never embeds them. A version 1 document (no `media` key) is still read, as version 2 with no images. Version 2 refuses a repeated image id, and an image whose item is not in the document. Images are a version bump rather than an additive field because the top level is strict: an older app refuses an unknown top-level key instead of ignoring it.
 
-`POST /api/import` accepts either version. The whole import runs in a single
+Until the export becomes an archive that carries the files, `GET /api/export` writes `"media": []`, because a JSON response cannot carry an image and the import refuses an image row without its file.
+
+`POST /api/import` accepts either version, and answers with counts: `collectionsImported`, `collectionsSkipped`, `itemsImported`, `itemsSkipped`, `mediaImported` and `mediaSkipped`. The import plans which images to bring in before anything is written: only images of items it adds, never those of an item already here, and never an id already in use. An added item holding more live images than one item may (50) refuses the whole file. The whole import runs in a single
 transaction, so an invalid payload is rejected with `400` and leaves the database
 untouched (no partial writes). Every refusal has the same body, `{"statusCode":400,
 "error":"Bad Request","message":"Invalid import file"}`. The thrown error's message is

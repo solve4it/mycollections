@@ -59,6 +59,32 @@ describe("GET /api/export", () => {
   });
 });
 
+describe("GET /api/export before it carries files (#45)", () => {
+  it("leaves image rows out of the JSON, which cannot carry their files, so the file re-imports", async () => {
+    const { item } = await seed();
+    await handle.media.create({
+      itemId: item.id,
+      source: "user-attached",
+      mimeType: "image/webp",
+      bytes: 10,
+      width: 1,
+      height: 1,
+    });
+    const app = await makeApp();
+    const exported = (await app.inject({ method: "GET", url: "/api/export", headers: auth })).json();
+    expect(exported.media).toEqual([]);
+
+    const fresh = await openDatabase({ path: ":memory:" });
+    try {
+      const target = await buildApp({ db: fresh, token: TOKEN });
+      const res = await target.inject({ method: "POST", url: "/api/import", headers: jsonAuth, payload: exported });
+      expect(res.statusCode).toBe(200);
+    } finally {
+      fresh.close();
+    }
+  });
+});
+
 describe("POST /api/import", () => {
   it("round-trips an exported document into an empty database", async () => {
     const { collection, item } = await seed();
@@ -76,6 +102,8 @@ describe("POST /api/import", () => {
         collectionsSkipped: 0,
         itemsImported: 1,
         itemsSkipped: 0,
+        mediaImported: 0,
+        mediaSkipped: 0,
       });
       expect(await fresh.collections.list()).toEqual([collection]);
       expect(await fresh.items.listByCollection(collection.id)).toEqual([item]);
@@ -99,6 +127,8 @@ describe("POST /api/import", () => {
         collectionsSkipped: 1,
         itemsImported: 0,
         itemsSkipped: 1,
+        mediaImported: 0,
+        mediaSkipped: 0,
       });
     } finally {
       fresh.close();
