@@ -35,6 +35,7 @@ import {
   useRestoreCollection,
   useRestoreItem,
   useRestoreTrashedItem,
+  useSetItemView,
   useUpdateCollection,
   useUpdateItem,
 } from "./queries.js";
@@ -196,5 +197,140 @@ describe("item changes refresh the dashboard list, though it is not on screen (#
     const { result } = renderHook(() => useDeleteItem(ID), { wrapper });
     await act(() => result.current.mutateAsync(ITEM.id));
     expect(listCollections).not.toHaveBeenCalled();
+  });
+});
+
+describe("useSetItemView (#38)", () => {
+  const { itemCount: _itemCount, ownedCount: _ownedCount, ...COLLECTION } = LISTED;
+  const OTHER = { ...LISTED, id: "33333333-3333-3333-3333-333333333333", name: "Coins" };
+
+  function deferred<T>() {
+    let resolve!: (value: T) => void;
+    let reject!: (error: unknown) => void;
+    const promise = new Promise<T>((res, rej) => {
+      resolve = res;
+      reject = rej;
+    });
+    return { promise, resolve, reject };
+  }
+
+  function seeded() {
+    const { qc, wrapper } = setup();
+    qc.setQueryData(["collections", ID], COLLECTION);
+    qc.setQueryData(["collections"], [LISTED, OTHER]);
+    return { qc, wrapper };
+  }
+
+  it("shows the new view at once and sends only the view", async () => {
+    const { qc, wrapper } = seeded();
+    const sent = deferred<typeof COLLECTION>();
+    vi.mocked(updateCollection).mockReturnValue(sent.promise);
+    const { result } = renderHook(() => useSetItemView(ID), { wrapper });
+
+    act(() => result.current.mutate("grid"));
+
+    await waitFor(() => expect(qc.getQueryData<typeof COLLECTION>(["collections", ID])?.itemView).toBe("grid"));
+    expect(qc.getQueryData<CollectionWithItemCount[]>(["collections"])?.map((c) => [c.name, c.itemView])).toEqual([
+      ["Trading cards", "grid"],
+      ["Coins", "list"],
+    ]);
+    expect(updateCollection).toHaveBeenCalledWith(ID, { itemView: "grid" });
+
+    await act(async () => sent.resolve({ ...COLLECTION, itemView: "grid", updatedAt: "2024-02-01T00:00:00.000Z" }));
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(qc.getQueryData<typeof COLLECTION>(["collections", ID])).toEqual({
+      ...COLLECTION,
+      itemView: "grid",
+      updatedAt: "2024-02-01T00:00:00.000Z",
+    });
+  });
+
+  it("does not fetch the items again — a layout changes no row", async () => {
+    const { qc, wrapper } = seeded();
+    const itemsFetch = vi.fn().mockResolvedValue([ITEM]);
+    await qc.prefetchQuery({ queryKey: ["collections", ID, "items", {}], queryFn: itemsFetch });
+    vi.mocked(updateCollection).mockResolvedValue({ ...COLLECTION, itemView: "grid" });
+    const { result } = renderHook(() => useSetItemView(ID), { wrapper });
+
+    await act(async () => {
+      await result.current.mutateAsync("grid");
+    });
+
+    expect(itemsFetch).toHaveBeenCalledTimes(1);
+    expect(qc.getQueryState(["collections", ID, "items", {}])?.isInvalidated).toBe(false);
+  });
+
+  it("puts the old view back when the server refuses", async () => {
+    const { qc, wrapper } = seeded();
+    vi.mocked(updateCollection).mockRejectedValue(new Error("offline"));
+    const { result } = renderHook(() => useSetItemView(ID), { wrapper });
+
+    act(() => result.current.mutate("grid"));
+
+    await waitFor(() => expect(result.current.isError).toBe(true));
+    expect(qc.getQueryData<typeof COLLECTION>(["collections", ID])?.itemView).toBe("list");
+    expect(qc.getQueryData<CollectionWithItemCount[]>(["collections"])?.map((c) => c.itemView)).toEqual([
+      "list",
+      "list",
+    ]);
+  });
+
+  it("sends a second switch only once the first has landed, so the last choice is the one stored", async () => {
+    const { qc, wrapper } = seeded();
+    const first = deferred<typeof COLLECTION>();
+    const second = deferred<typeof COLLECTION>();
+    vi.mocked(updateCollection).mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise);
+    const { result } = renderHook(() => useSetItemView(ID), { wrapper });
+
+    act(() => result.current.mutate("grid"));
+    act(() => result.current.mutate("list"));
+
+    await waitFor(() => expect(qc.getQueryData<typeof COLLECTION>(["collections", ID])?.itemView).toBe("list"));
+    expect(updateCollection).toHaveBeenCalledTimes(1);
+
+    await act(async () => first.resolve({ ...COLLECTION, itemView: "grid" }));
+    await waitFor(() => expect(updateCollection).toHaveBeenCalledTimes(2));
+    expect(updateCollection).toHaveBeenLastCalledWith(ID, { itemView: "list" });
+    // The first answer does not paint its view over the choice made since.
+    expect(qc.getQueryData<typeof COLLECTION>(["collections", ID])?.itemView).toBe("list");
+
+    await act(async () => second.resolve({ ...COLLECTION, itemView: "list" }));
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(qc.getQueryData<typeof COLLECTION>(["collections", ID])?.itemView).toBe("list");
+  });
+
+  it("goes back to the view the server holds when two queued switches both fail", async () => {
+    const { qc, wrapper } = seeded();
+    const first = deferred<typeof COLLECTION>();
+    const second = deferred<typeof COLLECTION>();
+    vi.mocked(updateCollection).mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise);
+    const { result } = renderHook(() => useSetItemView(ID), { wrapper });
+
+    act(() => result.current.mutate("grid"));
+    act(() => result.current.mutate("list"));
+    await act(async () => first.reject(new Error("offline")));
+    await waitFor(() => expect(updateCollection).toHaveBeenCalledTimes(2));
+    await act(async () => second.reject(new Error("offline")));
+
+    await waitFor(() => expect(result.current.isError).toBe(true));
+    // The server never stored anything but list, so list is what shows.
+    expect(qc.getQueryData<typeof COLLECTION>(["collections", ID])?.itemView).toBe("list");
+  });
+
+  it("does not undo a later choice when an earlier switch fails", async () => {
+    const { qc, wrapper } = seeded();
+    const first = deferred<typeof COLLECTION>();
+    vi.mocked(updateCollection)
+      .mockReturnValueOnce(first.promise)
+      .mockResolvedValueOnce({ ...COLLECTION, itemView: "list" });
+    const { result } = renderHook(() => useSetItemView(ID), { wrapper });
+
+    act(() => result.current.mutate("grid"));
+    act(() => result.current.mutate("list"));
+    await act(async () => first.reject(new Error("offline")));
+
+    await waitFor(() => expect(updateCollection).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(qc.getQueryData<typeof COLLECTION>(["collections", ID])?.itemView).toBe("list");
   });
 });

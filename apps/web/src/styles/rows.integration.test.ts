@@ -101,3 +101,51 @@ describe("an item row at phone width (#42, R13)", () => {
     expect(declaration(only(RULES, ".item-field").body, "overflow-wrap")).toBe("anywhere");
   });
 });
+
+describe("the grid view (#38)", () => {
+  it("lays the cards out on a grid that falls to one column at phone width", () => {
+    const grid = only(RULES, ".item-list-grid").body;
+    expect(declaration(grid, "display")).toBe("grid");
+    // min(100%, …) is what lets a 320px screen hold one card without scrolling sideways.
+    expect(declaration(grid, "grid-template-columns")).toBe("repeat(auto-fill, minmax(min(100%, 14rem), 1fr))");
+  });
+
+  it("never fills gaps out of order — the painted order has to stay the DOM order", () => {
+    for (const rule of RULES) expect(declaration(rule.body, "grid-auto-flow"), rule.selector).toBeUndefined();
+  });
+
+  it("gives an open editor a whole row of the grid", () => {
+    expect(declaration(only(RULES, ".item-list-grid > .item-editing").body, "grid-column")).toBe("1 / -1");
+  });
+
+  it("stacks a card's cover, fields and actions, with the actions at the foot so they line up across a row", () => {
+    const row = only(RULES, ".item-list-grid .item-row").body;
+    expect(declaration(row, "flex-direction")).toBe("column");
+    // Grown by flex inside a column cell, never height: 100%, which pushed a
+    // card's failure alert out of its cell and over the next row (#38 review).
+    expect(declaration(row, "flex")).toBe("1 1 auto");
+    expect(declaration(row, "height")).toBeUndefined();
+    const cell = only(RULES, ".item-list-grid > li").body;
+    expect(declaration(cell, "display")).toBe("flex");
+    expect(declaration(cell, "flex-direction")).toBe("column");
+    // In a column the row's 16rem basis would be a height: a card resets it.
+    expect(declaration(only(RULES, ".item-list-grid .item-fields").body, "flex")).toBe("0 0 auto");
+    expect(declaration(only(RULES, ".item-list-grid .item-actions").body, "margin-top")).toBe("auto");
+  });
+
+  it("reserves the cover's square before the photo arrives, fitting the whole photo in", () => {
+    const cover = only(RULES, ".item-card-cover").body;
+    expect(declaration(cover, "aspect-ratio")).toBe("1");
+    expect(declaration(cover, "width")).toBe("100%");
+    expect(declaration(cover, "object-fit")).toBe("contain");
+  });
+});
+
+describe("a placeholder card (#38)", () => {
+  it("stacks like a real card and reserves the same square cover", () => {
+    expect(declaration(only(RULES, ".item-list-grid .skeleton-row").body, "flex-direction")).toBe("column");
+    const cover = only(RULES, ".skeleton-card-cover").body;
+    expect(declaration(cover, "aspect-ratio")).toBe("1");
+    expect(declaration(cover, "width")).toBe("100%");
+  });
+});

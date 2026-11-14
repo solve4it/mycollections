@@ -1,3 +1,5 @@
+import type { ItemView } from "@mycollections/core";
+
 /**
  * Loading skeletons (#225). A skeleton is a picture of the content that is
  * coming, so it is built from the same containers the real content uses — the
@@ -51,12 +53,18 @@ export function CollectionGridSkeleton({ label, count = 4 }: SkeletonProps) {
   );
 }
 
-/** The placeholder list itself, shared by the two screens that show items. */
-function PlaceholderItemList({ count }: { count: number }) {
+/**
+ * The placeholder list itself, shared by the two screens that show items. In a
+ * collection's grid (#38) it draws cards: the same grid, and a square block
+ * where each cover will stand, so the grid does not resize when the items land.
+ */
+function PlaceholderItemList({ count, view = "list" }: { count: number; view?: ItemView }) {
+  const grid = view === "grid";
   return (
-    <ul className="item-list" aria-hidden="true">
+    <ul className={grid ? "item-list item-list-grid" : "item-list"} aria-hidden="true">
       {placeholderKeys(count).map((key) => (
         <li key={key} className="skeleton-row">
+          {grid && <span className="skeleton skeleton-card-cover" />}
           <span className="skeleton skeleton-line skeleton-line-status" />
           <span className="skeleton skeleton-line skeleton-line-field" />
         </li>
@@ -66,11 +74,11 @@ function PlaceholderItemList({ count }: { count: number }) {
 }
 
 /** Placeholder item rows, in the list the real items use. */
-export function ItemListSkeleton({ label, count = 3 }: SkeletonProps) {
+export function ItemListSkeleton({ label, count = 3, view }: SkeletonProps & { view?: ItemView }) {
   return (
     <div role="status">
       <span className="visually-hidden">{label}</span>
-      <PlaceholderItemList count={count} />
+      <PlaceholderItemList count={count} view={view} />
     </div>
   );
 }

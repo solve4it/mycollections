@@ -31,6 +31,8 @@ export class ApiFixture {
     isFiniteSet?: boolean;
     /** Only alongside `isFiniteSet: true` — the server refuses a target on any other collection (#42). */
     targetCount?: number | null;
+    /** How the collection's page lays out its items (#38); the server defaults to "list". */
+    itemView?: "list" | "grid";
   }): Promise<SeededCollection> {
     const res = await this.request.post(`${API_URL}/api/collections`, {
       headers: this.headers,

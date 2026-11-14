@@ -64,3 +64,20 @@ describe("ItemListSkeleton", () => {
     for (const block of blocks) expect(block).toHaveClass("skeleton");
   });
 });
+
+describe("ItemListSkeleton in a collection's grid (#38)", () => {
+  it("draws placeholder cards in the grid the real cards use, each with a square cover block", () => {
+    const { container } = render(<ItemListSkeleton label="Loading items…" count={3} view="grid" />);
+    const list = container.querySelector(".item-list");
+    expect(list).toHaveClass("item-list-grid");
+    expect(list).toHaveAttribute("aria-hidden", "true");
+    expect(list?.querySelectorAll(".skeleton-row .skeleton-card-cover")).toHaveLength(3);
+    expect(screen.getByRole("status")).toHaveTextContent("Loading items…");
+  });
+
+  it("draws plain rows, with no cover block, in the list", () => {
+    const { container } = render(<ItemListSkeleton label="Loading items…" count={2} view="list" />);
+    expect(container.querySelector(".item-list")).not.toHaveClass("item-list-grid");
+    expect(container.querySelector(".skeleton-card-cover")).toBeNull();
+  });
+});

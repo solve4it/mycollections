@@ -1,5 +1,6 @@
-import type { Item, ItemStatus, Media } from "@mycollections/core";
+import type { Collection, CollectionWithItemCount, Item, ItemStatus, ItemView, Media } from "@mycollections/core";
 import { keepPreviousData, type QueryClient, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useRef } from "react";
 import {
   createCollection,
   createItem,
@@ -90,6 +91,63 @@ export function useUpdateCollection(id: string) {
       // A changed target or finite flag changes the dashboard's bar (#42).
       refreshDashboard(queryClient);
       return queryClient.invalidateQueries({ queryKey: ["collections"] });
+    },
+  });
+}
+
+/**
+ * Writes a collection's view into both places it is cached: the collection's
+ * own query and its entry in the dashboard list. Nothing else is touched.
+ */
+function writeItemView(queryClient: QueryClient, id: string, itemView: ItemView) {
+  queryClient.setQueryData<Collection>(["collections", id], (current) => current && { ...current, itemView });
+  queryClient.setQueryData<CollectionWithItemCount[]>(["collections"], (list) =>
+    list?.map((listed) => (listed.id === id ? { ...listed, itemView } : listed)),
+  );
+}
+
+/**
+ * Switches a collection between its list and grid views (#38).
+ *
+ * Shown at once and taken back if the server refuses, like an image reorder: a
+ * layout that waited a round trip would feel like a dead control. Unlike
+ * `useUpdateCollection`, nothing is invalidated — the view changes no row, no
+ * count and no label, so fetching the items again would only cost a request.
+ *
+ * Switches run one at a time (`scope`), so they reach the server in the order
+ * they were made and the last choice is the one stored. While a later switch
+ * is queued, an earlier one's answer is not written back and its failure is not
+ * rolled back: either would paint over the choice the user has made since.
+ */
+export function useSetItemView(id: string) {
+  const queryClient = useQueryClient();
+  const mutationKey = ["collections", id, "item-view"];
+  /** Whether a switch made after this one is still to land. */
+  const superseded = () => queryClient.isMutating({ mutationKey }) > 1;
+  // The last view the server is known to hold. Not each switch's own snapshot:
+  // `onMutate` runs at once even for a switch queued behind another, so its
+  // snapshot is the earlier switch's optimistic view, which the server may never
+  // have stored (#38 review: grid then list, both refused, left grid showing).
+  const confirmed = useRef<ItemView | undefined>(undefined);
+  return useMutation({
+    mutationKey,
+    scope: { id: `item-view:${id}` },
+    mutationFn: (itemView: ItemView) => updateCollection(id, { itemView }),
+    onMutate: async (itemView: ItemView) => {
+      // A collection fetch landing after this would paint the old view back.
+      await queryClient.cancelQueries({ queryKey: ["collections", id], exact: true });
+      // Only the first switch of a run sees the server's view in the cache.
+      if (!superseded()) confirmed.current = queryClient.getQueryData<Collection>(["collections", id])?.itemView;
+      writeItemView(queryClient, id, itemView);
+    },
+    onError: () => {
+      if (confirmed.current && !superseded()) writeItemView(queryClient, id, confirmed.current);
+    },
+    onSuccess: (saved) => {
+      confirmed.current = saved.itemView;
+      if (superseded()) return;
+      queryClient.setQueryData<Collection>(["collections", id], saved);
+      writeItemView(queryClient, id, saved.itemView);
     },
   });
 }

@@ -5,6 +5,8 @@ import {
   type Item,
   type ItemCounts,
   type ItemFilter,
+  type ItemView,
+  parseItemSort,
 } from "@mycollections/core";
 import { type UseQueryResult, useQueryClient } from "@tanstack/react-query";
 import { createRoute, Link, useNavigate } from "@tanstack/react-router";
@@ -19,6 +21,7 @@ import { AppliedFilters, FilterPanel } from "../../components/FilterPanel.js";
 import { Icon } from "../../components/Icon.js";
 import { ItemSearchBox } from "../../components/ItemSearchBox.js";
 import { ItemSortSelect } from "../../components/ItemSortSelect.js";
+import { ItemViewSelect } from "../../components/ItemViewSelect.js";
 import { MediaImage } from "../../components/MediaImage.js";
 import { CollectionDetailSkeleton, ItemListSkeleton } from "../../components/Skeleton.js";
 import { StatusTabs } from "../../components/StatusTabs.js";
@@ -27,6 +30,7 @@ import { useAnnounce } from "../../lib/announcer.js";
 import type { ItemWithMedia } from "../../lib/api-client.js";
 import { scopedId } from "../../lib/dom-id.js";
 import { type FocusDestination, useFocusHandoff } from "../../lib/focus-handoff.js";
+import { cardFields } from "../../lib/item-card.js";
 import { itemLabel, labelFieldId } from "../../lib/item-label.js";
 import {
   effectiveFilters,
@@ -50,6 +54,7 @@ import {
   useItems,
   useRestoreItem,
   useSetItemStatus,
+  useSetItemView,
   useUpdateItem,
 } from "../../lib/queries.js";
 import { authenticatedRoute } from "../_authenticated.js";
@@ -198,6 +203,9 @@ function CollectionDetailPage() {
   }
   const createItem = useCreateItem(id);
   const restoreItem = useRestoreItem(id);
+  // List or grid (#38): the collection's own setting, switched at once and
+  // taken back if the server refuses.
+  const setItemView = useSetItemView(id);
   // The undo shortcut outlives the row that spawned it: once the delete lands and
   // the list reloads, that <li> is gone, so the toast is owned by the page.
   // `index` is where in the list the row was, which is where focus goes if the
@@ -575,7 +583,12 @@ function CollectionDetailPage() {
       <div className="item-list-controls">
         <ItemSearchBox value={search.q ?? ""} onSearch={setSearch} inputRef={searchInputRef} />
         <ItemSortSelect value={sort} searching={q !== ""} fields={collection.fields} onSort={setSort} />
+        <ItemViewSelect value={collection.itemView} onChange={(view) => setItemView.mutate(view)} />
       </div>
+      {/* Inserted with its message inside, as a failure surface is: a
+          `role="alert"` is announced on insertion. The select has already gone
+          back to the view that stuck, so the sentence only has to say why. */}
+      {setItemView.isError && <p role="alert">{t("view_error")}</p>}
       <FilterPanel collectionId={id} fields={collection.fields} filters={filters} onApply={setFilters} />
       <AppliedFilters
         fields={collection.fields}
@@ -610,6 +623,8 @@ function CollectionDetailPage() {
       >
         <ItemList
           collection={collection}
+          view={collection.itemView}
+          sortFieldId={sortFieldOf(sort)}
           query={itemsQuery}
           items={visibleItems}
           empty={empty}
@@ -865,8 +880,18 @@ function CollectionDetailPage() {
   );
 }
 
+/** The field the list is sorted by, if it is sorted by a field (#38). */
+function sortFieldOf(sort: string | undefined): string | undefined {
+  const parsed = sort ? parseItemSort(sort) : null;
+  return parsed?.key === "field" ? parsed.fieldId : undefined;
+}
+
 interface ItemListProps {
   collection: Collection;
+  /** Rows or cards (#38). Only class names change between the two, never elements. */
+  view: ItemView;
+  /** The field the list is sorted by, which a card shows first (#38). */
+  sortFieldId: string | undefined;
   /** The fetch, for its loading, error and placeholder states. */
   query: UseQueryResult<Item[]>;
   /** What the selected tab shows of the fetched list; undefined until it loads (#42). */
@@ -899,6 +924,8 @@ interface ItemListProps {
  */
 function ItemList({
   collection,
+  view,
+  sortFieldId,
   query,
   items,
   empty,
@@ -923,13 +950,13 @@ function ItemList({
           <p>{t("items_error_description")}</p>
         </div>
       );
-    return <ItemListSkeleton label={t("loading_items")} />;
+    return <ItemListSkeleton label={t("loading_items")} view={view} />;
   }
 
   // Nothing to show *yet*: the empty result is the previous view's, kept while
   // this one loads, and is no answer about this one (#42). Rows kept that way
   // stay on screen marked busy, below; an empty kept result shows the wait.
-  if (items.length === 0 && query.isPlaceholderData) return <ItemListSkeleton label={t("loading_items")} />;
+  if (items.length === 0 && query.isPlaceholderData) return <ItemListSkeleton label={t("loading_items")} view={view} />;
 
   // "Nothing matches", "nothing in this tab" and "nothing here" are different
   // news with different ways out (#41, #42); the page says which.
@@ -968,11 +995,23 @@ function ItemList({
       {query.error && <p role="alert">{t("items_reload_error")}</p>}
       {/* Visible, not live: the announcer speaks it once the search settles. */}
       {countText && <p className="item-count">{countText}</p>}
-      <ul className="item-list" aria-busy={query.isPlaceholderData || undefined}>
+      {/* The same <ul> and <li>s in both views, only the classes differ (#38): a
+          different element would remount every row, taking an open editor's
+          draft with it and dropping focus to <body>. In the grid an open editor
+          takes a whole row of its own, which can leave a gap at the end of the
+          row above. That gap stays: `grid-auto-flow: dense` would fill it by
+          painting cards out of their DOM order, and that order is what the tab
+          sequence, a screen reader and `rowDestination` all follow. */}
+      <ul
+        className={view === "grid" ? "item-list item-list-grid" : "item-list"}
+        aria-busy={query.isPlaceholderData || undefined}
+      >
         {items.map((item, index) => (
           <ItemRow
             key={item.id}
             collection={collection}
+            view={view}
+            sortFieldId={sortFieldId}
             item={item}
             onDeleting={(trigger) => onDeleting(index, trigger)}
             onDeleted={() => onDeleted(item, index)}
@@ -988,6 +1027,8 @@ function ItemList({
 
 interface ItemRowProps {
   collection: Collection;
+  view: ItemView;
+  sortFieldId: string | undefined;
   item: ItemWithMedia;
   watchCompletion: () => CompletionWatch;
   onSaved: (item: Item, completed: CompletionCheck) => void;
@@ -996,7 +1037,17 @@ interface ItemRowProps {
   onDeleted: () => void;
 }
 
-function ItemRow({ collection, item, watchCompletion, onDeleting, onDeleted, onSaved, onMarked }: ItemRowProps) {
+function ItemRow({
+  collection,
+  view,
+  sortFieldId,
+  item,
+  watchCompletion,
+  onDeleting,
+  onDeleted,
+  onSaved,
+  onMarked,
+}: ItemRowProps) {
   const { t } = useTranslation("items");
   const updateItem = useUpdateItem(collection.id);
   // Its own mutation, not the editor's: a failed mark and a failed save are
@@ -1032,7 +1083,8 @@ function ItemRow({ collection, item, watchCompletion, onDeleting, onDeleted, onS
   // unstyled <li> stacks the card and the message. No CSS change needed.
   if (editing) {
     return (
-      <li data-item-id={item.id}>
+      // `item-editing` gives a card's editor a whole row of the grid (#38).
+      <li data-item-id={item.id} className="item-editing">
         <div className="item-row">
           <DynamicItemForm
             fields={collection.fields}
@@ -1084,13 +1136,24 @@ function ItemRow({ collection, item, watchCompletion, onDeleting, onDeleted, onS
   // dotted border in the status color, and muted values. The badge still says
   // which status it is; the line is a second cue, never the only one.
   const remaining = item.status !== "owned";
+  const grid = view === "grid";
+  // A card shows its name as the link and a few fields under it (#38); a row
+  // shows every field, the name among them in its place.
+  const shownFields = grid ? cardFields(collection.fields, item, nameField, sortFieldId) : collection.fields;
+  const itemLink = (
+    <Link to="/collections/$id/items/$itemId" params={{ id: collection.id, itemId: item.id }} className="item-link">
+      {name}
+    </Link>
+  );
   return (
     <li data-item-id={item.id}>
       <div className={remaining ? `item-row item-row-${item.status}` : "item-row"}>
         {/* The item's cover (#37). Decorative: the row's name says what it is,
             and the photo is one link away on the item's page. Fetched only as
-            the row nears the viewport. */}
-        {item.primaryMedia && (
+            the row nears the viewport. A card always leads with it (#38), an
+            empty frame standing in where there is no photo, so the cards in a
+            row of the grid line up. */}
+        {item.primaryMedia ? (
           <MediaImage
             collectionId={collection.id}
             itemId={item.id}
@@ -1099,9 +1162,11 @@ function ItemRow({ collection, item, watchCompletion, onDeleting, onDeleted, onS
             width={item.primaryMedia.width}
             height={item.primaryMedia.height}
             alt=""
-            className="item-row-thumb"
+            className={grid ? "item-card-cover" : "item-row-thumb"}
             lazy
           />
+        ) : (
+          grid && <span className="item-card-cover item-card-cover-empty" aria-hidden="true" />
         )}
         <div className="item-fields">
           <span className={`item-status item-status-${item.status}`}>
@@ -1114,29 +1179,11 @@ function ItemRow({ collection, item, watchCompletion, onDeleting, onDeleted, onS
               its photos are (#37) — the list-to-detail convention, and a link
               whose name is simply the item's. An item with nothing filled in is
               still reachable, through a link named "(untitled)". */}
-          {nameField === null && (
-            <Link
-              to="/collections/$id/items/$itemId"
-              params={{ id: collection.id, itemId: item.id }}
-              className="item-link"
-            >
-              {name}
-            </Link>
-          )}
-          {collection.fields.map((field) => (
+          {(grid || nameField === null) && itemLink}
+          {shownFields.map((field) => (
             <span key={field.id} className="item-field">
               <span className="item-field-label">{field.label}:</span>{" "}
-              {field.id === nameField ? (
-                <Link
-                  to="/collections/$id/items/$itemId"
-                  params={{ id: collection.id, itemId: item.id }}
-                  className="item-link"
-                >
-                  {name}
-                </Link>
-              ) : (
-                <FieldValue value={item.fields[field.id]} />
-              )}
+              {field.id === nameField ? itemLink : <FieldValue value={item.fields[field.id]} />}
             </span>
           ))}
         </div>

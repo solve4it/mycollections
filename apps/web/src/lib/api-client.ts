@@ -6,6 +6,7 @@ import type {
   Item,
   ItemCounts,
   ItemStatus,
+  ItemView,
   Media,
 } from "@mycollections/core";
 import { getToken } from "./token.js";
@@ -84,7 +85,10 @@ export async function createCollection(input: CreateCollectionInput): Promise<Co
  * stored under a field id that leaves the schema, and refuses to change an
  * existing field's type while the collection holds items.
  */
-export type UpdateCollectionInput = Partial<CreateCollectionInput>;
+export type UpdateCollectionInput = Partial<CreateCollectionInput> & {
+  /** How the collection's page lays out its items (#38); an omitted key keeps the stored view. */
+  itemView?: ItemView;
+};
 
 export async function updateCollection(id: string, input: UpdateCollectionInput): Promise<Collection> {
   const res = await request(`/api/collections/${id}`, { method: "PATCH", body: JSON.stringify(input) });

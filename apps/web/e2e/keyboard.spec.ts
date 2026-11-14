@@ -338,6 +338,7 @@ test.describe("keyboard traversal of every screen", () => {
       'link "Edit collection"',
       'searchbox "Search items"',
       'combobox "Sort by"',
+      'combobox "View"',
       'button "Filters"',
       'tab "All" [selected]',
       'tabpanel "All"',
@@ -2010,6 +2011,7 @@ test.describe("marking an item collected (#42)", () => {
       'link "Edit collection"',
       'searchbox "Search items"',
       'combobox "Sort by"',
+      'combobox "View"',
       'button "Filters"',
       'tab "All" [selected]',
       'tabpanel "All"',
@@ -2267,5 +2269,108 @@ test.describe("marking an item collected (#42)", () => {
     }));
     expect(widths.scroll, "the page must not scroll sideways").toBeLessThanOrEqual(widths.inner);
     expect(widths.rows, "no row overflows its own box").toEqual([0, 0]);
+  });
+});
+
+test.describe("a collection's grid (#38)", () => {
+  async function seedGrid(api: import("./fixtures.js").ApiFixture) {
+    await api.reset();
+    const collection = await api.createCollection({ name: "Vinyl records", fields: FIELDS, itemView: "grid" });
+    await api.createItem(collection.id, { title: "Kind of Blue", year: 1959 });
+    await api.createItem(collection.id, { title: "Blue Train", year: 1957 });
+    return collection;
+  }
+
+  /**
+   * The grid is the list restyled — the same elements in the same order — so
+   * the tab sequence is the list's, card by card. No `dense` packing, which is
+   * what keeps the painted order and this one the same.
+   */
+  test("walks the cards in the same order as the rows", async ({ page, api }) => {
+    const collection = await seedGrid(api);
+    await page.goto(`/collections/${collection.id}`);
+    await expect(page.locator("ul.item-list-grid > li")).toHaveCount(2);
+
+    await expectTabOrder(page, "a collection in the grid", [
+      'link "All collections"',
+      'link "Edit collection"',
+      'searchbox "Search items"',
+      'combobox "Sort by"',
+      'combobox "View"',
+      'button "Filters"',
+      'tab "All" [selected]',
+      'tabpanel "All"',
+      nameStop("Kind of Blue"),
+      editStop("Kind of Blue"),
+      deleteStop("Kind of Blue"),
+      nameStop("Blue Train"),
+      editStop("Blue Train"),
+      deleteStop("Blue Train"),
+      'combobox "Status"',
+      'textbox "Title"',
+      'spinbutton "Year"',
+      'button "Save"',
+    ]);
+  });
+
+  test("switching the view keeps focus on the select, and the choice is the collection's after a reload", async ({
+    page,
+    api,
+  }) => {
+    await api.reset();
+    const collection = await api.createCollection({ name: "Vinyl records", fields: FIELDS });
+    await api.createItem(collection.id, { title: "Kind of Blue", year: 1959 });
+    await page.goto(`/collections/${collection.id}`);
+    await expect(page.locator("ul.item-list")).toBeVisible();
+
+    const view = page.getByRole("combobox", { name: "View" });
+    await view.focus();
+    const saved = page.waitForResponse(
+      (res) => res.request().method() === "PATCH" && res.url().endsWith(`/api/collections/${collection.id}`),
+    );
+    await view.selectOption("grid");
+    await expect(page.locator("ul.item-list")).toHaveClass(/item-list-grid/);
+    await expect(view, "a layout change must leave focus where it was").toBeFocused();
+    expect((await saved).status()).toBe(200);
+
+    await page.reload();
+    await expect(page.getByRole("combobox", { name: "View" })).toHaveValue("grid");
+    await expect(page.locator("ul.item-list")).toHaveClass(/item-list-grid/);
+  });
+
+  test("deleting a card hands focus to the card in its place, and Undo brings it back to the card", async ({
+    page,
+    api,
+  }) => {
+    const collection = await seedGrid(api);
+    await page.goto(`/collections/${collection.id}`);
+    await expect(page.locator("ul.item-list-grid > li")).toHaveCount(2);
+
+    await page.getByRole("button", { name: deleteName("Kind of Blue") }).focus();
+    await page.keyboard.press("Enter");
+    await expect(page.locator("ul.item-list-grid > li")).toHaveCount(1);
+    await expect(page.getByRole("button", { name: editName("Blue Train") })).toBeFocused();
+
+    await page.getByRole("button", { name: "Undo" }).focus();
+    await page.keyboard.press("Enter");
+    await expect(page.locator("ul.item-list-grid > li")).toHaveCount(2);
+    await expect(page.getByRole("button", { name: editName("Kind of Blue") })).toBeFocused();
+  });
+
+  test("a card's editor opens with focus inside it, and Cancel hands focus back to the card's Edit", async ({
+    page,
+    api,
+  }) => {
+    const collection = await seedGrid(api);
+    await page.goto(`/collections/${collection.id}`);
+    const card = page.locator("ul.item-list-grid > li").first();
+
+    await page.getByRole("button", { name: editName("Kind of Blue") }).focus();
+    await page.keyboard.press("Enter");
+    await expect(card.getByRole("combobox", { name: "Status", exact: true })).toBeFocused();
+
+    await card.getByRole("button", { name: "Cancel" }).focus();
+    await page.keyboard.press("Enter");
+    await expect(page.getByRole("button", { name: editName("Kind of Blue") })).toBeFocused();
   });
 });
