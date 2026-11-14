@@ -23,7 +23,11 @@ board IDs); this file holds the judgment. When they overlap, CLAUDE.md wins on m
    `packages/core` (types/Zod) → `packages/db` (repository) → `apps/api` (route) →
    `apps/web` (lib → component → route → locale JSON). Commit at each layer boundary with a
    conventional message referencing the issue (`fix(api): … #216`). Small PRs; split rather
-   than grow.
+   than grow. When an issue splits, **stack** the PRs (one per layer boundary, each based on the
+   one below) instead of waiting for each to merge. The mechanics are in CLAUDE.md under
+   "Stacked PRs". Expect the owner to merge lower layers while you build the next, so check
+   `gh pr view <n> --json state` before creating a PR against a layer's branch. A merged
+   layer's branch is deleted, and a PR against it fails with `base: invalid` (#442).
 4. **TDD, and watch the test fail.** Write the test first, run it, and confirm it fails _for
    the right reason_ (missing module ≠ wrong behavior). Only then implement. Assert displayed
    or returned values with discriminating fixtures — `expect(body.fields).toEqual({title:
