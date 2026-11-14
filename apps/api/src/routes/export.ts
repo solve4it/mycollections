@@ -1,6 +1,9 @@
 import { type DatabaseHandle, exportBackup, type ImportMode, importBackup } from "@mycollections/db";
 import type { FastifyInstance } from "fastify";
 
+/** The one message a refused import answers with, whatever refused it. */
+export const INVALID_IMPORT_MESSAGE = "Invalid import file";
+
 const importQuerySchema = {
   type: "object",
   properties: {
@@ -20,8 +23,11 @@ export async function registerExportRoutes(app: FastifyInstance, db: DatabaseHan
     try {
       const summary = importBackup(db, request.body, mode ?? "skip");
       return reply.code(200).send(summary);
-    } catch (err) {
-      throw app.httpErrors.badRequest(err instanceof Error ? err.message : "Invalid import file");
+    } catch {
+      // Never the thrown message (#45): Zod quotes unknown key names, SQLite quotes
+      // table and constraint names, and both come from a file someone else may have
+      // written. Only a refusal with no detail leaves this route.
+      throw app.httpErrors.badRequest(INVALID_IMPORT_MESSAGE);
     }
   });
 }

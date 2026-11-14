@@ -226,7 +226,10 @@ back everything it held. Consequently:
 
 `POST /api/import` accepts exactly that document. The whole import runs in a single
 transaction, so an invalid payload is rejected with `400` and leaves the database
-untouched (no partial writes). The only `mode` today is `skip` (the default):
+untouched (no partial writes). Every refusal has the same body, `{"statusCode":400,
+"error":"Bad Request","message":"Invalid import file"}`. The thrown error's message is
+never sent: Zod quotes unknown key names and SQLite quotes table and constraint names,
+and both come from a file someone else may have written (#45). The only `mode` today is `skip` (the default):
 records whose id already exists are left as-is, making imports idempotent and
 non-destructive. `replace` / `merge` modes are reserved for the future.
 
