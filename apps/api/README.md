@@ -5,18 +5,19 @@ Local Fastify API server for MyCollections. Runs on `localhost` only and is inte
 ## Security
 
 - **Bearer token auth**: Every request (except `GET /api/health`) requires `Authorization: Bearer <token>`. The token is `API_TOKEN` when set. Otherwise, in development, it is a 256-bit token created once and kept in a `0600` file `api-token` beside the database, so it survives restarts (#241). On every start the file must be a regular file (not a symlink), owned by the server's user, with no group/other permission bits, and well-formed, or the server refuses to start, so a token planted in a shared directory is never adopted. An in-memory database gets a token for that run only. Comparison is constant-time via [`@fastify/bearer-auth`](https://github.com/fastify/fastify-bearer-auth), and the scheme name is matched case-insensitively per RFC 7235.
-- **Auth by scope, not by path**: the collection, item and export routes are registered inside an encapsulated Fastify scope that owns the bearer guard, so a new route is protected by where it is registered rather than by matching an exemption list. Only `GET /api/health` — and the Swagger UI in development — are registered outside it. Path-matching exemptions previously let a query string (`/api/health?probe=1`) turn a public route into a 401 and left the whole `/api/docs` prefix unauthenticated in production (#242). A request to an unknown path answers 404 without authenticating, since no handler is reachable.
+- **Auth by scope, not by path**: the collection, item and export routes are registered inside an encapsulated Fastify scope that owns the bearer guard, so a new route is protected by where it is registered rather than by matching an exemption list. Only `GET /api/health`, plus the Swagger UI and `POST /api/pair` in development, are registered outside it. Path-matching exemptions previously let a query string (`/api/health?probe=1`) turn a public route into a 401 and left the whole `/api/docs` prefix unauthenticated in production (#242). A request to an unknown path answers 404 without authenticating, since no handler is reachable.
 - **OWASP headers**: `@fastify/helmet` applies `X-Content-Type-Options`, `Strict-Transport-Security`, `X-Frame-Options`, `X-XSS-Protection`, and a strict `Content-Security-Policy` in production.
 - **CORS**: Restricted to `http://localhost:<port>` in dev mode; disabled in production (same-origin only).
 - **Localhost binding**: The server binds to `127.0.0.1` by default — never exposed to the network.
 
 ## Routes
 
-All routes require `Authorization: Bearer <token>` except `GET /api/health`.
+All routes require `Authorization: Bearer <token>` except `GET /api/health` and `POST /api/pair`.
 
 | Method   | Path                                                             | Description                                                                                                                                                            |
 | -------- | ---------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `GET`    | `/api/health`                                                    | Health check (no auth required)                                                                                                                                        |
+| `POST`   | `/api/pair`                                                      | Trade a one-time pairing code for the token (no auth; development on loopback only, see [Pairing a browser](#pairing-a-browser-241))                                   |
 | `GET`    | `/api/collections`                                               | List all collections, each with `itemCount` and `ownedCount` (see [Counts and progress](#counts-and-progress-42))                                                      |
 | `POST`   | `/api/collections`                                               | Create a collection — a finite set may carry a target (see [A finite set's target](#a-finite-sets-target-42))                                                          |
 | `GET`    | `/api/collections/:id`                                           | Get a collection                                                                                                                                                       |
@@ -247,6 +248,22 @@ const token = randomUUID();
 const app = await buildApp({ db, token, isDev: true });
 await app.listen({ port: 3001, host: "127.0.0.1" });
 ```
+
+## Pairing a browser (#241)
+
+In development on a loopback bind with a database on disk, startup prints a one-time link:
+
+```
+Pair a browser (link valid 15 minutes): http://localhost:5173/setup#pair=<code>
+```
+
+The web app's setup screen sends the code to `POST /api/pair` as `{"code": "<code>"}` and gets `{"token": "…"}` back. The code is a 256-bit base64url string, held only in memory. It is single-use: it is retired before the response is sent, so a replay fails. It expires after 15 minutes, and only one is live at a time; after each successful pairing a fresh link is printed for the next browser. Restarting the API also mints a fresh one.
+
+- **The code is in the fragment** (`#pair=`), which browsers never send to a server, so it reaches no access log and no `Referer`. The request log records the path, never the body.
+- **Every failure is `401 {"error":"Unauthorized"}`.** A wrong, used or expired code all look the same. A wrong guess never retires the real code, so nobody can block pairing by guessing.
+- **No rate limit is needed.** A 256-bit code cannot be guessed, and on loopback an IP-keyed limiter would be one global bucket, which would let any local process lock the owner out (#247).
+- **JSON bodies only.** A `text/plain` POST, which another origin can send without a preflight, is refused with `400`. The success response carries `Cache-Control: no-store`.
+- **The route does not exist** (`404`) outside development, on a non-loopback bind, or with an in-memory database. A rebinding page is refused by Host pinning before it reaches the route.
 
 ## Images (#37)
 
