@@ -44,6 +44,25 @@ curl -s -X POST \
   -d '{"title":"<title>","body":"<body>","head":"<branch>","base":"main"}'
 ```
 
+### Stacked PRs (an issue split into several PRs)
+
+When one issue needs more than one PR, stack them with GitHub stacked PRs. Don't open each PR only after the previous one merges (#442). Install once: `gh extension install github/gh-stack`.
+
+1. **Branch each layer off the one below**: `feat/issue-<n>-<layer>` from the previous layer's branch. Push each one with the bot token as above.
+2. **Create each PR with the curl recipe above**, with `"base"` set to the head branch of the layer below. The bottom PR's base is `main`.
+3. **Link them as the bot**: `GH_TOKEN=$BOT_TOKEN gh stack link <pr> <pr> ...`, PR numbers bottom to top, re-listing every open layer when one is added. Passing numbers rather than branch names means nothing is pushed.
+4. **Only the top PR says `Closes #<n>`.** The others say `Part of #<n>`, and each says which PR it is stacked on.
+5. **After a lower layer squash-merges**, GitHub points the next PR at `main`, but its branch still carries the merged layer's original commits:
+   - `git fetch && git rebase --onto origin/main <old tip of the merged layer> <branch>`;
+   - rerun the gate;
+   - `git push --force-with-lease=<branch>:<old sha> …`;
+   - correct the PR body's "stacked on" line.
+
+Rules that apply throughout:
+
+- **Use `gh stack` for `link` only.** Never `gh stack submit`/`push`, or `gh pr create`: they act as `shusak`, not the bot.
+- **PRs must land in order.** The merge queue only takes a PR targeting `main`, so a layer is queued once the one below it has merged and GitHub has pointed it at `main`.
+
 ## Issue Workflow
 
 Every piece of work follows this process:
