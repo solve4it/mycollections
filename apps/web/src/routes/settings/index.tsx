@@ -46,7 +46,7 @@ function SettingsPage() {
     setErrorReporting(event.target.checked);
   }
 
-  function handleDisconnect() {
+  function handleUnpair() {
     clearToken();
     void navigate({ to: "/setup" });
   }
@@ -211,9 +211,13 @@ function SettingsPage() {
             anything — all it did was make every page-level status query
             ambiguous. */}
         {isTokenSessionOnly() && <p className="form-hint">{t("session_only_notice")}</p>}
-        <p>{t("disconnect_description")}</p>
-        <button type="button" className="touch-target button-quiet" onClick={handleDisconnect}>
-          {t("disconnect_button")}
+        {/* "Unpair", not "Disconnect" (#241): the token survives restarts now, so
+            the old reason to press this — a server that rotated its token — is
+            gone. It forgets the token here only; there is one shared device token,
+            and revoking it means deleting the token file and restarting the API. */}
+        <p>{t("unpair_description")}</p>
+        <button type="button" className="touch-target button-quiet" onClick={handleUnpair}>
+          {t("unpair_button")}
         </button>
       </section>
     </div>

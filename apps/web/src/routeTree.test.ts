@@ -82,7 +82,7 @@ describe("the token guard (#420)", () => {
    * The property a layout guard is usually assumed not to have: it runs again
    * on a client navigation between two of its own children, rather than only
    * when the layout is first entered. A token cleared mid-session — another
-   * tab's Disconnect, or storage evicted — must stop the next navigation.
+   * tab's Unpair, or storage evicted — must stop the next navigation.
    */
   it("runs again on a client navigation between two guarded screens, after the token is gone", async () => {
     setToken("test-token");

@@ -130,24 +130,39 @@ test.describe("keyboard traversal of every screen", () => {
      */
     test("asking for a token", async ({ page }) => {
       await page.goto("/setup");
-      await expect(page.getByLabel("API Token")).toBeVisible();
+      await expect(page.getByLabel("API token or pairing link")).toBeVisible();
 
       expect(await tabOrder(page), "the tab order of the setup screen").toEqual([
-        'textbox "API Token"',
+        'textbox "API token or pairing link"',
+        'button "Connect"',
+      ]);
+    });
+
+    /**
+     * A refused pairing link (#241) adds an alert and nothing focusable: the paste
+     * field and Connect are still the way on.
+     */
+    test("after a pairing link was refused", async ({ page }) => {
+      await page.route("**/api/pair", (route) => route.fulfill({ status: 401, json: { error: "Unauthorized" } }));
+      await page.goto(`/setup#pair=${"a".repeat(43)}`);
+      await expect(page.getByRole("alert")).toBeVisible();
+
+      expect(await tabOrder(page), "the tab order of the setup screen after a refused link").toEqual([
+        'textbox "API token or pairing link"',
         'button "Connect"',
       ]);
     });
 
     /**
      * Settings is guarded like every other screen (#371). Without the guard it
-     * rendered with every query unauthenticated, offering to disconnect a token
+     * rendered with every query unauthenticated, offering to unpair a token
      * that was never there.
      */
     test("settings without a token goes to setup", async ({ page }) => {
       await page.goto("/settings");
       await expect(page).toHaveURL(/\/setup$/);
-      await expect(page.getByLabel("API Token")).toBeVisible();
-      await expect(page.getByRole("button", { name: "Disconnect" })).toHaveCount(0);
+      await expect(page.getByLabel("API token or pairing link")).toBeVisible();
+      await expect(page.getByRole("button", { name: "Unpair this browser" })).toHaveCount(0);
     });
   });
 
@@ -411,7 +426,7 @@ test.describe("keyboard traversal of every screen", () => {
       purgeStop("Kind of Blue"),
       'button "Empty trash"',
       'checkbox "Record error reports" [checked]',
-      'button "Disconnect"',
+      'button "Unpair this browser"',
     ]);
   });
 

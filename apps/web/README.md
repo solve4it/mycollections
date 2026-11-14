@@ -18,15 +18,15 @@ The `Shell` component provides the full-height application frame:
 
 Code-based routing via TanStack Router. Routes are defined in `src/routes/`:
 
-| Route                   | File                           | Description                                                                                     |
-| ----------------------- | ------------------------------ | ----------------------------------------------------------------------------------------------- |
-| `/`                     | `routes/index.tsx`             | Redirects to `/collections`                                                                     |
-| `/setup`                | `routes/setup/index.tsx`       | First-run onboarding: API token entry. Redirects to `/collections` if a token is already stored |
-| `/collections`          | `routes/collections/index.tsx` | Dashboard: collection cards, loading/error/empty states. Redirects to `/setup` if no token      |
-| `/collections/new`      | `routes/collections/new.tsx`   | Create a collection with the field schema builder                                               |
-| `/collections/$id`      | `routes/collections/$id.tsx`   | Collection detail: item list + add/edit/delete with a dynamically generated form                |
-| `/collections/$id/edit` | `routes/collections/edit.tsx`  | Edit a collection's name, description, finite set and target count, and fields; manage its tags |
-| `/settings`             | `routes/settings/index.tsx`    | Settings + language selector                                                                    |
+| Route                   | File                           | Description                                                                                                                                                      |
+| ----------------------- | ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/`                     | `routes/index.tsx`             | Redirects to `/collections`                                                                                                                                      |
+| `/setup`                | `routes/setup/index.tsx`       | First-run onboarding: pairs from a `#pair=` link, or takes a pasted token or link. Redirects to `/collections` if a token is already stored and there is no link |
+| `/collections`          | `routes/collections/index.tsx` | Dashboard: collection cards, loading/error/empty states. Redirects to `/setup` if no token                                                                       |
+| `/collections/new`      | `routes/collections/new.tsx`   | Create a collection with the field schema builder                                                                                                                |
+| `/collections/$id`      | `routes/collections/$id.tsx`   | Collection detail: item list + add/edit/delete with a dynamically generated form                                                                                 |
+| `/collections/$id/edit` | `routes/collections/edit.tsx`  | Edit a collection's name, description, finite set and target count, and fields; manage its tags                                                                  |
+| `/settings`             | `routes/settings/index.tsx`    | Settings + language selector                                                                                                                                     |
 
 The root layout (`routes/__root.tsx`) wraps all routes with the `Shell` component. Routes that need a connected API are children of one pathless layout route, `authenticatedRoute` (`routes/_authenticated.tsx`), whose `beforeLoad` redirects to `/setup` without a token (#420). Only `/setup` and the not-found splat sit outside it; `src/routeTree.test.ts` pins that, and checks the guard runs on fresh loads and when moving between guarded screens client-side.
 
@@ -38,7 +38,15 @@ The web app talks to the `@mycollections/api` server over HTTP.
 - **`src/lib/token.ts`**: `getToken` / `setToken` / `clearToken` / `isTokenSessionOnly`. The token is persisted to `localStorage` (`api_token`) and also held in memory for the session, because touching storage throws outright where it is denied — cookies blocked, a sandboxed frame, partitioned or policy-restricted storage — and the token guard (`routes/_authenticated.tsx`) reads it on every navigation. A denied write costs the reload, not the session, and `isTokenSessionOnly()` is how the UI says so rather than letting the next reload look like a bug (#279).
 - **`src/lib/queries.ts`**: TanStack Query hooks — `useCollections()`, `useCollection(id)`, `useItems(id)` (queries) and `useCreateCollection()`, `useCreateItem(id)`, `useUpdateItem(id)`, `useDeleteItem(id)` (mutations, each invalidating the relevant query on success). `useCollectionCounts(id, enabled)` reads the counts under `["collections", id, "items", "counts"]`, inside the items prefix every item mutation invalidates. Item create, update, delete and restore, a collection edit, and Settings' restores and import also fetch the dashboard list `["collections"]` again with `refetchType: "all"`. That list is not on screen while those run, and a merely stale entry would paint the old owned count on return and then jump (#42). `QueryClientProvider` is mounted in `main.tsx`.
 
-The API token comes from `API_TOKEN`, or in development from the `api-token` file the server keeps beside its database (it survives restarts; startup prints the file's path). The user pastes it into the `/setup` screen. Where the browser will not store anything, that screen says so before the token is pasted, and Settings → Connection repeats it — the app still works, it just cannot remember the token.
+The API token comes from `API_TOKEN`, or in development from the `api-token` file the server keeps beside its database (it survives restarts; startup prints the file's path). A browser normally gets it by **pairing** (#241): it opens the one-time link the API prints (`/setup#pair=<code>`), which the API also opens by itself on a first run. `/setup` sends the code to `POST /api/pair` through `pair()` in `lib/api-client.ts`, stores the token it gets back and goes to `/collections`.
+
+- **One send per code.** The code is single-use, so a ref guards against StrictMode's double effect, and the request is never cancelled.
+- **The code leaves the address bar.** Success replaces the history entry that held it; a failure navigates to a bare `/setup`.
+- **The hash is followed, not read once at mount.** A link opened in a tab already on `/setup` (after Unpair, say) changes only the fragment and remounts nothing.
+- **A link wins over a stored token.** `beforeLoad` does not redirect away while a `#pair=` fragment is present, because that token may be the stale one.
+- **Refusals don't trigger auth recovery.** A refused code raises `PairingRejectedError`, not `UnauthorizedError`, so it does not send the app through 401 recovery, and the screen explains it in an alert.
+
+The token field also accepts a pasted pairing link, for a browser the link cannot be opened in (a DevContainer, a remote machine), and still accepts the token itself. Settings → Connection's **Unpair this browser** forgets the token here only; it does not revoke it. Where the browser will not store anything, that screen says so before the token is pasted, and Settings → Connection repeats it — the app still works, it just cannot remember the token.
 
 ## Collection creation
 

@@ -74,7 +74,7 @@ export function isTokenSessionOnly(): boolean {
 /**
  * Signing out in one tab has to sign out in all of them. Persisted tokens used
  * to get that for free, because every tab read the same key; a token held in
- * memory would otherwise outlive the Disconnect that removed it. Fires only
+ * memory would otherwise outlive the Unpair that removed it. Fires only
  * where storage works — denied storage dispatches no storage events, and there
  * is nothing to stay in sync with there anyway.
  */

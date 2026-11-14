@@ -113,8 +113,8 @@ describe("SettingsPage", () => {
     vi.mocked(getToken).mockReturnValue(null);
     const { router } = renderSettings();
     await waitFor(() => expect(router.state.location.pathname).toBe("/setup"));
-    // No screen of unauthenticated queries offering to disconnect nothing.
-    expect(screen.queryByRole("button", { name: /disconnect/i })).toBeNull();
+    // No screen of unauthenticated queries offering to unpair nothing.
+    expect(screen.queryByRole("button", { name: "Unpair this browser" })).toBeNull();
     vi.mocked(getToken).mockReturnValue("test-token");
   });
 
@@ -141,9 +141,14 @@ describe("SettingsPage", () => {
     expect(option).toBeInTheDocument();
   });
 
-  it("renders a Disconnect button", async () => {
+  it("offers to unpair this browser, and says plainly that the token is not revoked (#241)", async () => {
     renderSettings();
-    expect(await screen.findByRole("button", { name: /disconnect/i })).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "Unpair this browser" })).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Forget the API token in this browser. To connect again, open a new pairing link from the API's startup output, or paste the token. The token itself is not revoked.",
+      ),
+    ).toBeInTheDocument();
   });
 
   it("says the token is not saved when it is only held for the session", async () => {
@@ -162,14 +167,14 @@ describe("SettingsPage", () => {
   it("says nothing about the token when it is stored normally", async () => {
     vi.mocked(isTokenSessionOnly).mockReturnValue(false);
     renderSettings();
-    await screen.findByRole("button", { name: /disconnect/i });
+    await screen.findByRole("button", { name: "Unpair this browser" });
     expect(screen.queryByText(/token is not saved on this device/i)).toBeNull();
   });
 
-  it("clearing the connection removes the stored token and goes to /setup", async () => {
+  it("unpairing removes the stored token and goes to /setup", async () => {
     localStorage.setItem("api_token", "some-token");
     const { router } = renderSettings();
-    fireEvent.click(await screen.findByRole("button", { name: /disconnect/i }));
+    fireEvent.click(await screen.findByRole("button", { name: "Unpair this browser" }));
     expect(localStorage.getItem("api_token")).toBeNull();
     await waitFor(() => expect(router.state.location.pathname).toBe("/setup"));
   });

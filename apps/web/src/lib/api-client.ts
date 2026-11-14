@@ -46,6 +46,36 @@ export class UnauthorizedError extends ApiError {
 }
 
 /**
+ * A pairing code the API refused (#241): wrong, already used, or expired — the API
+ * deliberately does not say which. Its own class, not `UnauthorizedError`, because
+ * that one sends the whole app back to `/setup`, which is where pairing happens.
+ */
+export class PairingRejectedError extends ApiError {
+  constructor() {
+    super(401);
+  }
+}
+
+/**
+ * Trades a one-time pairing code for the device token (#241).
+ *
+ * Not built on `request()`: that attaches the stored token, which during pairing is
+ * missing or stale, and turns a 401 into `UnauthorizedError` for the global recovery.
+ */
+export async function pair(code: string): Promise<string> {
+  const res = await fetch(`${BASE_URL}/api/pair`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ code }),
+  });
+  if (res.status === 401) throw new PairingRejectedError();
+  if (!res.ok) throw new ApiError(res.status);
+  const body = (await res.json()) as { token?: unknown };
+  if (typeof body.token !== "string" || body.token.trim() === "") throw new ApiError(res.status);
+  return body.token;
+}
+
+/**
  * Re-exported rather than defined here: the token needs guarding against a
  * browser that will not store anything (#279), and `token.js` is where that
  * lives. Every caller and every test mock still reaches it through this module.
