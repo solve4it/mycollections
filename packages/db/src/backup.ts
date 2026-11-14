@@ -29,6 +29,9 @@ export async function exportBackup(handle: DatabaseHandle): Promise<ExportDocume
     exportedAt: new Date().toISOString(),
     collections,
     items,
+    // Filled with every image row in the next step of #45; until then an export
+    // carries no images, as it never has.
+    media: [],
   };
 }
 
