@@ -5,6 +5,9 @@ on:
     branches: [main]
   push:
     branches: [main]
+  # The merge queue tests each PR on top of the latest main on a gh-readonly-queue/main/* ref;
+  # the required checks must report there too, or every queued PR waits out the timeout.
+  merge_group:
 
 permissions:
   contents: read
