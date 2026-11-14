@@ -634,6 +634,27 @@ test.describe("accessibility", () => {
     await expectNoAccessibilityViolations(page);
   });
 
+  /**
+   * A collection export the server refuses (#45): an alert inserted with its
+   * message inside, and focus left on Export for the retry.
+   */
+  test("a failed collection export", async ({ page, api }) => {
+    await api.reset();
+    const collection = await api.createCollection({ name: "Vinyl records", fields: FIELDS });
+    await page.route("**/api/collections/*/export", (route) =>
+      route.fulfill({ status: 500, json: { message: "Internal Server Error" } }),
+    );
+
+    await page.goto(`/collections/${collection.id}`);
+    const exportButton = page.getByRole("button", { name: "Export collection" });
+    await exportButton.focus();
+    await page.keyboard.press("Enter");
+
+    await expect(page.getByRole("alert")).toHaveText("The export failed. Please try again.");
+    await expect(exportButton).toBeFocused();
+    await expectNoAccessibilityViolations(page);
+  });
+
   test("a collection with no items", async ({ page, api }) => {
     await api.reset();
     const collection = await api.createCollection({ name: "Board games", fields: FIELDS });

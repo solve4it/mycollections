@@ -351,6 +351,7 @@ test.describe("keyboard traversal of every screen", () => {
     await expectTabOrder(page, "a collection with items", [
       'link "All collections"',
       'link "Edit collection"',
+      'button "Export collection"',
       'searchbox "Search items"',
       'combobox "Sort by"',
       'combobox "View"',
@@ -2024,6 +2025,7 @@ test.describe("marking an item collected (#42)", () => {
     await expectTabOrder(page, "a collection with remaining items", [
       'link "All collections"',
       'link "Edit collection"',
+      'button "Export collection"',
       'searchbox "Search items"',
       'combobox "Sort by"',
       'combobox "View"',
@@ -2309,6 +2311,7 @@ test.describe("a collection's grid (#38)", () => {
     await expectTabOrder(page, "a collection in the grid", [
       'link "All collections"',
       'link "Edit collection"',
+      'button "Export collection"',
       'searchbox "Search items"',
       'combobox "Sort by"',
       'combobox "View"',

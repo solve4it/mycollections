@@ -27,8 +27,9 @@ import { CollectionDetailSkeleton, ItemListSkeleton } from "../../components/Ske
 import { StatusTabs } from "../../components/StatusTabs.js";
 import { UndoToast } from "../../components/UndoToast.js";
 import { useAnnounce } from "../../lib/announcer.js";
-import type { ItemWithMedia } from "../../lib/api-client.js";
+import { exportCollection, type ItemWithMedia } from "../../lib/api-client.js";
 import { scopedId } from "../../lib/dom-id.js";
+import { downloadBlob, exportFileName } from "../../lib/download.js";
 import { type FocusDestination, useFocusHandoff } from "../../lib/focus-handoff.js";
 import { cardFields } from "../../lib/item-card.js";
 import { itemLabel, labelFieldId } from "../../lib/item-label.js";
@@ -206,6 +207,10 @@ function CollectionDetailPage() {
   // List or grid (#38): the collection's own setting, switched at once and
   // taken back if the server refuses.
   const setItemView = useSetItemView(id);
+  // This collection's archive (#45). Plain state rather than a mutation: nothing
+  // is cached and nothing else on the page depends on it.
+  const [exporting, setExporting] = useState(false);
+  const [exportFailed, setExportFailed] = useState(false);
   // The undo shortcut outlives the row that spawned it: once the delete lands and
   // the list reloads, that <li> is gone, so the toast is owned by the page.
   // `index` is where in the list the row was, which is where focus goes if the
@@ -559,11 +564,37 @@ function CollectionDetailPage() {
       </Link>
       <div className="collection-detail-header">
         <h1>{collection.name}</h1>
-        <Link to="/collections/$id/edit" params={{ id }} className="touch-target button-quiet">
-          <Icon name="edit" />
-          {tCollections("edit_collection")}
-        </Link>
+        {/* Grouped, so the header's space-between keeps the actions together on
+            the right instead of floating the first one into the middle. */}
+        <div className="collection-detail-actions">
+          <Link to="/collections/$id/edit" params={{ id }} className="touch-target button-quiet">
+            <Icon name="edit" />
+            {tCollections("edit_collection")}
+          </Link>
+          <button
+            type="button"
+            className="touch-target button-quiet"
+            // What `disabled` would do, without dropping focus to <body>: a second
+            // press while the archive is being built is ignored.
+            aria-disabled={exporting || undefined}
+            onClick={() => {
+              if (exporting) return;
+              setExporting(true);
+              setExportFailed(false);
+              exportCollection(id)
+                .then((blob) => downloadBlob(blob, exportFileName(collection.name)))
+                .catch(() => setExportFailed(true))
+                .finally(() => setExporting(false));
+            }}
+          >
+            <Icon name="export" />
+            {tCollections("export_collection")}
+          </button>
+        </div>
       </div>
+      {/* Inserted with its message inside: a role="alert" is announced on insertion.
+          A finished download is its own feedback, so success says nothing. */}
+      {exportFailed && <p role="alert">{tCollections("export_collection_error")}</p>}
       {measurable && countsQuery.data && (
         <CollectionProgress
           collection={collection}

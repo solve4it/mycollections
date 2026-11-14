@@ -44,6 +44,8 @@
   "submit_error": "Could not create the collection. Check your input and try again.",
   "edit_title": "Edit collection",
   "edit_collection": "Edit collection",
+  "export_collection": "Export collection",
+  "export_collection_error": "The export failed. Please try again.",
   "back_to_collection": "Back to collection",
   "save": "Save changes",
   "save_error": "Could not save the collection. Check your input and try again.",
