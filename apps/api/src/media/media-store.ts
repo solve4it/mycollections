@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { ReadStream } from "node:fs";
-import { chmod, mkdir, open, readdir, rename, rmdir, stat, unlink, writeFile } from "node:fs/promises";
+import { chmod, mkdir, open, readdir, rename, rm, rmdir, stat, unlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { MediaFileRef } from "@mycollections/db";
 
@@ -78,6 +78,75 @@ export class MediaStore {
       await Promise.all(
         [...Object.values(temps), ...Object.values(finals)].map((path) => unlink(path).catch(() => {})),
       );
+      throw error;
+    }
+  }
+
+  /**
+   * Like `write`, but never replaces a file that is already there (#45). Each file
+   * is created exclusively (`wx`) at its final name, so an existing one makes this
+   * fail rather than be overwritten, and on failure only the names this call
+   * created are removed — an import must never be able to overwrite, or clean
+   * up, an image it did not write.
+   *
+   * No temp file and rename here, unlike `write`: a hard link was the first
+   * design, but exFAT and many SMB mounts do not support one (review of #449).
+   * A half-written file is never read, because its row is inserted only after
+   * both files are complete, and a crash leaves an unreferenced file the sweep
+   * removes.
+   */
+  async writeNew(itemId: string, mediaId: string, files: { display: Buffer; thumb: Buffer }): Promise<void> {
+    const finals = { display: this.#path(itemId, mediaId, "display"), thumb: this.#path(itemId, mediaId, "thumb") };
+    await mkdir(join(this.#dir, itemId), { recursive: true, mode: 0o700 });
+    const created: string[] = [];
+    try {
+      for (const variant of ["display", "thumb"] as const) {
+        await writeFile(finals[variant], files[variant], { mode: 0o600, flag: "wx" });
+        created.push(finals[variant]);
+      }
+    } catch (error) {
+      await Promise.all(created.map((path) => unlink(path).catch(() => {})));
+      throw error;
+    }
+  }
+
+  /**
+   * Removes the files of a media id that no row names (review of #449) — what a
+   * purge whose unlink failed leaves until the next startup sweep. The caller has
+   * checked there is no row; without this, re-importing an export taken before
+   * that purge would fail on the stray file.
+   */
+  async removeOrphan(itemId: string, mediaId: string): Promise<void> {
+    await this.remove(itemId, mediaId);
+  }
+
+  /**
+   * A fresh path for an incoming import archive, in `.import/` beside the item
+   * folders (#45): on the same filesystem as the images rather than a temp
+   * directory that may be held in memory, owner-only, and never touched by the
+   * sweep, which only looks at folders named by an item id.
+   */
+  async importPath(): Promise<string> {
+    const folder = join(this.#dir, ".import");
+    await mkdir(folder, { recursive: true, mode: 0o700 });
+    await chmod(folder, 0o700);
+    return join(folder, `${randomUUID()}.zip`);
+  }
+
+  /** Removes whatever an import killed mid-way left in `.import/`. Run at startup, before anything is in flight. */
+  async clearImports(): Promise<void> {
+    const folder = join(this.#dir, ".import");
+    for (const name of await readdir(folder).catch(() => [] as string[])) {
+      await rm(join(folder, name), { force: true });
+    }
+  }
+
+  /** Whether one variant's file is on disk, without opening it — an export checks thousands. */
+  async has(itemId: string, mediaId: string, variant: MediaVariant): Promise<boolean> {
+    try {
+      return (await stat(this.#path(itemId, mediaId, variant))).isFile();
+    } catch (error) {
+      if (isMissing(error)) return false;
       throw error;
     }
   }

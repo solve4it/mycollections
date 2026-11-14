@@ -7,8 +7,9 @@ import type { DatabaseHandle } from "@mycollections/db";
 import Fastify from "fastify";
 import { DEFAULT_DEV_ORIGINS, isLoopbackHost, normalizeDevOrigins } from "./config.js";
 import { pathOf } from "./logger.js";
+import { createJobLimiter } from "./media/job-limiter.js";
 import { registerCollectionRoutes } from "./routes/collections.js";
-import { registerExportRoutes } from "./routes/export.js";
+import { type ImportLimits, registerExportRoutes } from "./routes/export.js";
 import { registerItemRoutes } from "./routes/items.js";
 import { type MediaRouteOptions, registerMediaRoutes } from "./routes/media.js";
 import { type PairingOptions, registerPairRoute } from "./routes/pair.js";
@@ -42,6 +43,8 @@ export interface AppOptions {
    * files to remove. `server.ts` always passes one.
    */
   media?: MediaRouteOptions;
+  /** Bounds on an archive import (#45). Defaults suit a real collection; tests shrink them. */
+  importLimits?: ImportLimits;
   /**
    * One-time pairing (#241). Without it `POST /api/pair` is not registered at all;
    * `server.ts` passes it only in development on a loopback bind.
@@ -209,9 +212,18 @@ export async function buildApp(options: AppOptions) {
 
     await registerCollectionRoutes(authenticated, db);
     await registerItemRoutes(authenticated, db);
-    await registerExportRoutes(authenticated, db);
-    await registerTrashRoutes(authenticated, db, options.media?.store);
-    if (options.media) await registerMediaRoutes(authenticated, db, options.media);
+    // One limiter for every image the server processes, uploads and imports alike,
+    // so an import cannot double the number of decodes running at once (#45).
+    const media = options.media && {
+      ...options.media,
+      limiter: options.media.limiter ?? createJobLimiter({ concurrency: 1, maxWaiting: 2 }),
+    };
+    await registerExportRoutes(authenticated, db, {
+      media: media && { store: media.store, limiter: media.limiter, maxImagesPerItem: media.maxImagesPerItem ?? 50 },
+      importLimits: options.importLimits,
+    });
+    await registerTrashRoutes(authenticated, db, media?.store);
+    if (media) await registerMediaRoutes(authenticated, db, media);
   });
 
   return app;

@@ -5,6 +5,7 @@ export {
   type ImportPlan,
   type ImportSummary,
   importBackup,
+  importDocument,
   type PlanOptions,
   planImport,
   TooManyImagesError,

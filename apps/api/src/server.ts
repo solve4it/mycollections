@@ -53,6 +53,8 @@ try {
 // nothing it stores outlives the process, so neither do its images.
 const mediaDir = config.mediaDir ?? (await mkdtemp(join(tmpdir(), "mycollections-media-")));
 const media = await MediaStore.open(mediaDir).catch(exitWithConfigurationError);
+// An import killed mid-way leaves its uploaded archive in `.import/`; nothing is in flight yet (#45).
+await media.clearImports();
 // Files no row names any more: a crash between a purge's commit and its unlink, a
 // database restored from a backup older than its images. Nothing is in flight yet.
 const swept = await media.sweep(await handle.media.listFileRefs());

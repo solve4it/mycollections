@@ -1,4 +1,14 @@
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, statSync, utimesSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  utimesSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { text } from "node:stream/consumers";
@@ -128,5 +138,65 @@ describe("MediaStore.sweep", () => {
 
     expect(await store.sweep([])).toBe(0);
     for (const path of [...strangers, holiday]) expect(existsSync(path)).toBe(true);
+  });
+});
+
+describe("MediaStore.writeNew (#45)", () => {
+  it("writes both files like write does", async () => {
+    const store = await MediaStore.open(dir);
+    await store.writeNew(ITEM, MEDIA, files());
+    expect(readFileSync(join(dir, ITEM, `${MEDIA}.webp`), "utf8")).toBe("display bytes");
+    expect(readFileSync(join(dir, ITEM, `${MEDIA}.thumb.webp`), "utf8")).toBe("thumb bytes");
+    expect(statSync(join(dir, ITEM, `${MEDIA}.webp`)).mode & 0o777).toBe(0o600);
+  });
+
+  it("refuses to replace an image already on disk, and leaves both its files exactly as they were", async () => {
+    const store = await MediaStore.open(dir);
+    await store.write(ITEM, MEDIA, files("original display", "original thumb"));
+    await expect(store.writeNew(ITEM, MEDIA, files("imported", "imported"))).rejects.toThrow();
+    expect(readFileSync(join(dir, ITEM, `${MEDIA}.webp`), "utf8")).toBe("original display");
+    expect(readFileSync(join(dir, ITEM, `${MEDIA}.thumb.webp`), "utf8")).toBe("original thumb");
+    expect(readdirSync(join(dir, ITEM)).sort()).toEqual([`${MEDIA}.thumb.webp`, `${MEDIA}.webp`]);
+  });
+
+  it("refuses when only the thumbnail is there, and removes the display it had just placed", async () => {
+    const store = await MediaStore.open(dir);
+    mkdirSync(join(dir, ITEM), { recursive: true });
+    writeFileSync(join(dir, ITEM, `${MEDIA}.thumb.webp`), "stranger");
+    await expect(store.writeNew(ITEM, MEDIA, files())).rejects.toThrow();
+    expect(readdirSync(join(dir, ITEM))).toEqual([`${MEDIA}.thumb.webp`]);
+    expect(readFileSync(join(dir, ITEM, `${MEDIA}.thumb.webp`), "utf8")).toBe("stranger");
+  });
+});
+
+describe("MediaStore import folder (#45)", () => {
+  it("hands out owner-only paths in a .import folder the sweep never touches", async () => {
+    const store = await MediaStore.open(dir);
+    const path = await store.importPath();
+    expect(path.startsWith(join(dir, ".import"))).toBe(true);
+    expect(statSync(join(dir, ".import")).mode & 0o777).toBe(0o700);
+    writeFileSync(path, "archive");
+    age(path);
+    await store.sweep([]);
+    expect(existsSync(path)).toBe(true);
+  });
+
+  it("empties the import folder of anything a killed import left behind", async () => {
+    const store = await MediaStore.open(dir);
+    const path = await store.importPath();
+    writeFileSync(path, "archive");
+    await store.clearImports();
+    expect(readdirSync(join(dir, ".import"))).toEqual([]);
+  });
+});
+
+describe("MediaStore.removeOrphan (review of #449)", () => {
+  it("removes files that no row names, so a stray file cannot block a re-import", async () => {
+    const store = await MediaStore.open(dir);
+    await store.write(ITEM, MEDIA, files());
+    await store.removeOrphan(ITEM, MEDIA);
+    expect(existsSync(join(dir, ITEM, `${MEDIA}.webp`))).toBe(false);
+    await store.writeNew(ITEM, MEDIA, files());
+    expect(readFileSync(join(dir, ITEM, `${MEDIA}.webp`), "utf8")).toBe("display bytes");
   });
 });

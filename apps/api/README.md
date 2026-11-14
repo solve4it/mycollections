@@ -274,6 +274,35 @@ The web app's setup screen sends the code to `POST /api/pair` as `{"code": "<cod
 - **First run opens the browser.** On the start that creates the token file (a fresh install, or the first start after upgrading), the API waits up to a minute for the web origin to answer, then opens the link with the platform opener (`open`, `xdg-open` or `explorer.exe`, spawned without a shell). The opener is handed a `0600` redirect page, `pair-<random>.html` in the data directory, never the link itself: a browser launched cold keeps its URL arguments in argv, where `ps` shows them to other users (Jupyter's `jpserver-*-open.html` does the same). The page is deleted when the browser pairs, when the code expires, or at the next start. Nothing opens on an ordinary restart, under `CI`, or with `BROWSER=none`. A missing opener or a web app that never answers just leaves the printed link to use.
 - **The route does not exist** (`404`) outside development, on a non-loopback bind, or with an in-memory database. A rebinding page is refused by Host pinning before it reaches the route.
 
+## Importing an archive (#45)
+
+`POST /api/import` takes two kinds of body:
+
+- **`application/json`**: a version 1 or version 2 document, up to 32 MiB, 50,000 items and 1,000 collections. A JSON body may not carry image rows, because it cannot carry their files, so a document with any is refused.
+- **`application/zip`** (or `application/x-zip-compressed`, which Windows browsers use for `.zip`): an export archive, `export.json` plus `media/<itemId>/<mediaId>.webp`. Send the file itself as the body. The zip's own first bytes are checked, not the label.
+
+The archive is treated as untrusted input:
+
+- **Received** into `<MEDIA_DIR>/.import/` (owner-only, on the same disk as the images, emptied at every start), with bytes counted as they arrive. Over 2 GiB answers `413 {"message":"Import too large"}`. The rest of the body is read and discarded so the client sees the 413, but only up to 8 MiB past the cap; beyond that the connection is cut. An upload that sends nothing for a minute is dropped. The file is removed either way before the response.
+- **Read** with [yauzl](https://github.com/thejoshwolfe/yauzl), trusting only the central directory, with these caps:
+
+  | Limit          | Value          |
+  | -------------- | -------------- |
+  | Entries        | 2,100          |
+  | Image rows     | 2,000          |
+  | `export.json`  | 32 MiB         |
+  | Items          | 50,000         |
+  | Collections    | 1,000          |
+  | Each image     | 25 MiB         |
+  | Total inflated | 2 GiB + 64 MiB |
+
+  Each size cap is checked on the declared size first and counted again while inflating. The item and collection counts are checked before the schema validates anything. Validating and inserting cost per record, so a small zip holding a huge document must not get that far: 170,000 items once blocked the server for 12 seconds and used 2.8 GB. Also refused: a deflated image inflating more than 20:1, encrypted entries, compression other than stored or deflate, and any repeated name. Images are found by the path their validated row implies, never by an entry's own name.
+- **Planned before anything is written.** Images come in only with items the import adds, never onto an item already here, and never under an id already in use. An added item with more than 50 live images refuses the whole archive.
+- **Re-processed.** Every image goes through the same pipeline as an upload: sniff, pixel cap, re-encode, metadata stripped. Its width, height, size and type are what that produced, not what the archive claimed. Imports share the upload limiter but wait for a turn rather than get a 503.
+- **Written without overwriting.** Files go first, each created exclusively, so an existing file is never replaced. Files under an id that no row names, left by a purge whose delete failed, are cleared first. Then all the rows go in one transaction. Any failure removes exactly the files this import wrote.
+- **One import at a time, JSON or archive.** A second one answers `409 {"message":"Another import is in progress"}`. The plan holds only while nothing else adds the items it chose to attach images to. The lock is released however the import ends.
+- **Refused with fixed text.** Every refusal of the file is `400 {"message":"Invalid import file"}`. A server-side failure, such as a full disk, is a generic 500.
+
 ## Images (#37)
 
 `src/media/` turns an upload into what is stored and keeps the files; `src/routes/media.ts` puts it behind the routes above.
@@ -283,7 +312,7 @@ The web app's setup screen sends the code to `POST /api/pair` as `{"code": "<cod
 - **Files first, then the row**, so a row never names a missing file; if the row cannot be written (the item was purged meanwhile) the files are removed.
 - **Item responses** — list, get, create, PATCH, restore — carry `primaryMedia: { id, width, height } | null`, added in one helper (`routes/item-response.ts`) so no route can answer without it. It is not part of `Item`, so the JSON export is unchanged.
 - **Purges** remove the files of exactly the image rows they took — diffed before and after, so an upload landing meanwhile is untouched — after the commit. Emptying the trash also takes images trashed on their own; the counts it returns are unchanged, since the trash lists items and collections only. A file that will not go is logged and left for the startup sweep.
-- **Not yet in backups or the JSON export** (#45, #47): a restored backup has no images.
+- **Imported from an export archive** (#45): see [Importing an archive](#importing-an-archive-45). The export does not yet write archives, so an export taken today still has no images; automated backups (#47) don't carry them either.
 
 - **Accepted formats** are decided by the file's own first bytes, before sharp parses anything: JPEG, PNG, GIF, WebP and AVIF. The decoded format must agree. Everything else is refused, including SVG and TIFF, which the bundled libvips _can_ read: "sharp could decode it" is not an allowlist.
 - **Limits:** an upload may declare at most 50 megapixels (`MAX_INPUT_PIXELS`), which sharp checks from the header before decoding. libvips runs one thread with no operation cache, and `createJobLimiter` caps how many images are processed at once, refusing the rest with `QueueFullError` (a 503) instead of queueing without bound.

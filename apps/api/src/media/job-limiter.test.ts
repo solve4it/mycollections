@@ -50,4 +50,15 @@ describe("createJobLimiter", () => {
     await expect(limiter.run(async () => Promise.reject(new Error("boom")))).rejects.toThrow("boom");
     expect(await limiter.run(async () => "next")).toBe("next");
   });
+
+  it("lets an import wait its turn past a full queue instead of being refused (#45)", async () => {
+    const limiter = createJobLimiter({ concurrency: 1, maxWaiting: 0 });
+    const gate = deferred();
+    const running = limiter.run(() => gate.promise);
+    await expect(limiter.run(async () => "refused")).rejects.toBeInstanceOf(QueueFullError);
+    const patient = limiter.run(async () => "waited", { wait: true });
+    gate.resolve();
+    await running;
+    expect(await patient).toBe("waited");
+  });
 });

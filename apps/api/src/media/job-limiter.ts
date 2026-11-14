@@ -6,8 +6,17 @@ export class QueueFullError extends Error {
   }
 }
 
+export interface RunOptions {
+  /**
+   * Wait for a slot however long the queue is, rather than be refused (#45). For
+   * an import, which holds one turn of its own (imports run one at a time) and
+   * must not fail halfway because uploads arrived meanwhile.
+   */
+  wait?: boolean;
+}
+
 export interface JobLimiter {
-  run<T>(job: () => Promise<T>): Promise<T>;
+  run<T>(job: () => Promise<T>, options?: RunOptions): Promise<T>;
 }
 
 /**
@@ -23,9 +32,9 @@ export function createJobLimiter({ concurrency, maxWaiting }: { concurrency: num
   const waiting: (() => void)[] = [];
 
   return {
-    async run<T>(job: () => Promise<T>): Promise<T> {
+    async run<T>(job: () => Promise<T>, options: RunOptions = {}): Promise<T> {
       if (running >= concurrency) {
-        if (waiting.length >= maxWaiting) throw new QueueFullError();
+        if (!options.wait && waiting.length >= maxWaiting) throw new QueueFullError();
         // A finishing job hands its slot straight to this one (see `finally`),
         // so `running` stays at the cap and nothing can slip in between.
         await new Promise<void>((resolve) => waiting.push(resolve));
