@@ -213,6 +213,19 @@ describe("SetupPage", () => {
       );
     });
 
+    it("pairs from a link opened in a tab already showing /setup, where only the fragment changes", async () => {
+      // Found by driving the app (#241): after Unpair, a new link pasted into the same
+      // tab's address bar is a same-document navigation. Nothing remounts, so a code
+      // read only at mount was silently ignored.
+      const pairCalls = stubPairing(async () => ({ status: 200, body: { token: "device-token" } }));
+      const { router } = renderSetup();
+      await screen.findByLabelText(LABEL);
+      await router.navigate({ to: "/setup", hash: `pair=${CODE}` });
+      await waitFor(() => expect(router.state.location.pathname).toBe("/collections"));
+      expect(localStorage.getItem("api_token")).toBe("device-token");
+      expect(pairCalls).toHaveLength(1);
+    });
+
     it("pairs from a link pasted into the field, for a browser the link could not be opened in", async () => {
       const pairCalls = stubPairing(async () => ({ status: 200, body: { token: "device-token" } }));
       const { router } = renderSetup();

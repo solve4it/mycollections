@@ -1,4 +1,4 @@
-import { createRoute, redirect, useNavigate, useRouter } from "@tanstack/react-router";
+import { createRoute, redirect, useNavigate, useRouterState } from "@tanstack/react-router";
 import { type FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { getToken, PairingRejectedError, pair, setToken } from "../../lib/api-client.js";
@@ -26,7 +26,6 @@ type Pairing = { status: "idle" } | { status: "pairing" } | { status: "failed"; 
 function SetupPage() {
   const { t } = useTranslation("setup");
   const navigate = useNavigate();
-  const router = useRouter();
   const [token, setTokenInput] = useState("");
   // Asked once, before anything is typed. It cannot be said afterwards: a
   // successful connect navigates away from this screen immediately, so a notice
@@ -34,9 +33,10 @@ function SetupPage() {
   // front of the person who has just been asked for the token a second time.
   const [canRemember] = useState(isStorageAvailable);
 
-  // Read once, at mount: the code is dropped from the address as soon as it has been
-  // used, and the screen must not then forget what it is doing.
-  const [linkCode] = useState(() => pairingCodeFrom(router.state.location.hash));
+  // Followed, not read once at mount: a link opened in a tab already on /setup — after
+  // Unpair, say — is a same-document navigation that changes only the fragment, and
+  // nothing remounts. Reading the code once ignored it silently.
+  const linkCode = useRouterState({ select: (state) => pairingCodeFrom(state.location.hash) });
   const [pairing, setPairing] = useState<Pairing>(linkCode === null ? { status: "idle" } : { status: "pairing" });
   // The code is single-use, so it must be sent once. StrictMode runs the effect below
   // twice and keeps refs across its simulated remount, so a ref is the guard that
@@ -45,7 +45,7 @@ function SetupPage() {
   const sentCode = useRef<string | null>(null);
 
   const runPairing = useCallback(
-    async (code: string) => {
+    async (code: string, fromLink: boolean) => {
       if (sentCode.current === code) return;
       sentCode.current = code;
       setPairing({ status: "pairing" });
@@ -56,14 +56,14 @@ function SetupPage() {
       } catch (error) {
         setPairing({ status: "failed", reason: error instanceof PairingRejectedError ? "rejected" : "unreachable" });
         // A spent or dead code has no business in the address bar or in history.
-        if (linkCode !== null) await navigate({ to: "/setup", replace: true });
+        if (fromLink) await navigate({ to: "/setup", replace: true });
       }
     },
-    [navigate, linkCode],
+    [navigate],
   );
 
   useEffect(() => {
-    if (linkCode !== null) void runPairing(linkCode);
+    if (linkCode !== null) void runPairing(linkCode, true);
   }, [linkCode, runPairing]);
 
   function handleSubmit(e: FormEvent) {
@@ -73,7 +73,7 @@ function SetupPage() {
     if (!token.trim()) return;
     const pastedCode = pairingCodeFrom(token);
     if (pastedCode !== null) {
-      void runPairing(pastedCode);
+      void runPairing(pastedCode, false);
       return;
     }
     setToken(token);
