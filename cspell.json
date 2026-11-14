@@ -110,6 +110,7 @@
     "coverage",
     ".turbo",
     "pnpm-lock.yaml",
+    "**/CHANGELOG.md",
     ".git",
     ".claude/worktrees",
     "test-results",
