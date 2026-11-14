@@ -11,6 +11,7 @@ import { registerCollectionRoutes } from "./routes/collections.js";
 import { registerExportRoutes } from "./routes/export.js";
 import { registerItemRoutes } from "./routes/items.js";
 import { type MediaRouteOptions, registerMediaRoutes } from "./routes/media.js";
+import { type PairingOptions, registerPairRoute } from "./routes/pair.js";
 import { registerTrashRoutes } from "./routes/trash.js";
 
 export interface AppOptions {
@@ -41,6 +42,11 @@ export interface AppOptions {
    * files to remove. `server.ts` always passes one.
    */
   media?: MediaRouteOptions;
+  /**
+   * One-time pairing (#241). Without it `POST /api/pair` is not registered at all;
+   * `server.ts` passes it only in development on a loopback bind.
+   */
+  pairing?: PairingOptions;
 }
 
 /** Strips the port, brackets, casing and any trailing dot from a Host header value. */
@@ -175,6 +181,9 @@ export async function buildApp(options: AppOptions) {
   // Public surface: registered on the root instance, outside the authenticated scope
   // below. Swagger (registered above, dev only) is public for the same reason.
   app.get("/api/health", async () => ({ status: "ok" }));
+  // Public by necessity: a browser that is pairing has no token yet. The one-time code
+  // is the credential (#241).
+  if (options.pairing) await registerPairRoute(app, token, options.pairing);
 
   // Everything else lives inside an encapsulated scope that registers the bearer
   // guard, so a route is protected by where it is registered rather than by its path

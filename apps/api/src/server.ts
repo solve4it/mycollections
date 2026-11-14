@@ -7,6 +7,7 @@ import { resolveServerConfig, type ServerConfig, startupWarnings } from "./confi
 import { type DeviceToken, resolveDeviceToken } from "./device-token.js";
 import { buildLoggerOptions } from "./logger.js";
 import { MediaStore } from "./media/media-store.js";
+import { isPairingEnabled, PairingCodes, pairingLink } from "./pairing.js";
 
 /**
  * A misconfiguration is the operator's to fix, so print the message rather than a stack
@@ -46,6 +47,15 @@ const media = await MediaStore.open(mediaDir).catch(exitWithConfigurationError);
 // Files no row names any more: a crash between a purge's commit and its unlink, a
 // database restored from a backup older than its images. Nothing is in flight yet.
 const swept = await media.sweep(await handle.media.listFileRefs());
+// One-time pairing links (#241), in development on loopback only. After a browser
+// pairs, the next link is printed straight away so a second browser can pair too.
+const pairingCodes = isPairingEnabled(config) ? new PairingCodes() : undefined;
+const webOrigin = config.devOrigins[0];
+function announcePairingLink(codes: PairingCodes): void {
+  if (webOrigin === undefined) return;
+  console.log(`Pair a browser (link valid 15 minutes): ${pairingLink(webOrigin, codes.mint())}`);
+}
+
 // `buildApp` validates too — it refuses a dev CORS allowlist that is empty or not
 // loopback — and a throw here is a misconfiguration like any other, not a crash.
 const app = await buildApp({
@@ -55,6 +65,7 @@ const app = await buildApp({
   allowedHosts: config.allowedHosts,
   devOrigins: config.devOrigins,
   media: { store: media },
+  pairing: pairingCodes && { codes: pairingCodes, onPaired: () => announcePairingLink(pairingCodes) },
   logger: buildLoggerOptions({ isDev: config.isDev, level: process.env.LOG_LEVEL }),
 }).catch(exitWithConfigurationError);
 
@@ -70,6 +81,7 @@ if (config.isDev) {
   console.log(describeToken(deviceToken));
   console.log(`Swagger UI: http://${config.host}:${config.port}/api/docs`);
 }
+if (pairingCodes) announcePairingLink(pairingCodes);
 
 /**
  * Where the token is, never what it is — except for an in-memory database's per-run
