@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { Collection } from "./collection.js";
 import { EXPORT_VERSION, ExportDocumentSchema } from "./export-document.js";
 import type { Item } from "./item.js";
+import type { Media } from "./media.js";
 
 const collection: Collection = {
   id: "11111111-1111-4111-8111-111111111111",
@@ -25,9 +26,34 @@ const item: Item = {
   deletedAt: null,
 };
 
+const image: Media = {
+  id: "33333333-3333-4333-8333-333333333333",
+  itemId: item.id,
+  kind: "image",
+  source: "user-attached",
+  mimeType: "image/webp",
+  bytes: 1234,
+  width: 640,
+  height: 480,
+  position: 0,
+  createdAt: "2026-01-01T00:00:00.000Z",
+  deletedAt: null,
+};
+
 function validDocument() {
   return {
     version: EXPORT_VERSION,
+    exportedAt: "2026-06-14T12:00:00.000Z",
+    collections: [collection],
+    items: [item],
+    media: [image],
+  };
+}
+
+/** A version 1 backup as #189 wrote it: no media key at all. */
+function versionOneDocument() {
+  return {
+    version: 1,
     exportedAt: "2026-06-14T12:00:00.000Z",
     collections: [collection],
     items: [item],
@@ -48,6 +74,7 @@ describe("ExportDocumentSchema", () => {
       exportedAt: "2026-06-14T12:00:00.000Z",
       collections: [],
       items: [],
+      media: [],
     });
     expect(parsed.collections).toEqual([]);
     expect(parsed.items).toEqual([]);
@@ -109,5 +136,47 @@ describe("ExportDocumentSchema", () => {
     });
     expect(result.success).toBe(false);
     expect(result.error?.issues[0]?.message).toBe("targetCount requires isFiniteSet");
+  });
+
+  describe("version 2: images (#45)", () => {
+    it("is the version written today", () => {
+      expect(EXPORT_VERSION).toBe(2);
+    });
+
+    it("keeps every image row, soft-deleted ones included", () => {
+      const trashed = {
+        ...image,
+        id: "44444444-4444-4444-8444-444444444444",
+        position: 1,
+        deletedAt: "2026-02-01T00:00:00.000Z",
+      };
+      const parsed = ExportDocumentSchema.parse({ ...validDocument(), media: [image, trashed] });
+      expect(parsed.media).toEqual([image, trashed]);
+    });
+
+    it("reads a version 1 backup as a version 2 document with no images", () => {
+      const parsed = ExportDocumentSchema.parse(versionOneDocument());
+      expect(parsed).toEqual({ ...versionOneDocument(), version: 2, media: [] });
+    });
+
+    it("refuses a version 1 document carrying media, which no version 1 writer produced", () => {
+      expect(() => ExportDocumentSchema.parse({ ...versionOneDocument(), media: [image] })).toThrow();
+    });
+
+    it("refuses a version 2 document without its media list", () => {
+      const { media: _media, ...withoutMedia } = validDocument();
+      expect(() => ExportDocumentSchema.parse(withoutMedia)).toThrow();
+    });
+
+    it("refuses two image rows with one id, which would make the import ambiguous about which file is which", () => {
+      expect(() =>
+        ExportDocumentSchema.parse({ ...validDocument(), media: [image, { ...image, position: 1 }] }),
+      ).toThrow();
+    });
+
+    it("refuses an image whose item is not in the document", () => {
+      const stray = { ...image, itemId: "55555555-5555-4555-8555-555555555555" };
+      expect(() => ExportDocumentSchema.parse({ ...validDocument(), media: [stray] })).toThrow();
+    });
   });
 });
