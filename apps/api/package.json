@@ -37,9 +37,13 @@
     "@mycollections/core": "workspace:*",
     "@mycollections/db": "workspace:*",
     "fastify": "^5.12.8",
-    "sharp": "0.35.5"
+    "sharp": "0.35.5",
+    "yauzl": "3.4.0",
+    "yazl": "3.3.1"
   },
   "devDependencies": {
+    "@types/yauzl": "3.4.0",
+    "@types/yazl": "3.3.1",
     "tsx": "^4.23.15",
     "typescript": "^7.0.2",
     "vitest": "^5.1.0"
