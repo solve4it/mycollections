@@ -14,13 +14,21 @@
       // Every variable the local servers read has to be passed through by name.
       "passThroughEnv": [
         "API_TOKEN",
+        // BROWSER=none and CI stop the first-run pairing link opening a browser (#241);
+        // DISPLAY and friends are what xdg-open needs to find the desktop session on Linux.
+        "BROWSER",
+        "CI",
         "DB_PATH",
+        "DBUS_SESSION_BUS_ADDRESS",
         "DEV_ORIGINS",
+        "DISPLAY",
         "HOST",
         "LOG_LEVEL",
         "MEDIA_DIR",
         "PORT",
-        "VITE_API_URL"
+        "VITE_API_URL",
+        "WAYLAND_DISPLAY",
+        "XDG_RUNTIME_DIR"
       ]
     },
     "test": {

@@ -1,13 +1,22 @@
+import { spawn } from "node:child_process";
+import { rmSync } from "node:fs";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { openDatabase } from "@mycollections/db";
 import { buildApp } from "./app.js";
 import { resolveServerConfig, type ServerConfig, startupWarnings } from "./config.js";
 import { type DeviceToken, resolveDeviceToken } from "./device-token.js";
 import { buildLoggerOptions } from "./logger.js";
 import { MediaStore } from "./media/media-store.js";
-import { isPairingEnabled, PairingCodes, pairingLink } from "./pairing.js";
+import {
+  openerCommand,
+  removeStaleRedirectFiles,
+  shouldAutoOpen,
+  waitForOrigin,
+  writeRedirectFile,
+} from "./open-browser.js";
+import { isPairingEnabled, PAIRING_TTL_MS, PairingCodes, pairingLink } from "./pairing.js";
 
 /**
  * A misconfiguration is the operator's to fix, so print the message rather than a stack
@@ -51,9 +60,38 @@ const swept = await media.sweep(await handle.media.listFileRefs());
 // pairs, the next link is printed straight away so a second browser can pair too.
 const pairingCodes = isPairingEnabled(config) ? new PairingCodes() : undefined;
 const webOrigin = config.devOrigins[0];
-function announcePairingLink(codes: PairingCodes): void {
-  if (webOrigin === undefined) return;
-  console.log(`Pair a browser (link valid 15 minutes): ${pairingLink(webOrigin, codes.mint())}`);
+function announcePairingLink(codes: PairingCodes): string | undefined {
+  if (webOrigin === undefined) return undefined;
+  const link = pairingLink(webOrigin, codes.mint());
+  console.log(`Pair a browser (link valid 15 minutes): ${link}`);
+  return link;
+}
+
+// The first-run redirect page holds a live code, so it goes as soon as the code does:
+// on pairing, at expiry, or — for a run that was killed — at the next start.
+const dataDir = config.dbPath === ":memory:" ? undefined : dirname(config.dbPath);
+let redirectFile: string | undefined;
+function removeRedirectFile(): void {
+  if (redirectFile !== undefined) rmSync(redirectFile, { force: true });
+  redirectFile = undefined;
+}
+if (pairingCodes && dataDir !== undefined) removeStaleRedirectFiles(dataDir);
+
+/**
+ * Opens the pairing link on a first run (#241) once the web app answers. Never fatal: a
+ * missing opener or a web server that never comes up leaves the printed link to use.
+ */
+async function openPairingLink(origin: string, directory: string, link: string): Promise<void> {
+  if (!(await waitForOrigin(origin))) {
+    console.log(`The web app did not answer at ${origin}; open the pairing link above once it is running.`);
+    return;
+  }
+  redirectFile = writeRedirectFile(directory, link);
+  setTimeout(removeRedirectFile, PAIRING_TTL_MS).unref();
+  const { command, args } = openerCommand(process.platform, redirectFile);
+  const child = spawn(command, args, { stdio: "ignore", detached: true });
+  child.on("error", () => console.log("Could not open a browser; open the pairing link above."));
+  child.unref();
 }
 
 // `buildApp` validates too — it refuses a dev CORS allowlist that is empty or not
@@ -65,7 +103,13 @@ const app = await buildApp({
   allowedHosts: config.allowedHosts,
   devOrigins: config.devOrigins,
   media: { store: media },
-  pairing: pairingCodes && { codes: pairingCodes, onPaired: () => announcePairingLink(pairingCodes) },
+  pairing: pairingCodes && {
+    codes: pairingCodes,
+    onPaired: () => {
+      removeRedirectFile();
+      announcePairingLink(pairingCodes);
+    },
+  },
   logger: buildLoggerOptions({ isDev: config.isDev, level: process.env.LOG_LEVEL }),
 }).catch(exitWithConfigurationError);
 
@@ -81,7 +125,13 @@ if (config.isDev) {
   console.log(describeToken(deviceToken));
   console.log(`Swagger UI: http://${config.host}:${config.port}/api/docs`);
 }
-if (pairingCodes) announcePairingLink(pairingCodes);
+if (pairingCodes) {
+  const link = announcePairingLink(pairingCodes);
+  const autoOpen = shouldAutoOpen({ created: deviceToken.created, pairingEnabled: true, env: process.env });
+  if (link !== undefined && autoOpen && webOrigin !== undefined && dataDir !== undefined) {
+    void openPairingLink(webOrigin, dataDir, link);
+  }
+}
 
 /**
  * Where the token is, never what it is — except for an in-memory database's per-run
