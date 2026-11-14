@@ -112,10 +112,22 @@ export function importBackup(
   mode: ImportMode = "skip",
   plan?: ImportPlan,
 ): ImportSummary {
+  return importDocument(handle, ExportDocumentSchema.parse(document), mode, plan);
+}
+
+/**
+ * `importBackup` for a document the caller has already validated — an archive's,
+ * which can hold tens of thousands of records and is not worth parsing twice.
+ */
+export function importDocument(
+  handle: DatabaseHandle,
+  doc: ExportDocument,
+  mode: ImportMode = "skip",
+  plan?: ImportPlan,
+): ImportSummary {
   if (mode !== "skip") {
     throw new Error(`Unsupported import mode: ${mode}`);
   }
-  const doc = ExportDocumentSchema.parse(document);
   if (plan === undefined && doc.media.length > 0) {
     throw new Error("image rows cannot be imported without their files");
   }

@@ -5,11 +5,16 @@ import {
   exportBackup,
   type ImportMode,
   type ImportSummary,
-  importBackup,
+  importDocument,
 } from "@mycollections/db";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { importArchive } from "../archive/import-archive.js";
-import { ArchiveError, type ArchiveLimits, DEFAULT_ARCHIVE_LIMITS } from "../archive/read-export-archive.js";
+import {
+  ArchiveError,
+  type ArchiveLimits,
+  DEFAULT_ARCHIVE_LIMITS,
+  validateDocument,
+} from "../archive/read-export-archive.js";
 import type { JobLimiter } from "../media/job-limiter.js";
 import type { MediaStore } from "../media/media-store.js";
 
@@ -21,14 +26,33 @@ const BUSY_MESSAGE = "Another import is in progress";
 const MiB = 1024 * 1024;
 const GiB = 1024 * MiB;
 
-/** A JSON import body; the 1 MiB Fastify default refused a few thousand items (#45). */
-const JSON_BODY_LIMIT = 64 * MiB;
+/**
+ * A JSON import body. The 1 MiB Fastify default refused a few thousand items (#45);
+ * the document's item and collection counts are capped separately, as an
+ * archive's are.
+ */
+const JSON_BODY_LIMIT = 32 * MiB;
+
+/** How long an archive upload may go without sending a byte before it is dropped. */
+const DEFAULT_IDLE_TIMEOUT_MS = 60_000;
+
+/**
+ * How far past the archive cap the body is still read (and discarded) so the client
+ * gets a 413. Beyond it the connection is cut: an endless upload must not hold the
+ * import lock for ever.
+ */
+const DRAIN_MARGIN_BYTES = 8 * MiB;
+
+/** Every type a browser or tool labels a .zip with; the magic bytes are what is trusted. */
+const ZIP_TYPES = ["application/zip", "application/x-zip-compressed"];
 
 export interface ImportLimits {
   /** The uploaded archive, counted as it streams to disk. Defaults to 2 GiB. */
   maxArchiveBytes?: number;
   /** What the archive may hold; see `DEFAULT_ARCHIVE_LIMITS`. */
   archive?: Partial<ArchiveLimits>;
+  /** Milliseconds an archive upload may stay silent. Defaults to a minute. */
+  idleTimeoutMs?: number;
 }
 
 export interface ExportRouteOptions {
@@ -49,9 +73,11 @@ const ZIP_MAGIC = Buffer.from([0x50, 0x4b, 0x03, 0x04]);
 
 export async function registerExportRoutes(app: FastifyInstance, db: DatabaseHandle, options: ExportRouteOptions = {}) {
   const maxArchiveBytes = options.importLimits?.maxArchiveBytes ?? 2 * GiB;
+  const idleTimeoutMs = options.importLimits?.idleTimeoutMs ?? DEFAULT_IDLE_TIMEOUT_MS;
   const archiveLimits: ArchiveLimits = { ...DEFAULT_ARCHIVE_LIMITS, ...options.importLimits?.archive };
-  // One import at a time (#45): two interleaved imports could each plan an image
-  // the other then writes. Per app, which is per server.
+  // One import at a time (#45), JSON and archive alike: an import's plan holds only
+  // while nothing else adds the items it decided to bring images in with (review
+  // of #449). Per app, which is per server.
   let importing = false;
 
   app.get("/api/export", async (_request, reply) => {
@@ -67,19 +93,24 @@ export async function registerExportRoutes(app: FastifyInstance, db: DatabaseHan
     // The archive arrives as the raw request stream; this route counts its bytes
     // itself, since Fastify's body limit does not apply to a parser that does not
     // read the body.
-    scope.addContentTypeParser("application/zip", (_request, payload, done) => done(null, payload));
+    scope.addContentTypeParser(ZIP_TYPES, (_request, payload, done) => done(null, payload));
 
     scope.post(
       "/api/import",
       { schema: { querystring: importQuerySchema }, bodyLimit: JSON_BODY_LIMIT },
       async (request, reply) => {
         const { mode } = request.query as { mode?: ImportMode };
-        if (request.headers["content-type"]?.split(";")[0]?.trim().toLowerCase() === "application/zip") {
-          return importZip(request, reply);
-        }
+        const type = request.headers["content-type"]?.split(";")[0]?.trim().toLowerCase() ?? "";
+        if (ZIP_TYPES.includes(type)) return importZip(request, reply);
+        if (importing) throw app.httpErrors.conflict(BUSY_MESSAGE);
         try {
-          return reply.code(200).send(importBackup(db, request.body, mode ?? "skip"));
-        } catch {
+          // Counted before the schema runs, as an archive's document is.
+          const document = validateDocument(request.body, archiveLimits);
+          return reply.code(200).send(importDocument(db, document, mode ?? "skip"));
+        } catch (error) {
+          if (error instanceof ArchiveError && error.reason === "too-large") {
+            throw app.httpErrors.payloadTooLarge(TOO_LARGE_MESSAGE);
+          }
           // Never the thrown message (#45): Zod quotes unknown key names, SQLite quotes
           // table and constraint names, and both come from a file someone else may have
           // written. Only a refusal with no detail leaves this route.
@@ -100,10 +131,11 @@ export async function registerExportRoutes(app: FastifyInstance, db: DatabaseHan
       if (!reply.raw.writableEnded) aborted = true;
     });
 
-    const path = await media.store.importPath();
+    let path: string | undefined;
     let summary: ImportSummary;
     try {
-      await receive(request.body as Readable, path, maxArchiveBytes);
+      path = await media.store.importPath();
+      await receive(request.body as Readable, path, maxArchiveBytes, idleTimeoutMs);
       if (!(await startsWithZipMagic(path))) throw new ArchiveError("invalid");
       summary = await importArchive({
         db,
@@ -126,9 +158,13 @@ export async function registerExportRoutes(app: FastifyInstance, db: DatabaseHan
       throw app.httpErrors.badRequest(INVALID_IMPORT_MESSAGE);
     } finally {
       // Before replying, so nobody — the client, the next import — ever sees the
-      // archive still on disk.
-      await rm(path, { force: true });
-      importing = false;
+      // archive still on disk. The lock is released whatever happens here: a stuck
+      // flag would refuse every import until a restart (review of #449).
+      try {
+        if (path !== undefined) await rm(path, { force: true });
+      } finally {
+        importing = false;
+      }
     }
     return reply.code(200).send(summary);
   }
@@ -136,21 +172,44 @@ export async function registerExportRoutes(app: FastifyInstance, db: DatabaseHan
 
 /**
  * Streams the upload to `path` (created exclusively, owner-only). Past `maxBytes`
- * it stops writing but reads the rest of the body, discarding it, so the client
- * gets its 413 instead of a dropped connection.
+ * it stops writing but reads on, discarding, so the client gets its 413 instead of
+ * a dropped connection — up to a margin, beyond which the connection is cut. An
+ * upload silent for `idleMs` is dropped too, so a stalled client cannot hold the
+ * import lock (review of #449).
  */
-async function receive(body: Readable, path: string, maxBytes: number): Promise<void> {
+async function receive(body: Readable, path: string, maxBytes: number, idleMs: number): Promise<void> {
   const file = await open(path, "wx", 0o600);
   let received = 0;
+  let idle: NodeJS.Timeout | undefined;
+  let timedOut = false;
+  const armIdle = () => {
+    clearTimeout(idle);
+    // Destroyed without an error, which the loop below would otherwise see a
+    // second time as an unhandled stream error; the flag says why it ended.
+    idle = setTimeout(() => {
+      timedOut = true;
+      body.destroy();
+    }, idleMs);
+  };
   try {
+    armIdle();
     for await (const chunk of body) {
+      armIdle();
       received += (chunk as Buffer).length;
+      if (received > maxBytes + DRAIN_MARGIN_BYTES) {
+        body.destroy();
+        break;
+      }
       if (received > maxBytes) continue;
       await file.write(chunk as Buffer);
     }
+  } catch (error) {
+    if (!timedOut) throw error;
   } finally {
+    clearTimeout(idle);
     await file.close();
   }
+  if (timedOut) throw new ArchiveError("invalid");
   if (received > maxBytes) throw new ArchiveError("too-large");
 }
 

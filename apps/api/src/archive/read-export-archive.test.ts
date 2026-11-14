@@ -221,4 +221,9 @@ describe("openExportArchive (#45)", () => {
     const error = await refusal(path);
     expect(error.message).not.toContain("do-not-report");
   });
+
+  it("refuses more items or collections than an import allows, however small the zip (review of #449)", async () => {
+    expect((await refusal(await zip(standardEntries()), { maxItems: 0 })).reason).toBe("too-large");
+    expect((await refusal(await zip(standardEntries()), { maxCollections: 0 })).reason).toBe("too-large");
+  });
 });

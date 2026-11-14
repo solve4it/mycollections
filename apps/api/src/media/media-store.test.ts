@@ -189,3 +189,14 @@ describe("MediaStore import folder (#45)", () => {
     expect(readdirSync(join(dir, ".import"))).toEqual([]);
   });
 });
+
+describe("MediaStore.removeOrphan (review of #449)", () => {
+  it("removes files that no row names, so a stray file cannot block a re-import", async () => {
+    const store = await MediaStore.open(dir);
+    await store.write(ITEM, MEDIA, files());
+    await store.removeOrphan(ITEM, MEDIA);
+    expect(existsSync(join(dir, ITEM, `${MEDIA}.webp`))).toBe(false);
+    await store.writeNew(ITEM, MEDIA, files());
+    expect(readFileSync(join(dir, ITEM, `${MEDIA}.webp`), "utf8")).toBe("display bytes");
+  });
+});

@@ -22,6 +22,10 @@ export interface ArchiveLimits {
   maxMediaRows: number;
   /** `export.json`, declared and inflated. */
   maxJsonBytes: number;
+  /** Items in the document, counted before schema validation: parsing and inserting cost per item. */
+  maxItems: number;
+  /** Collections in the document, likewise. */
+  maxCollections: number;
   /** Each image, declared and inflated — the upload route's limit. */
   maxImageBytes: number;
   /** Everything the import reads, declared. */
@@ -36,7 +40,12 @@ const GiB = 1024 * MiB;
 export const DEFAULT_ARCHIVE_LIMITS: ArchiveLimits = Object.freeze({
   maxEntries: 2_100,
   maxMediaRows: 2_000,
-  maxJsonBytes: 64 * MiB,
+  // A small zip can inflate a document cheaply, and validating and inserting 170,000
+  // cloned items blocked the server for 12 s and took 2.8 GB (review of #449). The
+  // counts are the real bound; the byte cap keeps parsing itself in check.
+  maxJsonBytes: 32 * MiB,
+  maxItems: 50_000,
+  maxCollections: 1_000,
   maxImageBytes: 25 * MiB,
   maxTotalBytes: 2 * GiB + 64 * MiB,
   maxImageRatio: 20,
@@ -81,7 +90,7 @@ export async function openExportArchive(path: string, limits: ArchiveLimits): Pr
     if (documentEntry === undefined) throw new ArchiveError("invalid");
     if (documentEntry.uncompressedSize > limits.maxJsonBytes) throw new ArchiveError("too-large");
 
-    const document = parseDocument(await readEntry(zipfile, documentEntry, limits.maxJsonBytes));
+    const document = parseDocument(await readEntry(zipfile, documentEntry, limits.maxJsonBytes), limits);
     if (document.media.length > limits.maxMediaRows) throw new ArchiveError("too-large");
 
     let total = documentEntry.uncompressedSize;
@@ -117,12 +126,29 @@ function exceedsRatio(entry: Entry, maxRatio: number): boolean {
   return entry.compressedSize === 0 || entry.uncompressedSize / entry.compressedSize > maxRatio;
 }
 
-function parseDocument(bytes: Buffer): ExportDocument {
+function parseDocument(bytes: Buffer, limits: ArchiveLimits): ExportDocument {
   let raw: unknown;
   try {
     raw = JSON.parse(bytes.toString("utf8"));
   } catch {
     throw new ArchiveError("invalid");
+  }
+  return validateDocument(raw, limits);
+}
+
+/**
+ * Checks a parsed document's size before the schema sees it — validation and the
+ * inserts after it cost per record — then validates it. Shared by the archive and
+ * the JSON body, which reach the same import.
+ */
+export function validateDocument(
+  raw: unknown,
+  limits: Pick<ArchiveLimits, "maxItems" | "maxCollections">,
+): ExportDocument {
+  const counts = raw as { items?: unknown; collections?: unknown } | null;
+  if (Array.isArray(counts?.items) && counts.items.length > limits.maxItems) throw new ArchiveError("too-large");
+  if (Array.isArray(counts?.collections) && counts.collections.length > limits.maxCollections) {
+    throw new ArchiveError("too-large");
   }
   const parsed = ExportDocumentSchema.safeParse(raw);
   if (!parsed.success) throw new ArchiveError("invalid");

@@ -60,7 +60,7 @@ async function sourceDocument(count = 1): Promise<{ document: ExportDocument; ro
 async function archive(document: ExportDocument, images: Map<string, Buffer>, extra: [string, Buffer][] = []) {
   const zip = new ZipFile();
   zip.addBuffer(Buffer.from(JSON.stringify(document)), "export.json");
-  for (const row of document.media) {
+  for (const row of document.media ?? []) {
     const bytes = images.get(row.id);
     if (bytes) zip.addBuffer(bytes, `media/${row.itemId}/${row.id}.webp`, { compress: false });
   }
@@ -71,15 +71,28 @@ async function archive(document: ExportDocument, images: Map<string, Buffer>, ex
   return Buffer.concat(chunks);
 }
 
-async function targetApp(options: { limiter?: JobLimiter; maxArchiveBytes?: number } = {}) {
-  const store = await MediaStore.open(join(root, "media"));
+async function targetApp(
+  options: { limiter?: JobLimiter; maxArchiveBytes?: number; idleTimeoutMs?: number; store?: MediaStore } = {},
+) {
+  const store = options.store ?? (await MediaStore.open(join(root, "media")));
   const app = await buildApp({
     db: target,
     token: TOKEN,
     media: { store, limiter: options.limiter },
-    importLimits: options.maxArchiveBytes === undefined ? undefined : { maxArchiveBytes: options.maxArchiveBytes },
+    importLimits: { maxArchiveBytes: options.maxArchiveBytes, idleTimeoutMs: options.idleTimeoutMs },
   });
   return { app, store };
+}
+
+/** A limiter whose first job waits until the test lets it go, so an import can be held mid-way. */
+function heldLimiter() {
+  let release!: () => void;
+  const held = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const base = createJobLimiter({ concurrency: 1, maxWaiting: 2 });
+  const limiter: JobLimiter = { run: (job, options) => held.then(() => base.run(job, options)) };
+  return { limiter, release };
 }
 
 function postZip(app: Awaited<ReturnType<typeof buildApp>>, body: Buffer) {
@@ -184,12 +197,7 @@ describe("POST /api/import with an archive (#45)", () => {
 
   it("refuses a second import while one is running, rather than interleave them", async () => {
     const { document, rows } = await sourceDocument(1);
-    let release!: () => void;
-    const held = new Promise<void>((resolve) => {
-      release = resolve;
-    });
-    const base = createJobLimiter({ concurrency: 1, maxWaiting: 2 });
-    const limiter: JobLimiter = { run: (job, options) => held.then(() => base.run(job, options)) };
+    const { limiter, release } = heldLimiter();
     const { app } = await targetApp({ limiter });
     const body = await archive(document, new Map([[rows[0]?.id as string, await webp()]]));
 
@@ -235,5 +243,142 @@ describe("POST /api/import with JSON, alongside archives (#45)", () => {
     expect(res.statusCode).toBe(400);
     expect(res.json()).toEqual(INVALID);
     expect(existsSync(join(root, "media", document.media[0]?.itemId as string))).toBe(false);
+  });
+});
+
+describe("review of #449", () => {
+  it("frees the import lock even when preparing the import fails, so the next one is not refused for ever", async () => {
+    const { document, rows } = await sourceDocument(1);
+    const body = await archive(document, new Map([[rows[0]?.id as string, await webp()]]));
+    const store = await MediaStore.open(join(root, "media"));
+    const broken = Object.assign(Object.create(Object.getPrototypeOf(store)), store) as MediaStore;
+    let fail = true;
+    const realImportPath = store.importPath.bind(store);
+    broken.importPath = async () => {
+      if (fail) throw Object.assign(new Error("denied"), { code: "EACCES" });
+      return realImportPath();
+    };
+    // Every other method goes to the real store.
+    for (const name of [
+      "writeNew",
+      "remove",
+      "removeOrphan",
+      "has",
+      "read",
+      "write",
+      "sweep",
+      "clearImports",
+    ] as const) {
+      (broken as unknown as Record<string, unknown>)[name] = (
+        store as unknown as Record<string, (...a: unknown[]) => unknown>
+      )[name]?.bind(store);
+    }
+    const { app } = await targetApp({ store: broken });
+    expect((await postZip(app, body)).statusCode).toBe(500);
+    fail = false;
+    expect((await postZip(app, body)).statusCode).toBe(200);
+  });
+
+  it("refuses a JSON import while an archive import is running, so neither can change what the other planned", async () => {
+    const { document, rows } = await sourceDocument(1);
+    const { limiter, release } = heldLimiter();
+    const { app } = await targetApp({ limiter });
+    const first = postZip(app, await archive(document, new Map([[rows[0]?.id as string, await webp()]])));
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    const json = await app.inject({
+      method: "POST",
+      url: "/api/import",
+      headers: { ...auth, "content-type": "application/json" },
+      payload: JSON.stringify({ ...document, media: [] }),
+    });
+    expect(json.statusCode).toBe(409);
+    release();
+    expect((await first).json()).toMatchObject({ itemsImported: 1, mediaImported: 1 });
+  });
+
+  it.each(["application/x-zip-compressed", "Application/ZIP", "application/zip; charset=binary"])(
+    "accepts an archive sent as %s, which is how some browsers label a .zip",
+    async (contentType) => {
+      const { document, rows } = await sourceDocument(1);
+      const { app } = await targetApp();
+      const res = await app.inject({
+        method: "POST",
+        url: "/api/import",
+        headers: { ...auth, "content-type": contentType },
+        payload: await archive(document, new Map([[rows[0]?.id as string, await webp()]])),
+      });
+      expect(res.statusCode).toBe(200);
+    },
+  );
+
+  it("imports a version 1 document inside an archive", async () => {
+    const collection = await source.collections.create({ name: "Records", fields, isFiniteSet: false });
+    await source.items.create({ collectionId: collection.id, fields: { title: "Kind of Blue" } });
+    const { media: _media, ...rest } = await exportBackup(source);
+    const { app } = await targetApp();
+    const res = await postZip(app, await archive({ ...rest, version: 1 } as unknown as ExportDocument, new Map()));
+    expect(res.json()).toMatchObject({ collectionsImported: 1, itemsImported: 1, mediaImported: 0 });
+  });
+
+  it("clears a stray file no row names instead of failing the import on it", async () => {
+    const { document, rows } = await sourceDocument(1);
+    const row = rows[0] as Media;
+    const { app, store } = await targetApp();
+    await store.write(row.itemId, row.id, { display: Buffer.from("stray"), thumb: Buffer.from("stray") });
+    const res = await postZip(app, await archive(document, new Map([[row.id, await webp()]])));
+    expect(res.json()).toMatchObject({ mediaImported: 1 });
+  });
+
+  it("stops waiting for an upload that goes quiet, freeing the lock and the disk", async () => {
+    const { Readable } = await import("node:stream");
+    const { document, rows } = await sourceDocument(1);
+    const { app } = await targetApp({ idleTimeoutMs: 50 });
+    // Two bytes, then silence: never ends. Dropping it destroys the request, which
+    // light-my-request reports as a destroyed response — a real client is cut off
+    // the same way. What matters is what it leaves behind.
+    const stalled = new Readable({ read() {} });
+    stalled.push(Buffer.from("PK"));
+    await app
+      .inject({
+        method: "POST",
+        url: "/api/import",
+        headers: { ...auth, "content-type": "application/zip" },
+        payload: stalled,
+      })
+      .catch(() => undefined);
+
+    const deadline = Date.now() + 2_000;
+    while (readdirSync(join(root, "media", ".import")).length > 0 && Date.now() < deadline) {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    expect(readdirSync(join(root, "media", ".import"))).toEqual([]);
+    const next = await postZip(app, await archive(document, new Map([[rows[0]?.id as string, await webp()]])));
+    expect(next.statusCode).toBe(200);
+  });
+
+  it("stops at the abort check between images and removes what it wrote", async () => {
+    const { document, rows } = await sourceDocument(2);
+    const images = new Map<string, Buffer>();
+    for (const row of rows) images.set(row.id, await webp());
+    const { importArchive } = await import("../archive/import-archive.js");
+    const { DEFAULT_ARCHIVE_LIMITS } = await import("../archive/read-export-archive.js");
+    const store = await MediaStore.open(join(root, "media"));
+    const path = join(root, "a.zip");
+    (await import("node:fs")).writeFileSync(path, await archive(document, images));
+    let checks = 0;
+    await expect(
+      importArchive({
+        db: target,
+        store,
+        limiter: createJobLimiter({ concurrency: 1, maxWaiting: 2 }),
+        path,
+        limits: DEFAULT_ARCHIVE_LIMITS,
+        maxImagesPerItem: 50,
+        // Fine for the first image, gone by the second.
+        isAborted: () => ++checks > 1,
+      }),
+    ).rejects.toThrow(/aborted/);
+    expect(mediaFiles()).toEqual([]);
+    expect(await target.collections.list({ includeDeleted: true })).toEqual([]);
   });
 });

@@ -1,5 +1,5 @@
 import type { Media } from "@mycollections/core";
-import { type DatabaseHandle, type ImportSummary, importBackup, planImport } from "@mycollections/db";
+import { type DatabaseHandle, type ImportSummary, importDocument, planImport } from "@mycollections/db";
 import type { JobLimiter } from "../media/job-limiter.js";
 import type { MediaStore } from "../media/media-store.js";
 import { processImage } from "../media/process-image.js";
@@ -50,6 +50,14 @@ export async function importArchive(input: ImportArchiveInput): Promise<ImportSu
       if (input.isAborted()) throw new ImportAbortedError();
       const bytes = await archive.readImage(row);
       const processed = await input.limiter.run(() => processImage(bytes), { wait: true });
+      // The plan found no row with this id, so files under it are strays a failed
+      // purge left for the sweep; they would otherwise make writeNew refuse.
+      if (
+        (await input.store.has(row.itemId, row.id, "display")) ||
+        (await input.store.has(row.itemId, row.id, "thumb"))
+      ) {
+        await input.store.removeOrphan(row.itemId, row.id);
+      }
       await input.store.writeNew(row.itemId, row.id, processed);
       written.push(row);
       media.push({
@@ -60,7 +68,9 @@ export async function importArchive(input: ImportArchiveInput): Promise<ImportSu
         height: processed.height,
       });
     }
-    return importBackup(input.db, archive.document, "skip", { media, mediaSkipped: plan.mediaSkipped });
+    // Already validated by the reader: importDocument skips a second parse of what
+    // can be tens of thousands of records (review of #449).
+    return importDocument(input.db, archive.document, "skip", { media, mediaSkipped: plan.mediaSkipped });
   } catch (error) {
     await Promise.all(written.map((row) => input.store.remove(row.itemId, row.id).catch(() => {})));
     throw error;
