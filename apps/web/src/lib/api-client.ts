@@ -327,6 +327,13 @@ export async function exportData(): Promise<Blob> {
   return res.blob();
 }
 
+/** One live collection's export archive (#45), as a Blob for a browser download. */
+export async function exportCollection(id: string): Promise<Blob> {
+  const res = await request(`/api/collections/${id}/export`);
+  if (!res.ok) throw new ApiError(res.status);
+  return res.blob();
+}
+
 /**
  * What an import sends (#45): a JSON backup the page has already parsed, or an
  * export archive, sent as it is.
