@@ -7,6 +7,8 @@ const TOKEN = "test-token";
 const auth = { Authorization: `Bearer ${TOKEN}` };
 const jsonAuth = { ...auth, "Content-Type": "application/json" };
 
+const INVALID_IMPORT = { statusCode: 400, error: "Bad Request", message: "Invalid import file" };
+
 const baseFields: FieldDefinition[] = [{ id: "title", type: "text", label: "Title", required: true }];
 
 let handle: DatabaseHandle;
@@ -115,6 +117,47 @@ describe("POST /api/import", () => {
     expect(await handle.collections.list()).toEqual([]);
   });
 
+  // The 400 used to carry the thrown error's message (#45). Zod quotes unknown key
+  // names, SQLite quotes table and constraint names, and an archive reader quotes
+  // entry names — all of it chosen by whoever wrote the file. One fixed body instead.
+  it("answers an unknown key with a fixed message that does not repeat the key", async () => {
+    const app = await makeApp();
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/import",
+      headers: jsonAuth,
+      payload: {
+        version: EXPORT_VERSION,
+        exportedAt: new Date().toISOString(),
+        collections: [],
+        items: [],
+        "do-not-report": 1,
+      },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toEqual(INVALID_IMPORT);
+    expect(res.body).not.toContain("do-not-report");
+  });
+
+  it("answers a database refusal with the same fixed message, naming no table or constraint", async () => {
+    const { item } = await seed();
+    const app = await makeApp();
+    const orphan = {
+      ...item,
+      id: "8d3f4c0e-6a3b-4f7e-9b2a-1c5d7e9f0a1b",
+      collectionId: "0b1c2d3e-4f50-4617-8293-a4b5c6d7e8f9",
+    };
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/import",
+      headers: jsonAuth,
+      payload: { version: EXPORT_VERSION, exportedAt: new Date().toISOString(), collections: [], items: [orphan] },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toEqual(INVALID_IMPORT);
+    expect(res.body).not.toMatch(/FOREIGN KEY|constraint|items/i);
+  });
+
   it("rejects an unknown import mode", async () => {
     const app = await makeApp();
     const res = await app.inject({
@@ -169,7 +212,7 @@ describe("export and import of a finite set's target (#42)", () => {
       const app = await buildApp({ db: fresh, token: TOKEN });
       const res = await app.inject({ method: "POST", url: "/api/import", headers: jsonAuth, payload: exported });
       expect(res.statusCode).toBe(400);
-      expect(res.json().message).toContain("targetCount requires isFiniteSet");
+      expect(res.json()).toEqual(INVALID_IMPORT);
       expect(await fresh.collections.list({ includeDeleted: true })).toEqual([]);
     } finally {
       fresh.close();
