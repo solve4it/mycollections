@@ -8,6 +8,12 @@ import { setupRoute } from "../setup/index.js";
 import { settingsRoute } from "./index.js";
 
 vi.mock("../../lib/api-client.js", () => ({
+  // Real enough for the page to tell a 413 from a 409 by `status` (#45).
+  ApiError: class ApiError extends Error {
+    constructor(readonly status: number) {
+      super(`API error ${status}`);
+    }
+  },
   clearToken: vi.fn(() => localStorage.removeItem("api_token")),
   getToken: vi.fn(() => "test-token"),
   isTokenSessionOnly: vi.fn(() => false),
@@ -23,6 +29,7 @@ vi.mock("../../lib/api-client.js", () => ({
 }));
 
 import {
+  ApiError,
   exportData,
   getToken,
   type ImportSummary,
@@ -83,7 +90,16 @@ const IMPORT_SUMMARY: ImportSummary = {
   collectionsSkipped: 1,
   itemsImported: 5,
   itemsSkipped: 3,
+  mediaImported: 4,
+  mediaSkipped: 0,
 };
+
+/** A file that starts like every zip does (`PK\x03\x04`), as an export archive would (#45). */
+function selectArchive(input: HTMLElement) {
+  const file = new File([new Uint8Array([0x50, 0x4b, 0x03, 0x04, 1, 2, 3])], "backup.zip", { type: "application/zip" });
+  fireEvent.change(input, { target: { files: [file] } });
+  return file;
+}
 
 /** A promise the test settles by hand, so the import can be held in flight. */
 function deferred<T>() {
@@ -305,7 +321,62 @@ describe("SettingsPage data export", () => {
   });
 });
 
+describe("SettingsPage export archives (#45)", () => {
+  it("saves the export as a .zip, since it now carries images", async () => {
+    const clicks: string[] = [];
+    vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(function (this: HTMLAnchorElement) {
+      clicks.push(this.download);
+    });
+    vi.stubGlobal("URL", { ...URL, createObjectURL: vi.fn(() => "blob:x"), revokeObjectURL: vi.fn() });
+    renderSettings();
+    fireEvent.click(await screen.findByRole("button", { name: /export data/i }));
+    await waitFor(() => expect(clicks).toHaveLength(1));
+    expect(clicks[0]).toMatch(/^mycollections-export-\d{4}-\d{2}-\d{2}\.zip$/);
+    vi.unstubAllGlobals();
+  });
+
+  it("keeps Export focusable but refuses a second press while one export is running", async () => {
+    const inFlight = deferred<Blob>();
+    vi.mocked(exportData).mockReturnValue(inFlight.promise);
+    renderSettings();
+    const button = await screen.findByRole("button", { name: /export data/i });
+    fireEvent.click(button);
+    await waitFor(() => expect(button).toHaveAttribute("aria-disabled", "true"));
+    expect(button).not.toBeDisabled();
+    fireEvent.click(button);
+    expect(exportData).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe("SettingsPage data import", () => {
+  it("sends an export archive as it is, without reading it as JSON (#45)", async () => {
+    renderSettings();
+    const file = selectArchive(await screen.findByLabelText(/choose backup file/i));
+    await waitFor(() => expect(importData).toHaveBeenCalledWith({ archive: file }));
+  });
+
+  it("offers archives in the file picker as well as JSON backups (#45)", async () => {
+    renderSettings();
+    const input = await screen.findByLabelText(/choose backup file/i);
+    expect(input.getAttribute("accept")?.split(",")).toEqual([".zip", "application/zip", ".json", "application/json"]);
+  });
+
+  it("says a backup is too large to import, which is not the same as a broken one (#45)", async () => {
+    vi.mocked(importData).mockRejectedValue(new ApiError(413));
+    renderSettings();
+    selectArchive(await screen.findByLabelText(/choose backup file/i));
+    expect(await screen.findByRole("alert")).toHaveTextContent("That backup is larger than an import allows.");
+  });
+
+  it("says another import is still running (#45)", async () => {
+    vi.mocked(importData).mockRejectedValue(new ApiError(409));
+    renderSettings();
+    selectArchive(await screen.findByLabelText(/choose backup file/i));
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Another import is still running. Try again when it has finished.",
+    );
+  });
+
   it("renders a file picker for import", async () => {
     renderSettings();
     expect(await screen.findByLabelText(/choose backup file/i)).toBeInTheDocument();
@@ -317,8 +388,11 @@ describe("SettingsPage data import", () => {
     selectFile(input, JSON.stringify({ version: 1, exportedAt: "x", collections: [], items: [] }));
 
     await waitFor(() => expect(importData).toHaveBeenCalledTimes(1));
-    await waitFor(() => expect(importLiveRegion()).toHaveTextContent(/imported 2 collections and 5 items/i));
-    expect(importLiveRegion()).toHaveTextContent(/1 collections and 3 items already present were skipped/i);
+    expect(importData).toHaveBeenCalledWith({
+      document: { version: 1, exportedAt: "x", collections: [], items: [] },
+    });
+    await waitFor(() => expect(importLiveRegion()).toHaveTextContent(/imported 2 collections, 5 items and 4 images/i));
+    expect(importLiveRegion()).toHaveTextContent(/1 collections, 3 items and 0 images already present were skipped/i);
   });
 
   it("fills a live region that was already in the document, rather than inserting one with its message inside (#326)", async () => {
@@ -356,7 +430,7 @@ describe("SettingsPage data import", () => {
 
     inFlight.settle(IMPORT_SUMMARY);
 
-    await waitFor(() => expect(importLiveRegion()).toHaveTextContent(/imported 2 collections and 5 items/i));
+    await waitFor(() => expect(importLiveRegion()).toHaveTextContent(/imported 2 collections, 5 items and 4 images/i));
     expect(importLiveRegion(), "the summary must replace the pending text in the same node").toBe(before);
   });
 
@@ -382,7 +456,7 @@ describe("SettingsPage data import", () => {
 
     inFlight.settle(IMPORT_SUMMARY);
 
-    await waitFor(() => expect(importLiveRegion()).toHaveTextContent(/imported 2 collections and 5 items/i));
+    await waitFor(() => expect(importLiveRegion()).toHaveTextContent(/imported 2 collections, 5 items and 4 images/i));
     expect(screen.queryByText("Importing your backup…")).not.toBeInTheDocument();
   });
 

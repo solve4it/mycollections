@@ -316,18 +316,35 @@ export interface ImportSummary {
   collectionsSkipped: number;
   itemsImported: number;
   itemsSkipped: number;
+  mediaImported: number;
+  mediaSkipped: number;
 }
 
-/** Fetches the full backup document as a Blob suitable for a browser download. */
+/** Fetches the full export — a zip of the document and its images (#45) — as a Blob for a browser download. */
 export async function exportData(): Promise<Blob> {
   const res = await request("/api/export");
   if (!res.ok) throw new ApiError(res.status);
   return res.blob();
 }
 
-/** Sends a parsed backup document to the server and returns the import summary. */
-export async function importData(document: unknown): Promise<ImportSummary> {
-  const res = await request("/api/import", { method: "POST", body: JSON.stringify(document) });
+/**
+ * What an import sends (#45): a JSON backup the page has already parsed, or an
+ * export archive, sent as it is.
+ */
+export type ImportInput = { document: unknown } | { archive: Blob };
+
+/**
+ * Sends a backup to the server and returns the import summary. An archive goes
+ * as the raw body with its own type — never read, never re-encoded — so the
+ * server sees exactly the file the user chose. A 413 (too large) and a 409
+ * (another import running) come back as `ApiError` with that status.
+ */
+export async function importData(input: ImportInput): Promise<ImportSummary> {
+  const init: RequestInit =
+    "archive" in input
+      ? { method: "POST", body: input.archive, headers: { "Content-Type": "application/zip" } }
+      : { method: "POST", body: JSON.stringify(input.document) };
+  const res = await request("/api/import", init);
   if (!res.ok) throw new ApiError(res.status);
   return res.json() as Promise<ImportSummary>;
 }

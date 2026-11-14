@@ -12,6 +12,7 @@ import {
   getCollectionCounts,
   getItem,
   getTagValues,
+  type ImportInput,
   type ItemInput,
   type ItemListQuery,
   importData,
@@ -69,7 +70,7 @@ export function useCreateCollection() {
 export function useImportData() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: importData,
+    mutationFn: (input: ImportInput) => importData(input),
     // Run from Settings, where the dashboard is not on screen.
     onSuccess: () => {
       refreshDashboard(queryClient);
