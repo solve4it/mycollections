@@ -94,6 +94,7 @@ The most common defect a passing test still lets through is a **semantically-wro
 - **One feature per PR.** If your issue touches many unrelated files, split it into multiple PRs, each with its own issue if needed.
 - **Keep PRs small.** A reviewer should be able to understand the whole change in one sitting. Prefer a series of small PRs over one large one.
 - **Squash merge.** Every PR is squashed into a single commit on `main`. The squash commit message is the PR title, so write PR titles in conventional-commit form.
+- **Merge through the queue.** `main` has a merge queue: once a PR is approved and green, choose **Merge when ready** rather than merging directly. The queue reruns CI on the PR combined with everything ahead of it and merges only if that passes, so you never need to update your branch from `main` just to merge. Because CI runs on the queue's `merge_group` event as well as on `pull_request`, a new required check must be a job in a workflow that has both triggers.
 - **Link the issue** with `Closes #<number>` in the PR body.
 - **Add labels.** At minimum: the change type (`feature`, `bug`, `chore`, etc.), the area (`area-core`, `area-ui`, etc.), the phase (`phase-0` during bootstrap), and `AI-assisted` if applicable.
 - **Update docs as part of the PR** (see Definition of Done).
