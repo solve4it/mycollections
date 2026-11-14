@@ -160,18 +160,20 @@ pnpm --filter @mycollections/web build && pnpm --filter @mycollections/web exec 
 
 ### Connecting the web app to the API (the API token)
 
-The API protects every route (except `GET /api/health`) with a bearer token. On startup in dev mode it **prints the token to stdout**:
+The API protects every route (except `GET /api/health`) with a bearer token. With no `API_TOKEN` set, the token is generated **once** and kept in `api-token` beside the database (`apps/api/data/api-token` by default), readable only by you (`0600`). It survives restarts, including the auto-restart on file changes, so a browser stays connected (#241). Startup says where it is, never what it is:
 
 ```
-API token: 0789678b-8fe9-4794-9ff4-c1fe5092ad84
+API token: stored in /…/apps/api/data/api-token
 Swagger UI: http://127.0.0.1:3001/api/docs
 ```
 
 > Running `pnpm dev`? Turborepo prefixes each line, so look for `@mycollections/api:dev: API token: …`.
 
-On first load the web app shows a setup screen — paste that token to connect. It's stored in `localStorage` (key `api_token`), and also kept in memory for the session so that a browser which refuses storage still works; there the setup screen warns up front that the token cannot be remembered.
+On first load the web app shows a setup screen. Paste the token to connect (`cat apps/api/data/api-token`). It's stored in `localStorage` (key `api_token`), and also kept in memory for the session so that a browser which refuses storage still works; there the setup screen warns up front that the token cannot be remembered.
 
-By default the token is a **random UUID regenerated on every restart**, so after a server restart (including the auto-restart on file changes) you'd have to paste a fresh one. To keep a **stable token** across restarts, set it yourself:
+The server refuses to start if the token file is a symlink, belongs to another user, is readable by group or others, or is malformed. With `DB_PATH` in a shared directory such as `/tmp`, another user could otherwise plant a token they know. The error names the fix. To rotate the token, delete the file and restart. An in-memory database (`DB_PATH=:memory:`) has nowhere to keep a file, so it gets a token for that run only, which is printed.
+
+To choose the token yourself, set `API_TOKEN`. The file is then neither read nor created:
 
 ```bash
 API_TOKEN=dev-local-token pnpm --filter @mycollections/api dev

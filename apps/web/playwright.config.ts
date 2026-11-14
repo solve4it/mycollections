@@ -34,8 +34,7 @@ export const WEB_URL = `http://127.0.0.1:${WEB_PORT}`;
  * they inherit — `??=` so re-loading this config in a worker keeps the main
  * process's value rather than minting a second one.
  *
- * Generated rather than committed because the API prints `API token: …` to stdout
- * in development (apps/api/src/server.ts), and Playwright traces capture the
+ * Generated rather than committed because Playwright traces capture the
  * Authorization header, so a fixed value would be published by CI logs and
  * uploaded artifacts. `authenticatedApiHeaders` fails loudly if a worker ever
  * ends up with a different one.
