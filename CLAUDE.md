@@ -52,16 +52,17 @@ When one issue needs more than one PR, stack them with GitHub stacked PRs. Don't
 2. **Create each PR with the curl recipe above**, with `"base"` set to the head branch of the layer below. The bottom PR's base is `main`.
 3. **Link them as the bot**: `GH_TOKEN=$BOT_TOKEN gh stack link <pr> <pr> ...`, PR numbers bottom to top, re-listing every open layer when one is added. Passing numbers rather than branch names means nothing is pushed.
 4. **Only the top PR says `Closes #<n>`.** The others say `Part of #<n>`, and each says which PR it is stacked on.
-5. **After a lower layer squash-merges**, GitHub points the next PR at `main`, but its branch still carries the merged layer's original commits:
+5. **After a lower layer merges**, GitHub points the next linked PR at `main` and rebases it onto the squash commit by itself (seen with #450). Check it with `gh pr view <n> --json baseRefName,commits`. Only if the branch still carries the merged layer's original commits (a PR that was never linked into the stack, like #440), rebase it by hand:
    - `git fetch && git rebase --onto origin/main <old tip of the merged layer> <branch>`;
    - rerun the gate;
    - `git push --force-with-lease=<branch>:<old sha> …`;
    - correct the PR body's "stacked on" line.
+6. **Land the rest of a stack with `gh stack merge <top PR> --yes`**, run as the owner (not the bot) when the owner asks. `gh pr merge` refuses a PR that belongs to a stack (`Auto-merge is not supported for stacked pull requests`). `gh stack merge` adds every remaining layer up to the named PR to the merge queue as one all-or-nothing unit (#454). The queue sets the merge method, so `--squash` is ignored.
 
 Rules that apply throughout:
 
-- **Use `gh stack` for `link` only.** Never `gh stack submit`/`push`, or `gh pr create`: they act as `shusak`, not the bot.
-- **PRs must land in order.** The merge queue only takes a PR targeting `main`, so a layer is queued once the one below it has merged and GitHub has pointed it at `main`.
+- **Use `gh stack` for `link` (as the bot) and `merge` (as the owner) only.** Never `gh stack submit`/`push`, or `gh pr create`: they act as `shusak`, not the bot.
+- **Before targeting a layer's branch, check it is still open.** The owner may merge lower layers while the next one is being built. A merged layer's branch is deleted, and a PR against it fails with `base: invalid`.
 
 ## Issue Workflow
 
