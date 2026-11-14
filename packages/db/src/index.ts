@@ -1,8 +1,13 @@
 export {
   exportBackup,
+  exportCollection,
   type ImportMode,
+  type ImportPlan,
   type ImportSummary,
   importBackup,
+  type PlanOptions,
+  planImport,
+  TooManyImagesError,
 } from "./backup.js";
 export { type EmptyTrashResult, emptyTrash } from "./empty-trash.js";
 export { type DatabaseHandle, type OpenDatabaseOptions, openDatabase } from "./open-database.js";

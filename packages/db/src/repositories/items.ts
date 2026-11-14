@@ -12,7 +12,7 @@ import {
   type ItemSort,
   type ItemStatus,
 } from "@mycollections/core";
-import { and, asc, desc, eq, isNotNull, isNull, type SQL, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNotNull, isNull, type SQL, sql } from "drizzle-orm";
 import type { BetterSQLite3Database } from "drizzle-orm/better-sqlite3";
 import { integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
 import * as schema from "../schema.js";
@@ -332,6 +332,22 @@ export class ItemsRepository {
    * are idempotent and non-destructive. Synchronous so it can participate in a
    * caller's transaction. Returns whether a row was inserted.
    */
+  /** Which of these ids already name an item, trashed or not (#45). */
+  existingIds(ids: readonly string[]): Set<string> {
+    const found = new Set<string>();
+    for (let start = 0; start < ids.length; start += 500) {
+      const chunk = ids.slice(start, start + 500);
+      for (const row of this.#db
+        .select({ id: schema.items.id })
+        .from(schema.items)
+        .where(inArray(schema.items.id, chunk))
+        .all()) {
+        found.add(row.id);
+      }
+    }
+    return found;
+  }
+
   insertImported(item: Item): boolean {
     const validated = ItemSchema.parse(item);
     const result = this.#db.insert(schema.items).values(itemToRow(validated)).onConflictDoNothing().run();
