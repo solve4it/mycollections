@@ -1,9 +1,12 @@
 {
   "title": "Connect to MyCollections",
   "short_title": "Connect",
-  "description": "Enter the API token shown in your terminal when the server started.",
-  "token_label": "API Token",
-  "token_placeholder": "Paste your API token here",
+  "description": "Open the pairing link the API printed when it started — on a first run it opens by itself. Or paste the link, or the API token, below.",
+  "token_label": "API token or pairing link",
+  "token_placeholder": "Paste the API token or pairing link here",
   "connect_button": "Connect",
-  "no_persistence_notice": "This browser will not let MyCollections remember your token, so you will need to paste it again each time you open the app here."
+  "no_persistence_notice": "This browser will not let MyCollections remember your token, so you will need to paste it again each time you open the app here.",
+  "pairing_in_progress": "Pairing this browser…",
+  "pairing_rejected": "That pairing link has expired or was already used. Restart the API for a new one, or paste the API token below.",
+  "pairing_unreachable": "Could not reach the API to pair this browser. Make sure it is running, then open the link again."
 }

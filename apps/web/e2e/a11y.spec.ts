@@ -1,4 +1,5 @@
 import type { Page } from "@playwright/test";
+import { E2E_API_TOKEN } from "../playwright.config.js";
 import { type ApiFixture, expect, expectNoAccessibilityViolations, TINY_PNG, test } from "./fixtures.js";
 
 /**
@@ -24,7 +25,7 @@ test.describe("accessibility of the setup screen", () => {
   test("asking for a token", async ({ page }) => {
     await page.goto("/setup");
     await expect(page).toHaveURL(/\/setup$/);
-    await expect(page.getByLabel("API Token")).toBeVisible();
+    await expect(page.getByLabel("API token or pairing link")).toBeVisible();
     // The shell's nav is not on this screen (#371): with no token, every place
     // it led redirected straight back here. The landmark the scan still covers
     // is <main>, which has to survive the nav going.
@@ -32,6 +33,45 @@ test.describe("accessibility of the setup screen", () => {
     await expect(page.getByRole("main")).toBeVisible();
 
     await expectNoAccessibilityViolations(page);
+  });
+});
+
+/**
+ * Pairing from the link the API prints (#241). The real code only exists in the API's
+ * stdout, which the suite does not read, so `/api/pair` is answered here instead —
+ * these scans are about the screen's states, and the route has its own tests.
+ */
+test.describe("accessibility of pairing a browser", () => {
+  test.use({ storageState: { cookies: [], origins: [] } });
+
+  const CODE = "a".repeat(43);
+
+  test("while the pairing request is in flight", async ({ page }) => {
+    await page.route("**/api/pair", () => {
+      // Never answered: the screen stays in its pairing state for the scan.
+    });
+    await page.goto(`/setup#pair=${CODE}`);
+    await expect(page.getByText("Pairing this browser…")).toBeVisible();
+    await expect(page.getByRole("button", { name: "Connect" })).toHaveAttribute("aria-disabled", "true");
+
+    await expectNoAccessibilityViolations(page);
+  });
+
+  test("after the link was refused", async ({ page }) => {
+    await page.route("**/api/pair", (route) => route.fulfill({ status: 401, json: { error: "Unauthorized" } }));
+    await page.goto(`/setup#pair=${CODE}`);
+    await expect(page.getByRole("alert")).toContainText("expired or was already used");
+    // The spent code is gone from the address bar.
+    await expect(page).toHaveURL(/\/setup$/);
+
+    await expectNoAccessibilityViolations(page);
+  });
+
+  test("a good link lands in the app without anything typed", async ({ page }) => {
+    await page.route("**/api/pair", (route) => route.fulfill({ status: 200, json: { token: E2E_API_TOKEN } }));
+    await page.goto(`/setup#pair=${CODE}`);
+    await expect(page).toHaveURL(/\/collections$/);
+    await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
   });
 });
 
