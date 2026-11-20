@@ -43,4 +43,11 @@ describe("MediaStore.writeNew against a concurrent removal", () => {
     await store.writeNew(ITEM, MEDIA, { display: Buffer.from("d"), thumb: Buffer.from("t") });
     expect(readdirSync(join(dir, "media", ITEM)).sort()).toEqual([`${MEDIA}.thumb.webp`, `${MEDIA}.webp`]);
   });
+
+  it("does the same for an upload's temporary file", async () => {
+    const store = await MediaStore.open(join(dir, "media"));
+    raceOnce = true;
+    await store.write(ITEM, MEDIA, { display: Buffer.from("d"), thumb: Buffer.from("t") });
+    expect(readdirSync(join(dir, "media", ITEM)).sort()).toEqual([`${MEDIA}.thumb.webp`, `${MEDIA}.webp`]);
+  });
 });

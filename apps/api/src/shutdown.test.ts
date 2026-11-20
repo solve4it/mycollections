@@ -38,12 +38,15 @@ describe("closeOnSignals (#452)", () => {
     expect(exits).toEqual([130]);
   });
 
-  it("exits 1 when close fails", async () => {
+  it("exits 1 when close fails, saying why", async () => {
+    const logged = vi.spyOn(console, "error").mockImplementation(() => {});
     const { proc, exits } = fakeProcess();
     closeOnSignals(async () => {
       throw new Error("nope");
     }, proc);
     proc.emit("SIGTERM");
     await vi.waitFor(() => expect(exits).toEqual([1]));
+    expect(logged).toHaveBeenCalledWith("Shutdown failed:", new Error("nope"));
+    logged.mockRestore();
   });
 });

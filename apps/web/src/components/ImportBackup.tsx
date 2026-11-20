@@ -44,9 +44,16 @@ export function ImportBackup() {
 
   // A reload finds an import still under way and follows it. One that had already
   // finished before the page opened is not this visit's news, so it stays unsaid.
+  // Only ever once, and never after the page has followed a job of its own: the
+  // query is read once on mount, so later it still says "running" about a job
+  // long done, and adopting it again would bring that job's result back over a
+  // new import (review of #452).
+  const adopted = useRef(false);
   const currentJob = current.data;
   useEffect(() => {
-    if (jobId === null && isImportRunning(currentJob) && currentJob) setJobId(currentJob.id);
+    if (adopted.current || currentJob === undefined) return;
+    adopted.current = true;
+    if (jobId === null && currentJob !== null && isImportRunning(currentJob)) setJobId(currentJob.id);
   }, [currentJob, jobId]);
 
   // The rows are in only once the job is done; the lists reload then, not at the 202.
@@ -84,6 +91,7 @@ export function ImportBackup() {
     if (!file) return;
 
     setInvalidFile(false);
+    adopted.current = true;
     setJobId(null);
     importData.reset();
     const mode: ImportMode = attach ? "attach-media" : "skip";

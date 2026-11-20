@@ -618,6 +618,25 @@ describe("SettingsPage background archive imports (#452)", () => {
     expect(importData).not.toHaveBeenCalled();
   });
 
+  it("does not bring a finished job back when a new file is chosen after a reload (review of #452)", async () => {
+    vi.mocked(getCurrentImport).mockResolvedValue(job({ imagesDone: 2 }));
+    vi.mocked(getImportJob).mockResolvedValue(job({ phase: "done", imagesDone: 8, summary: IMPORT_SUMMARY }));
+    const upload = deferred<ImportResult>();
+    vi.mocked(importData).mockReturnValue(upload.promise);
+    renderSettings();
+    await waitFor(() => expect(importLiveRegion()).toHaveTextContent(/imported 2 collections/i));
+
+    selectArchive(screen.getByLabelText(/choose backup file/i));
+    await waitFor(() => expect(importLiveRegion()).toHaveTextContent("Importing your backup…"));
+    // Give a re-adopting effect its chance to run.
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(importLiveRegion()).toHaveTextContent(/^Importing your backup…$/);
+
+    upload.fail(new ApiError(409));
+    expect(await screen.findByRole("alert")).toHaveTextContent(/another import is still running/i);
+    expect(importLiveRegion()).toBeEmptyDOMElement();
+  });
+
   it("says nothing about an import that had already finished before the page opened", async () => {
     vi.mocked(getCurrentImport).mockResolvedValue(job({ phase: "done", summary: IMPORT_SUMMARY }));
     renderSettings();
