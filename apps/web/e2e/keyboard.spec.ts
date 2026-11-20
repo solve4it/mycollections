@@ -352,6 +352,7 @@ test.describe("keyboard traversal of every screen", () => {
       'link "All collections"',
       'link "Edit collection"',
       'button "Export collection"',
+      'link "Import CSV"',
       'searchbox "Search items"',
       'combobox "Sort by"',
       'combobox "View"',
@@ -402,6 +403,35 @@ test.describe("keyboard traversal of every screen", () => {
       'button "Move photo 2 of 2 later" [disabled]',
       'button "Delete photo 2 of 2": Delete',
       'button "Add photos"',
+    ]);
+  });
+
+  /** The CSV import with a file chosen (#44): the picker, one select per column, and Add. */
+  test("the CSV import with a file chosen", async ({ page, api }) => {
+    await api.reset();
+    const collection = await api.createCollection({ name: "Vinyl records", fields: FIELDS });
+
+    await page.goto(`/collections/${collection.id}/import`);
+    await page.getByLabel("CSV file").setInputFiles({
+      name: "records.csv",
+      mimeType: "text/csv",
+      buffer: Buffer.from("Title,Year,Status,Shelf\nKind of Blue,1959,wanted,A1\n"),
+    });
+    await expect(page.getByRole("heading", { level: 2, name: "Match columns" })).toBeFocused();
+    // The walk starts from the top of the page, as every other screen's does,
+    // rather than from the heading the file moved focus to.
+    // Shift+Tab from the first stop leaves the page, and the walk's first Tab comes back in at the top.
+    await page.getByRole("link", { name: "Skip to main content" }).focus();
+    await page.keyboard.press("Shift+Tab");
+
+    await expectTabOrder(page, "the CSV import", [
+      'link "Back to Vinyl records"',
+      'button "CSV file"',
+      'combobox "Title"',
+      'combobox "Year"',
+      'combobox "Status"',
+      'combobox "Shelf"',
+      'button "Add 1 item"',
     ]);
   });
 
@@ -2065,6 +2095,7 @@ test.describe("marking an item collected (#42)", () => {
       'link "All collections"',
       'link "Edit collection"',
       'button "Export collection"',
+      'link "Import CSV"',
       'searchbox "Search items"',
       'combobox "Sort by"',
       'combobox "View"',
@@ -2351,6 +2382,7 @@ test.describe("a collection's grid (#38)", () => {
       'link "All collections"',
       'link "Edit collection"',
       'button "Export collection"',
+      'link "Import CSV"',
       'searchbox "Search items"',
       'combobox "Sort by"',
       'combobox "View"',

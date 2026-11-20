@@ -655,6 +655,96 @@ test.describe("accessibility", () => {
     await expectNoAccessibilityViolations(page);
   });
 
+  /**
+   * The CSV import (#44), at each of its states: no file yet and a file it cannot
+   * read; a file read, its columns matched, the preview and the skipped rows, and
+   * a target chosen twice; the result once the rows are in; and a refused import.
+   */
+  const CSV_FILE = {
+    name: "records.csv",
+    mimeType: "text/csv",
+    buffer: Buffer.from(
+      "Title,Year,Signed,Shelf\nKind of Blue,1959,yes,A1\nBlue Train,soon,no,A2\nMingus Ah Um,1959,,A3\n",
+    ),
+  };
+
+  test("the CSV import with no file, and with a file it cannot read", async ({ page, api }) => {
+    await api.reset();
+    const collection = await api.createCollection({ name: "Vinyl records", fields: FIELDS });
+
+    await page.goto(`/collections/${collection.id}/import`);
+    await expect(page).toHaveURL(`/collections/${collection.id}/import`);
+    await expect(page.getByRole("heading", { level: 1, name: "Import items into Vinyl records" })).toBeVisible();
+    await expectNoAccessibilityViolations(page);
+
+    await page
+      .getByLabel("CSV file")
+      .setInputFiles({ name: "empty.csv", mimeType: "text/csv", buffer: Buffer.from("Title\n") });
+    await expect(page.getByRole("alert")).toHaveText("That file has no rows under its header row.");
+    await expectNoAccessibilityViolations(page);
+  });
+
+  test("the CSV import with columns matched, rows previewed and skipped, and a target chosen twice", async ({
+    page,
+    api,
+  }) => {
+    await api.reset();
+    const collection = await api.createCollection({ name: "Vinyl records", fields: FIELDS });
+
+    await page.goto(`/collections/${collection.id}/import`);
+    await page.getByLabel("CSV file").setInputFiles(CSV_FILE);
+    await expect(page.getByRole("heading", { level: 2, name: "Match columns" })).toBeFocused();
+    await expect(page.getByText("2 rows will be added.")).toBeVisible();
+    await expect(page.getByRole("list", { name: "Rows that will be skipped" })).toContainText("Year: not a number");
+    await expectNoAccessibilityViolations(page);
+
+    await page.getByRole("combobox", { name: "Shelf" }).selectOption({ label: "Year" });
+    await expect(page.getByText("“Year” is chosen for more than one column. Choose it once.")).toBeVisible();
+    await expectNoAccessibilityViolations(page);
+  });
+
+  test("the CSV import once the rows are in", async ({ page, api }) => {
+    await api.reset();
+    const collection = await api.createCollection({ name: "Vinyl records", fields: FIELDS });
+
+    await page.goto(`/collections/${collection.id}/import`);
+    await page.getByLabel("CSV file").setInputFiles(CSV_FILE);
+    await page.getByRole("button", { name: "Add 2 items" }).click();
+    await expect(page.getByRole("heading", { level: 2, name: "Added 2 items to Vinyl records." })).toBeFocused();
+    await expect(page.getByText("1 row was skipped.")).toBeVisible();
+    await expectNoAccessibilityViolations(page);
+  });
+
+  test("the CSV import for a collection with a required image field", async ({ page, api }) => {
+    await api.reset();
+    const collection = await api.createCollection({
+      name: "Vinyl records",
+      fields: [...FIELDS, { id: "sleeve", label: "Sleeve", type: "image", required: true }],
+    });
+
+    await page.goto(`/collections/${collection.id}/import`);
+    await expect(page.getByText("“Sleeve” is a required image field", { exact: false })).toBeVisible();
+    await expect(page.getByLabel("CSV file")).toHaveCount(0);
+    await expectNoAccessibilityViolations(page);
+  });
+
+  test("a refused CSV import", async ({ page, api }) => {
+    await api.reset();
+    const collection = await api.createCollection({ name: "Vinyl records", fields: FIELDS });
+    await page.route("**/api/collections/*/items/import", (route) =>
+      route.fulfill({ status: 500, json: { message: "Internal Server Error" } }),
+    );
+
+    await page.goto(`/collections/${collection.id}/import`);
+    await page.getByLabel("CSV file").setInputFiles(CSV_FILE);
+    const add = page.getByRole("button", { name: "Add 2 items" });
+    await add.focus();
+    await page.keyboard.press("Enter");
+    await expect(page.getByRole("alert")).toHaveText("The import failed and nothing was added. Please try again.");
+    await expect(add).toBeFocused();
+    await expectNoAccessibilityViolations(page);
+  });
+
   test("a collection with no items", async ({ page, api }) => {
     await api.reset();
     const collection = await api.createCollection({ name: "Board games", fields: FIELDS });

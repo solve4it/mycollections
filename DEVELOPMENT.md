@@ -522,6 +522,9 @@ its comment:
 | The photo toast's Undo                          | the restored photo's first control, once it is back                              | successor element                 |
 | A photo's thumbnail (opens the viewer)          | the viewer's Close button — the first control in the dialog                      | dialog: enter the dialog          |
 | The viewer's Close, Escape or a backdrop click  | the thumbnail of the photo last on show, set in the same task as `close()` (#37) | dialog: return to the invoker     |
+| A CSV file read on the import page              | the "Match columns" heading (`tabIndex={-1}`) (#44)                              | disclosure: enter what you opened |
+| The import's Add (the wizard goes with it)      | the result heading, whose text is the result (#44)                               | successor element                 |
+| The import's Import another file                | the CSV file picker                                                              | return to where the input began   |
 
 Two things that look like details and are not. A destination has to be a control whose name says
 where the user now is, which is why Remove field goes to the next field's label rather than to its
