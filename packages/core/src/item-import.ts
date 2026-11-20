@@ -79,6 +79,9 @@ function matchOption(options: readonly string[], raw: string): string | null {
 
 const ok = <T>(value: T): CoerceResult<T> => ({ ok: true, value });
 const refuse = (issue: ImportIssue): CoerceResult<never> => ({ ok: false, issue });
+// A digit string past about 309 digits reads as Infinity, which JSON sends as null:
+// the preview would show a value the server then stores empty, or refuses.
+const finite = (value: number): CoerceResult => (Number.isFinite(value) ? ok(value) : refuse("invalid"));
 
 /** Turns one CSV cell into the value the item form would have stored for it. */
 export function coerceCell(field: FieldDefinition, raw: string): CoerceResult {
@@ -89,11 +92,11 @@ export function coerceCell(field: FieldDefinition, raw: string): CoerceResult {
     case "text":
       return ok(cell);
     case "number":
-      return DECIMAL.test(cell) ? ok(Number(cell)) : refuse("invalid");
+      return DECIMAL.test(cell) ? finite(Number(cell)) : refuse("invalid");
     case "currency": {
       const match = CURRENCY.exec(cell);
       if (!match) return refuse("invalid");
-      return ok(Number(`${match[1] ?? ""}${(match[2] as string).replaceAll(",", "")}${match[3] ?? ""}`));
+      return finite(Number(`${match[1] ?? ""}${(match[2] as string).replaceAll(",", "")}${match[3] ?? ""}`));
     }
     case "rating": {
       if (!/^\d+$/.test(cell)) return refuse("invalid");

@@ -80,6 +80,14 @@ describe("coerceCell", () => {
     }
   });
 
+  it("refuses a number too large to store, which would otherwise travel as null", () => {
+    const huge = "9".repeat(400);
+    expect(coerceCell(number, huge)).toEqual({ ok: false, issue: "invalid" });
+    expect(coerceCell(number, `-${huge}`)).toEqual({ ok: false, issue: "invalid" });
+    expect(coerceCell(currency, `$${huge}`)).toEqual({ ok: false, issue: "invalid" });
+    expect(coerceCell(number, "9".repeat(300))).toEqual({ ok: true, value: Number("9".repeat(300)) });
+  });
+
   it("reads currency with one symbol and thousands commas", () => {
     expect(coerceCell(currency, "$1,234.56")).toEqual({ ok: true, value: 1234.56 });
     expect(coerceCell(currency, "€12")).toEqual({ ok: true, value: 12 });
