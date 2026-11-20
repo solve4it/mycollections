@@ -27,6 +27,7 @@ All routes require `Authorization: Bearer <token>` except `GET /api/health` and 
 | `POST`   | `/api/collections/:id/restore`                                   | Restore a soft-deleted collection                                                                                                                                      |
 | `GET`    | `/api/collections/:id/items`                                     | List items (`?status=owned\|wanted\|ordered`, `?q=` search, `?sort=` — see below), each with `primaryMedia`                                                            |
 | `POST`   | `/api/collections/:id/items`                                     | Create an item                                                                                                                                                         |
+| `POST`   | `/api/collections/:id/items/import`                              | Add up to 10,000 typed rows from a CSV import, all or none (see [Importing items from a CSV file](#importing-items-from-a-csv-file-44))                                |
 | `POST`   | `/api/collections/:id/tags/rename`                               | Rename or merge a tag across the collection's items (see below)                                                                                                        |
 | `POST`   | `/api/collections/:id/tags/remove`                               | Remove a tag from the collection's items                                                                                                                               |
 | `GET`    | `/api/collections/:id/tag-values`                                | Tags in use in a tags field (`?field=`), for suggestions                                                                                                               |
@@ -90,6 +91,19 @@ Both answer `{ updated, trashed }` — live and trashed items actually changed, 
 A repeated `q`, `sort` or `filter` is a `400`, never one value silently winning. Error messages are fixed text and never echo the query, and the request log records the path without its query string — search text is collection data, held to the same rule as request bodies. That includes the 404 for an unknown route, whose log line and response message name the path only.
 
 In dev mode, OpenAPI docs are available at `GET /api/docs`.
+
+### Importing items from a CSV file (#44)
+
+The browser reads the CSV file, maps its columns and types each cell with core's `coerceCell()`, then sends the rows that converted: `{ items: [{ status?, fields }] }`, at most 10,000 rows in a body of at most 32 MiB. The server never re-reads strings. In one transaction, it reads the collection and re-checks every row against the collection's current fields with core's `checkImportedFields()`. Every key must be one of the collection's fields, every value must have its field's shape, and every required field must be filled. Then it adds them all, or none. Fields a row leaves out get the empty value the item form stores. A missing status is `owned`.
+
+| Answer | When                                                                                                                                                                   |
+| ------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `201`  | `{ created }`                                                                                                                                                          |
+| `400`  | `Invalid import`: the body is not that shape. `Invalid row` with `row` (0-based) and `issue` (`invalid`, `required`, `too-long` or `unknown-field`): nothing was added |
+| `404`  | The collection is missing or trashed                                                                                                                                   |
+| `413`  | `Import too large`: more than 10,000 rows, or a body over 32 MiB                                                                                                       |
+
+Like every other refusal, these are fixed text. They never quote a value, a field id or a key from the file. Unlike the backup import, this route does not take the one-import lock, because its rows get fresh ids just as single creates do.
 
 ### Editing a field schema
 
