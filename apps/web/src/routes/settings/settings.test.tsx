@@ -129,8 +129,10 @@ beforeEach(() => {
   vi.mocked(exportData).mockResolvedValue(new Blob(["{}"], { type: "application/json" }));
   vi.mocked(importData).mockResolvedValue({ summary: IMPORT_SUMMARY });
   vi.mocked(getCurrentImport).mockResolvedValue(null);
-  // Polled fast here; a second is the real interval.
-  importPolling.intervalMs = 10;
+  // A second is the real interval. A millisecond here, so a test that leaves the
+  // job's progress to timing fails on every run rather than only on a slow CI
+  // runner (#462's merge queue): hold the next poll with `deferred` instead.
+  importPolling.intervalMs = 1;
   vi.mocked(listTrash).mockResolvedValue({ collections: [], items: [] });
 });
 
@@ -559,9 +561,14 @@ function announcer(): HTMLElement {
 describe("SettingsPage background archive imports (#452)", () => {
   it("shows the job's progress outside the live region, then its summary inside it", async () => {
     vi.mocked(importData).mockResolvedValue({ job: job() });
+    // The poll after "3 of 8" is held until the running state has been checked:
+    // a `findBy…` ends on a timer tick, which is room for a poll to land, so a
+    // queue of ready answers lets the job finish under the assertions on a slow
+    // machine (the merge queue of #462).
+    const nextPoll = deferred<ImportJob>();
     vi.mocked(getImportJob)
       .mockResolvedValueOnce(job({ imagesDone: 3 }))
-      .mockResolvedValueOnce(job({ phase: "saving", imagesDone: 8 }))
+      .mockReturnValueOnce(nextPoll.promise)
       .mockResolvedValue(job({ phase: "done", imagesDone: 8, summary: IMPORT_SUMMARY }));
     renderSettings();
     const input = await screen.findByLabelText(/choose backup file/i);
@@ -576,6 +583,7 @@ describe("SettingsPage background archive imports (#452)", () => {
     expect(importLiveRegion()).not.toContainElement(progress);
     expect(importLiveRegion()).toHaveTextContent("Importing your backup…");
 
+    nextPoll.settle(job({ phase: "saving", imagesDone: 8 }));
     await waitFor(() => expect(importLiveRegion()).toHaveTextContent(/imported 2 collections, 5 items and 4 images/i));
     expect(importLiveRegion()).toBe(before);
     expect(screen.queryByRole("progressbar")).not.toBeInTheDocument();
@@ -608,12 +616,16 @@ describe("SettingsPage background archive imports (#452)", () => {
 
   it("finds a running import again after a reload, and reports it when it ends", async () => {
     vi.mocked(getCurrentImport).mockResolvedValue(job({ imagesDone: 2 }));
+    // Held, as above, so the job is still running while it is checked.
+    const nextPoll = deferred<ImportJob>();
     vi.mocked(getImportJob)
       .mockResolvedValueOnce(job({ imagesDone: 2 }))
+      .mockReturnValueOnce(nextPoll.promise)
       .mockResolvedValue(job({ phase: "done", imagesDone: 8, summary: IMPORT_SUMMARY }));
     renderSettings();
-    expect(await screen.findByRole("progressbar", { name: "Importing images" })).toBeInTheDocument();
+    expect(await screen.findByRole("progressbar", { name: "Importing images" })).toHaveAttribute("value", "2");
     expect(await screen.findByLabelText(/choose backup file/i)).toHaveAttribute("aria-disabled", "true");
+    nextPoll.settle(job({ phase: "done", imagesDone: 8, summary: IMPORT_SUMMARY }));
     await waitFor(() => expect(importLiveRegion()).toHaveTextContent(/imported 2 collections/i));
     expect(importData).not.toHaveBeenCalled();
   });
