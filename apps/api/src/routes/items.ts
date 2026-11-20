@@ -1,8 +1,10 @@
 import {
   ITEM_FILTER_MAX_RAW_LENGTH,
+  ITEM_IMPORT_MAX_ROWS,
   ITEM_SEARCH_MAX_LENGTH,
   ITEM_STATUSES,
   type ItemFilter,
+  ItemImportRequestSchema,
   type ItemSort,
   parseItemFilters,
   parseItemSort,
@@ -75,6 +77,12 @@ const removeTagBodySchema = {
   additionalProperties: false,
   properties: { field: { type: "string", minLength: 1, maxLength: 300 }, value: tagName },
 } as const;
+
+/**
+ * A CSV import's body (#44): up to 10,000 typed rows. Fastify's default 1 MiB
+ * would refuse a full-size one; this caps what a single request may buffer.
+ */
+const IMPORT_BODY_LIMIT = 32 * 1024 * 1024;
 
 export async function registerItemRoutes(app: FastifyInstance, db: DatabaseHandle) {
   app.get("/api/collections/:id/items", { schema: { querystring: listQuerySchema } }, async (request, _reply) => {
@@ -171,10 +179,42 @@ export async function registerItemRoutes(app: FastifyInstance, db: DatabaseHandl
         fields: body.fields,
       });
       return reply.code(201).send(await oneWithPrimaryMedia(db, item));
-    } catch (err) {
-      throw app.httpErrors.badRequest(err instanceof Error ? err.message : "Invalid input");
+    } catch {
+      // Never the thrown message: Zod's lists each issue's path, which holds the
+      // field id, and can quote the value — both the user's data.
+      throw app.httpErrors.badRequest("Invalid item");
     }
   });
+
+  /**
+   * Adds rows the browser read from a CSV file and typed with core's rules (#44).
+   * All or none: one transaction, every row re-checked against the collection's
+   * fields. Refusals are fixed text — a row's index and a fixed word at most —
+   * because the values are the user's and the keys are the file's.
+   */
+  app.post(
+    "/api/collections/:id/items/import",
+    { schema: { body: { type: "object" } }, bodyLimit: IMPORT_BODY_LIMIT },
+    async (request, reply) => {
+      const { id } = request.params as { id: string };
+      const body = request.body as { items?: unknown };
+      if (Array.isArray(body.items) && body.items.length > ITEM_IMPORT_MAX_ROWS) {
+        throw app.httpErrors.payloadTooLarge("Import too large");
+      }
+      // Never Zod's message: it quotes unknown keys and bad values.
+      const parsed = ItemImportRequestSchema.safeParse(body);
+      if (!parsed.success) throw app.httpErrors.badRequest("Invalid import");
+      const collection = await db.collections.getById(id);
+      if (!collection) throw app.httpErrors.notFound("Collection not found");
+      const result = db.items.importRows(id, parsed.data.items);
+      if (result.ok) return reply.code(201).send({ created: result.created });
+      // Trashed between the lookup above and the transaction.
+      if (result.reason === "not-found") throw app.httpErrors.notFound("Collection not found");
+      return reply
+        .code(400)
+        .send({ statusCode: 400, error: "Bad Request", message: "Invalid row", row: result.row, issue: result.issue });
+    },
+  );
 
   app.get("/api/collections/:id/items/:itemId", async (request, _reply) => {
     const { id, itemId } = request.params as { id: string; itemId: string };

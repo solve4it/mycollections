@@ -24,6 +24,8 @@ export {
 export {
   type CollectionItemTally,
   type CreateItemInput,
+  type ImportRowInput,
+  type ImportRowsResult,
   InvalidItemQueryError,
   ItemsRepository,
   type ListItemsOptions,

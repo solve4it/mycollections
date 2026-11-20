@@ -40,6 +40,19 @@ describe("GET /api/collections/:id/items", () => {
     expect(res.json()).toHaveLength(1);
   });
 
+  it("refuses a value it cannot store with fixed text that names no field or value", async () => {
+    const app = await makeApp();
+    const res = await app.inject({
+      method: "POST",
+      url: `/api/collections/${collection.id}/items`,
+      headers: { ...auth, "Content-Type": "application/json" },
+      payload: { fields: { "do-not-echo-key": { nested: "do-not-echo-value" } } },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().message).toBe("Invalid item");
+    expect(res.body).not.toContain("do-not-echo");
+  });
+
   it("returns 404 for unknown collection", async () => {
     const app = await makeApp();
     const res = await app.inject({
