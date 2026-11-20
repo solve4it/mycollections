@@ -5,6 +5,7 @@ import {
   CSV_MAX_BYTES,
   CSV_MAX_COLUMNS,
   convertRows,
+  fieldsCsvCannotFill,
   mappingProblems,
   readCsv,
   suggestMapping,
@@ -52,6 +53,11 @@ describe("readCsv (#44)", () => {
     expect(result).toEqual({ ok: true, table: { headers: ["Code", "Name", "Extra"], rows: [["007", "", ""]] } });
   });
 
+  it("keeps a row's cells past the header, so the row can be refused rather than cut short", async () => {
+    const result = await readCsv(csv("Title,Year\nFoo, Jr.,2020\n"));
+    expect(result).toEqual({ ok: true, table: { headers: ["Title", "Year"], rows: [["Foo", " Jr.", "2020"]] } });
+  });
+
   it("refuses what it cannot read, saying why in a fixed word", async () => {
     expect(await readCsv(csv("Title\n"))).toEqual({ ok: false, reason: "empty" });
     expect(await readCsv(csv(""))).toEqual({ ok: false, reason: "empty" });
@@ -93,6 +99,14 @@ describe("suggestMapping", () => {
   });
 });
 
+describe("fieldsCsvCannotFill", () => {
+  it("names the required image fields, which no CSV column can fill", () => {
+    const required = { id: "f-photo", type: "image" as const, label: "Photo", required: true };
+    expect(fieldsCsvCannotFill([...fields, required])).toEqual(["f-photo"]);
+    expect(fieldsCsvCannotFill(fields)).toEqual([]);
+  });
+});
+
 describe("mappingProblems", () => {
   it("names required fields no column fills and targets chosen twice", () => {
     const mapping: ColumnTarget[] = [
@@ -102,6 +116,11 @@ describe("mappingProblems", () => {
       { kind: "status" },
     ];
     expect(mappingProblems(mapping, fields)).toEqual({ missingRequired: ["f-title"], duplicateColumns: [1, 3] });
+  });
+
+  it("leaves a required image field to fieldsCsvCannotFill, since no column can be chosen for it", () => {
+    const withPhoto = [...fields, { id: "f-photo", type: "image" as const, label: "Photo", required: true }];
+    expect(mappingProblems([{ kind: "field", fieldId: "f-title" }], withPhoto).missingRequired).toEqual([]);
   });
 
   it("finds nothing wrong with a mapping that fills every required field once", () => {
@@ -167,6 +186,16 @@ describe("convertRows", () => {
       labels,
     );
     expect(noStatus.items).toEqual([{ fields: { "f-title": "Dune" } }]);
+  });
+
+  it("skips a row with more cells than the header has columns, naming the first extra one", () => {
+    const wide = { headers: ["Title"], rows: [["Smith", " Jr."], ["Emma"]] };
+    const result = convertRows(wide, [{ kind: "field", fieldId: "f-title" }], fields, labels);
+    expect(result.rows).toEqual([
+      { row: 1, ok: false, issues: [{ column: 1, issue: "extra-cells" }] },
+      { row: 2, ok: true, item: { fields: { "f-title": "Emma" } } },
+    ]);
+    expect(result.items).toEqual([{ fields: { "f-title": "Emma" } }]);
   });
 
   it("builds fields on a prototype-free object, so a field id cannot reach Object.prototype", () => {

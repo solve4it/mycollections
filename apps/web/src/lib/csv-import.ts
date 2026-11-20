@@ -24,7 +24,10 @@ export const CSV_MAX_COLUMNS = 100;
 export interface CsvTable {
   /** The first row, each header trimmed. */
   headers: string[];
-  /** Every row under it, padded to the header's width; cells as written. */
+  /**
+   * Every row under it, cells as written: a short row padded to the header's
+   * width, a long one kept whole so `convertRows` can refuse it rather than cut it.
+   */
   rows: string[][];
 }
 
@@ -35,10 +38,17 @@ export type CsvReadResult = { ok: true; table: CsvTable } | { ok: false; reason:
 /** What one column fills: a field, the item's status, or nothing. */
 export type ColumnTarget = { kind: "skip" } | { kind: "status" } | { kind: "field"; fieldId: string };
 
+/**
+ * Why a cell was refused: core's reasons, or "extra-cells" for a row with more
+ * cells than the header has columns — usually an unquoted comma ("Smith, Jr."),
+ * which shifts every later value into the wrong column.
+ */
+export type CellIssue = ImportIssue | "extra-cells";
+
 /** One row of the file, typed — or the cells that would not convert, by column. */
 export type RowResult =
   | { row: number; ok: true; item: ImportRow }
-  | { row: number; ok: false; issues: { column: number; issue: ImportIssue }[] };
+  | { row: number; ok: false; issues: { column: number; issue: CellIssue }[] };
 
 type ImportRow = ItemImportRequest["items"][number];
 
@@ -68,7 +78,7 @@ export async function readCsv(file: File): Promise<CsvReadResult> {
     ok: true,
     table: {
       headers: first.map((header) => header.trim()),
-      rows: rest.map((row) => Array.from({ length: width }, (_, index) => row[index] ?? "")),
+      rows: rest.map((row) => Array.from({ length: Math.max(width, row.length) }, (_, index) => row[index] ?? "")),
     },
   };
 }
@@ -106,6 +116,14 @@ export function suggestMapping(
   });
 }
 
+/**
+ * Required image fields: no column can fill one (images arrive with their files),
+ * so a collection that has any cannot take a CSV import at all (the owner's call).
+ */
+export function fieldsCsvCannotFill(fields: readonly FieldDefinition[]): string[] {
+  return fields.filter((field) => field.type === "image" && field.required).map((field) => field.id);
+}
+
 const targetKey = (target: ColumnTarget) =>
   target.kind === "field" ? `field:${target.fieldId}` : target.kind === "status" ? "status" : null;
 
@@ -126,7 +144,9 @@ export function mappingProblems(
     seen.add(key);
   });
   const missingRequired = fields
-    .filter((field) => field.required && field.type !== "boolean" && !seen.has(`field:${field.id}`))
+    .filter(
+      (field) => field.required && field.type !== "boolean" && field.type !== "image" && !seen.has(`field:${field.id}`),
+    )
     .map((field) => field.id);
   return { missingRequired, duplicateColumns };
 }
@@ -148,7 +168,11 @@ export function convertRows(
     // No prototype: a field id is free text, and "__proto__" must be a plain key.
     const values: Record<string, unknown> = Object.create(null);
     let status: ItemStatus | undefined;
-    const issues: { column: number; issue: ImportIssue }[] = [];
+    const issues: { column: number; issue: CellIssue }[] = [];
+    // Its values cannot be trusted to sit under the right headers, so the row is skipped whole.
+    if (cells.length > table.headers.length) {
+      return { row: index + 1, ok: false, issues: [{ column: table.headers.length, issue: "extra-cells" }] };
+    }
     mapping.forEach((target, column) => {
       const raw = cells[column] ?? "";
       if (target.kind === "status") {

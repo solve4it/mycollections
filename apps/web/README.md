@@ -46,7 +46,9 @@ The web app talks to the `@mycollections/api` server over HTTP.
 - `readCsv` refuses a file with a fixed word: over 10 MB, UTF-16, an unterminated quote, no rows under the header, more than 10,000 rows, or more than 100 columns.
 - `suggestMapping` matches headers to field labels or ids, and to the status column.
 - `mappingProblems` names required fields no column fills, and columns that choose a target twice.
+- `fieldsCsvCannotFill` names required image fields. No column can fill one, so a collection that has any can't take a CSV import, and the page says so up front.
 - `convertRows` types every cell with core's `coerceCell`/`coerceStatus`. The preview therefore shows exactly what the server will accept.
+- A row with more cells than the header has columns is skipped whole with `extra-cells`. That usually means an unquoted comma (`Smith, Jr.`), which would shift every later value into the wrong column.
 - Only the rows that converted are sent. The rest are skipped and counted.
 
 The API token comes from `API_TOKEN`, or in development from the `api-token` file the server keeps beside its database (it survives restarts; startup prints the file's path). A browser normally gets it by **pairing** (#241): it opens the one-time link the API prints (`/setup#pair=<code>`), which the API also opens by itself on a first run. `/setup` sends the code to `POST /api/pair` through `pair()` in `lib/api-client.ts`, stores the token it gets back and goes to `/collections`.
