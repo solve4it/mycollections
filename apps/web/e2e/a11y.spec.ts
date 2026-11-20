@@ -1307,6 +1307,39 @@ test.describe("accessibility", () => {
   });
 
   /**
+   * A background archive import part-way through (#452): the labelled progress
+   * bar and its count, the busy picker, and the attach option (#453) ticked. The
+   * server's answers are stood in for so the state holds still to be scanned.
+   */
+  test("a background import in progress on Settings", async ({ page, api }) => {
+    await api.reset();
+    const job = {
+      id: "0b1c2d3e-4f50-4617-8293-a4b5c6d7e8f9",
+      phase: "images",
+      imagesDone: 3,
+      imagesTotal: 8,
+      summary: null,
+      failure: null,
+    };
+    await page.route("**/api/import?mode=attach-media", (route) =>
+      route.fulfill({ status: 202, json: { ...job, imagesDone: 0 }, headers: { Location: `/api/import/${job.id}` } }),
+    );
+    await page.route(`**/api/import/${job.id}`, (route) => route.fulfill({ status: 200, json: job }));
+
+    await page.goto("/settings");
+    await page.getByRole("checkbox", { name: "Also add photos to items you already have" }).check();
+    await page.getByLabel("Choose backup file").setInputFiles({
+      name: "mycollections-export.zip",
+      mimeType: "application/zip",
+      buffer: Buffer.from([0x50, 0x4b, 0x03, 0x04, 0, 0]),
+    });
+
+    await expect(page.getByRole("progressbar", { name: "Importing images" })).toHaveAttribute("value", "3");
+    await expect(page.getByText("3 of 8 images")).toBeVisible();
+    await expectNoAccessibilityViolations(page);
+  });
+
+  /**
    * Mirrors `TRASH_CONFIRMATION_MS` in `src/components/TrashSection.tsx`, rather
    * than importing it: these specs run in Node, and one import from `src/` pulls
    * the app's whole module graph — `import.meta.env` included — in with it.
