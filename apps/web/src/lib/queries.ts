@@ -1,4 +1,12 @@
-import type { Collection, CollectionWithItemCount, Item, ItemStatus, ItemView, Media } from "@mycollections/core";
+import type {
+  Collection,
+  CollectionWithItemCount,
+  Item,
+  ItemImportRequest,
+  ItemStatus,
+  ItemView,
+  Media,
+} from "@mycollections/core";
 import { keepPreviousData, type QueryClient, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRef } from "react";
 import {
@@ -21,6 +29,7 @@ import {
   type ItemInput,
   type ItemListQuery,
   importData,
+  importItems,
   listCollections,
   listItems,
   listMedia,
@@ -324,6 +333,22 @@ export function useCreateItem(collectionId: string) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (input: ItemInput) => createItem(collectionId, input),
+    onSuccess: () => {
+      refreshDashboard(queryClient);
+      return queryClient.invalidateQueries({ queryKey: ["collections", collectionId, "items"] });
+    },
+  });
+}
+
+/**
+ * Adds the rows a CSV import typed (#44). Its own items, counts and tag values
+ * live under the collection's `items` prefix; the dashboard's counts are fetched
+ * again though it is not on screen.
+ */
+export function useImportItems(collectionId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (items: ItemImportRequest["items"]) => importItems(collectionId, items),
     onSuccess: () => {
       refreshDashboard(queryClient);
       return queryClient.invalidateQueries({ queryKey: ["collections", collectionId, "items"] });

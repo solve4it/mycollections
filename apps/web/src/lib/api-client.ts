@@ -5,6 +5,7 @@ import type {
   FieldDefinition,
   Item,
   ItemCounts,
+  ItemImportRequest,
   ItemStatus,
   ItemView,
   Media,
@@ -219,6 +220,23 @@ export async function createItem(collectionId: string, input: ItemInput): Promis
   });
   if (!res.ok) throw new ApiError(res.status);
   return res.json() as Promise<Item>;
+}
+
+/**
+ * Adds the rows a CSV import typed (#44), all or none. The server re-checks every
+ * row against the collection's fields; a refusal comes back as an `ApiError`
+ * carrying its status, which the wizard words its message from.
+ */
+export async function importItems(
+  collectionId: string,
+  items: ItemImportRequest["items"],
+): Promise<{ created: number }> {
+  const res = await request(`/api/collections/${collectionId}/items/import`, {
+    method: "POST",
+    body: JSON.stringify({ items }),
+  });
+  if (!res.ok) throw new ApiError(res.status);
+  return res.json() as Promise<{ created: number }>;
 }
 
 export async function updateItem(collectionId: string, itemId: string, input: ItemInput): Promise<Item> {

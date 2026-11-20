@@ -13,6 +13,7 @@ vi.mock("./api-client.js", () => ({
   restoreItem: vi.fn(),
   restoreCollection: vi.fn(),
   importData: vi.fn(),
+  importItems: vi.fn(),
   updateCollection: vi.fn(),
 }));
 
@@ -21,6 +22,7 @@ import {
   deleteItem,
   getCollectionCounts,
   importData,
+  importItems,
   listCollections,
   restoreCollection,
   restoreItem,
@@ -32,6 +34,7 @@ import {
   useCreateItem,
   useDeleteItem,
   useImportData,
+  useImportItems,
   useRestoreCollection,
   useRestoreItem,
   useRestoreTrashedItem,
@@ -82,6 +85,7 @@ beforeEach(() => {
   vi.mocked(restoreItem).mockResolvedValue(ITEM);
   vi.mocked(updateCollection).mockResolvedValue(LISTED);
   vi.mocked(restoreCollection).mockResolvedValue(LISTED);
+  vi.mocked(importItems).mockResolvedValue({ created: 2 });
   vi.mocked(importData).mockResolvedValue({ summary: { collectionsImported: 1 } } as never);
 });
 
@@ -156,6 +160,13 @@ describe("item changes refresh the dashboard list, though it is not on screen (#
         async (_qc, wrapper) => {
           const { result } = renderHook(() => useUpdateCollection(ID), { wrapper });
           await act(() => result.current.mutateAsync({ targetCount: 6 }));
+        },
+      ],
+      [
+        "rows imported from a CSV file (#44)",
+        async (_qc, wrapper) => {
+          const { result } = renderHook(() => useImportItems(ID), { wrapper });
+          await act(() => result.current.mutateAsync([{ fields: { title: "Base Set card" } }]));
         },
       ],
       // Settings' three: run where the dashboard is never on screen either.
@@ -344,5 +355,23 @@ describe("useSetItemView (#38)", () => {
     await waitFor(() => expect(updateCollection).toHaveBeenCalledTimes(2));
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(qc.getQueryData<typeof COLLECTION>(["collections", ID])?.itemView).toBe("list");
+  });
+});
+
+describe("useImportItems (#44)", () => {
+  it("reloads the collection's lists, counts and tag values, and no other collection's", async () => {
+    const { qc, wrapper } = setup();
+    const other = "33333333-3333-3333-3333-333333333333";
+    qc.setQueryData(["collections", ID, "items", { q: "" }], []);
+    qc.setQueryData(["collections", ID, "items", "counts"], { total: 0 });
+    qc.setQueryData(["collections", ID, "items", "tag-values", "tags", ""], []);
+    qc.setQueryData(["collections", other, "items", { q: "" }], []);
+    const { result } = renderHook(() => useImportItems(ID), { wrapper });
+    await act(() => result.current.mutateAsync([{ fields: { title: "Base Set card" } }]));
+    expect(importItems).toHaveBeenCalledWith(ID, [{ fields: { title: "Base Set card" } }]);
+    expect(qc.getQueryState(["collections", ID, "items", { q: "" }])?.isInvalidated).toBe(true);
+    expect(qc.getQueryState(["collections", ID, "items", "counts"])?.isInvalidated).toBe(true);
+    expect(qc.getQueryState(["collections", ID, "items", "tag-values", "tags", ""])?.isInvalidated).toBe(true);
+    expect(qc.getQueryState(["collections", other, "items", { q: "" }])?.isInvalidated).toBe(false);
   });
 });
