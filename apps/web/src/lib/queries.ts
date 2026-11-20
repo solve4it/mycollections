@@ -2,6 +2,7 @@ import type { Collection, CollectionWithItemCount, Item, ItemStatus, ItemView, M
 import { keepPreviousData, type QueryClient, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRef } from "react";
 import {
+  ApiError,
   createCollection,
   createItem,
   deleteItem,
@@ -10,9 +11,13 @@ import {
   fetchMediaBlob,
   getCollection,
   getCollectionCounts,
+  getCurrentImport,
+  getImportJob,
   getItem,
   getTagValues,
   type ImportInput,
+  type ImportJob,
+  type ImportMode,
   type ItemInput,
   type ItemListQuery,
   importData,
@@ -67,16 +72,77 @@ export function useCreateCollection() {
   });
 }
 
+/** Reloads everything an import can add to. Run from Settings, where the dashboard is not on screen. */
+export function refreshAfterImport(queryClient: QueryClient) {
+  refreshDashboard(queryClient);
+  return queryClient.invalidateQueries({ queryKey: ["collections"] });
+}
+
+const importJobKey = (id: string | null) => ["import", "job", id] as const;
+
+/**
+ * Sends a backup. A JSON backup's rows are in by the time it answers, so the
+ * lists reload then; an archive answers with its background job (#452), and
+ * nothing is in the database yet — the page reloads them when the job is done.
+ * The job is put in the cache so its first poll is not a blank.
+ */
 export function useImportData() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (input: ImportInput) => importData(input),
-    // Run from Settings, where the dashboard is not on screen.
-    onSuccess: () => {
-      refreshDashboard(queryClient);
-      return queryClient.invalidateQueries({ queryKey: ["collections"] });
+    mutationFn: ({ input, mode }: { input: ImportInput; mode: ImportMode }) => importData(input, mode),
+    onSuccess: (result) => {
+      if ("job" in result) {
+        queryClient.setQueryData(importJobKey(result.job.id), result.job);
+        return;
+      }
+      return refreshAfterImport(queryClient);
     },
   });
+}
+
+/** How often a running import is asked about. An object, so a test can poll faster. */
+export const importPolling = { intervalMs: 1_000 };
+
+export function isImportRunning(job: ImportJob | undefined | null): boolean {
+  return job?.phase === "images" || job?.phase === "saving";
+}
+
+/**
+ * The server's running or last import, read once when Settings opens — how a
+ * reload finds an import still under way (#452). Not fetched again on focus: the
+ * page only needs to know whether to start following a job.
+ */
+export function useCurrentImport() {
+  return useQuery({
+    queryKey: ["import", "current"],
+    queryFn: getCurrentImport,
+    staleTime: 0,
+    gcTime: 0,
+    refetchOnWindowFocus: false,
+  });
+}
+
+/**
+ * Follows one background import until it ends (#452). Polls in a background tab
+ * too: an import runs for minutes and the user is likely elsewhere meanwhile, and
+ * the result should be there when they come back. A 404 — the server restarted
+ * and forgot it — is final, not retried; a network blip is.
+ */
+export function useImportJob(id: string | null) {
+  return useQuery({
+    queryKey: importJobKey(id),
+    queryFn: () => getImportJob(id as string),
+    enabled: id !== null,
+    refetchInterval: (query) =>
+      isImportRunning(query.state.data) && !isGone(query.state.error) ? importPolling.intervalMs : false,
+    refetchIntervalInBackground: true,
+    retry: (failures, error) => !isGone(error) && failures < 3,
+  });
+}
+
+/** The server no longer knows the job: superseded, or lost to a restart. */
+export function isGone(error: unknown): boolean {
+  return error instanceof ApiError && error.status === 404;
 }
 
 /**

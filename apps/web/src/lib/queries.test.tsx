@@ -82,7 +82,7 @@ beforeEach(() => {
   vi.mocked(restoreItem).mockResolvedValue(ITEM);
   vi.mocked(updateCollection).mockResolvedValue(LISTED);
   vi.mocked(restoreCollection).mockResolvedValue(LISTED);
-  vi.mocked(importData).mockResolvedValue({ collections: 1, items: 0 } as never);
+  vi.mocked(importData).mockResolvedValue({ summary: { collectionsImported: 1 } } as never);
 });
 
 describe("useCollectionCounts (#42)", () => {
@@ -177,7 +177,7 @@ describe("item changes refresh the dashboard list, though it is not on screen (#
         "an import",
         async (_qc, wrapper) => {
           const { result } = renderHook(() => useImportData(), { wrapper });
-          await act(() => result.current.mutateAsync({ document: {} }));
+          await act(() => result.current.mutateAsync({ input: { document: {} }, mode: "skip" }));
         },
       ],
     ];
@@ -190,6 +190,18 @@ describe("item changes refresh the dashboard list, though it is not on screen (#
 
     await waitFor(() => expect(qc.getQueryData(["collections"])).toEqual([{ ...LISTED, ownedCount: 3 }]));
     expect(listCollections).toHaveBeenCalledTimes(2);
+  });
+
+  it("an archive import's 202 fetches nothing yet: its rows land when the job is done (#452)", async () => {
+    const { qc, wrapper } = setup();
+    await seedDashboard(qc);
+    const job = { id: "j1", phase: "images", imagesDone: 0, imagesTotal: 2, summary: null, failure: null };
+    vi.mocked(importData).mockResolvedValue({ job } as never);
+    const { result } = renderHook(() => useImportData(), { wrapper });
+    await act(() => result.current.mutateAsync({ input: { archive: new Blob() }, mode: "skip" }));
+    expect(listCollections).toHaveBeenCalledTimes(1);
+    // Seeded, so following the job starts from what the 202 said.
+    expect(qc.getQueryData(["import", "job", "j1"])).toEqual(job);
   });
 
   it("fetches no dashboard list that was never loaded", async () => {

@@ -50,6 +50,9 @@ vi.mock("../lib/api-client.js", () => ({
   emptyTrash: vi.fn(),
   exportData: vi.fn(),
   importData: vi.fn(),
+  // Settings asks once whether an import is running (#452).
+  getCurrentImport: vi.fn(async () => null),
+  getImportJob: vi.fn(),
 }));
 
 function renderAt(path: string) {

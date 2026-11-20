@@ -15,6 +15,8 @@ vi.mock("../../lib/api-client.js", () => ({
   isTokenSessionOnly: vi.fn(() => false),
   exportData: vi.fn(),
   importData: vi.fn(),
+  getImportJob: vi.fn(),
+  getCurrentImport: vi.fn(),
   listTrash: vi.fn(),
   restoreItem: vi.fn(),
   restoreCollection: vi.fn(),
@@ -25,6 +27,7 @@ vi.mock("../../lib/api-client.js", () => ({
 
 import {
   emptyTrash,
+  getCurrentImport,
   listTrash,
   purgeCollection,
   purgeItem,
@@ -107,6 +110,8 @@ beforeEach(() => {
   localStorage.setItem("api_token", "test-token");
   vi.resetAllMocks();
   vi.mocked(listTrash).mockResolvedValue({ collections: [RECORDS], items: [DUNE] });
+  // The page's import section asks once whether an import is running (#452).
+  vi.mocked(getCurrentImport).mockResolvedValue(null);
 });
 
 afterEach(() => {

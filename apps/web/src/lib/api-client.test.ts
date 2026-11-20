@@ -7,8 +7,11 @@ import {
   emptyTrash,
   fetchMediaBlob,
   getCollectionCounts,
+  getCurrentImport,
+  getImportJob,
   getItem,
   getTagValues,
+  importData,
   listCollections,
   listItems,
   listMedia,
@@ -310,5 +313,52 @@ describe("api-client image actions (#37)", () => {
   it("rejects a stale order with its status", async () => {
     mockFetch(409, {});
     await expect(reorderMedia("c1", "i1", ["a"])).rejects.toMatchObject({ status: 409 });
+  });
+});
+
+describe("archive imports in the background (#452, #453)", () => {
+  const job = {
+    id: "0b1c2d3e-4f50-4617-8293-a4b5c6d7e8f9",
+    phase: "images",
+    imagesDone: 3,
+    imagesTotal: 10,
+    summary: null,
+    failure: null,
+  };
+  const archive = new Blob([new Uint8Array([0x50, 0x4b, 0x03, 0x04])], { type: "application/zip" });
+
+  it("hands back the job a 202 names", async () => {
+    mockFetch(202, job);
+    expect(await importData({ archive })).toEqual({ job });
+  });
+
+  it("hands back the summary a 200 carries", async () => {
+    const summary = { collectionsImported: 1, mediaAttached: 0 };
+    mockFetch(200, summary);
+    expect(await importData({ document: {} })).toEqual({ summary });
+  });
+
+  it("sends the mode only when it is not the default", async () => {
+    const skip = mockFetch(202, job);
+    await importData({ archive });
+    expect(String(skip.mock.calls[0]?.[0])).toMatch(/\/api\/import$/);
+    const attach = mockFetch(202, job);
+    await importData({ archive }, "attach-media");
+    expect(String(attach.mock.calls[0]?.[0])).toMatch(/\/api\/import\?mode=attach-media$/);
+  });
+
+  it("reads one job, and throws its status for a job the server does not know", async () => {
+    const fetchMock = mockFetch(200, job);
+    expect(await getImportJob(job.id)).toEqual(job);
+    expect(String(fetchMock.mock.calls[0]?.[0])).toMatch(new RegExp(`/api/import/${job.id}$`));
+    mockFetch(404, {});
+    await expect(getImportJob(job.id)).rejects.toMatchObject({ status: 404 });
+  });
+
+  it("reads the current job, null when there is none", async () => {
+    mockFetch(200, { job });
+    expect(await getCurrentImport()).toEqual(job);
+    mockFetch(200, { job: null });
+    expect(await getCurrentImport()).toBeNull();
   });
 });
