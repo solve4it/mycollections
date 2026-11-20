@@ -5,12 +5,13 @@ import {
   type DatabaseHandle,
   exportBackup,
   exportCollection,
+  IMPORT_MODES,
   type ImportMode,
-  type ImportSummary,
   importDocument,
 } from "@mycollections/db";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
-import { importArchive } from "../archive/import-archive.js";
+import { ImportAbortedError, prepareArchiveImport, runArchiveImport } from "../archive/import-archive.js";
+import { type ImportJobState, ImportJobs } from "../archive/import-jobs.js";
 import {
   ArchiveError,
   type ArchiveLimits,
@@ -67,15 +68,26 @@ export interface ExportRouteOptions {
 const importQuerySchema = {
   type: "object",
   properties: {
-    mode: { type: "string", enum: ["skip"] },
+    mode: { type: "string", enum: [...IMPORT_MODES] },
   },
 } as const;
+
+const UUID_PATTERN = "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$";
 
 const collectionParams = {
   type: "object",
   required: ["id"],
-  properties: { id: { type: "string", pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$" } },
+  properties: { id: { type: "string", pattern: UUID_PATTERN } },
 } as const;
+
+const jobParams = {
+  type: "object",
+  required: ["jobId"],
+  properties: { jobId: { type: "string", pattern: UUID_PATTERN } },
+} as const;
+
+/** Seconds a client should wait before asking about a running import again (RFC 9110 §10.2.3). */
+const POLL_SECONDS = "1";
 
 /** The first four bytes of every zip that starts with a file entry. */
 const ZIP_MAGIC = Buffer.from([0x50, 0x4b, 0x03, 0x04]);
@@ -84,10 +96,12 @@ export async function registerExportRoutes(app: FastifyInstance, db: DatabaseHan
   const maxArchiveBytes = options.importLimits?.maxArchiveBytes ?? 2 * GiB;
   const idleTimeoutMs = options.importLimits?.idleTimeoutMs ?? DEFAULT_IDLE_TIMEOUT_MS;
   const archiveLimits: ArchiveLimits = { ...DEFAULT_ARCHIVE_LIMITS, ...options.importLimits?.archive };
-  // One import at a time (#45), JSON and archive alike: an import's plan holds only
-  // while nothing else adds the items it decided to bring images in with (review
-  // of #449). Per app, which is per server.
-  let importing = false;
+  // One import at a time (#45), JSON and archive alike, held across an archive
+  // job's 202 (#452). Per app, which is per server.
+  const jobs = new ImportJobs();
+  // A closing server stops a running job at its next check and waits for it to
+  // remove what it wrote, so the database is never closed under its transaction.
+  app.addHook("onClose", () => jobs.shutdown());
 
   async function sendArchive(request: FastifyRequest, reply: FastifyReply, document: ExportDocument, name: string) {
     const stream = await writeExportArchive(document, options.media?.store, (row) =>
@@ -129,8 +143,8 @@ export async function registerExportRoutes(app: FastifyInstance, db: DatabaseHan
       async (request, reply) => {
         const { mode } = request.query as { mode?: ImportMode };
         const type = request.headers["content-type"]?.split(";")[0]?.trim().toLowerCase() ?? "";
-        if (ZIP_TYPES.includes(type)) return importZip(request, reply);
-        if (importing) throw app.httpErrors.conflict(BUSY_MESSAGE);
+        if (ZIP_TYPES.includes(type)) return importZip(request, reply, mode ?? "skip");
+        if (jobs.busy) throw app.httpErrors.conflict(BUSY_MESSAGE);
         try {
           // Counted before the schema runs, as an archive's document is.
           const document = validateDocument(request.body, archiveLimits);
@@ -148,32 +162,94 @@ export async function registerExportRoutes(app: FastifyInstance, db: DatabaseHan
     );
   });
 
-  async function importZip(request: FastifyRequest, reply: FastifyReply) {
+  function sendJob(reply: FastifyReply, job: ImportJobState) {
+    reply.header("Cache-Control", "no-store");
+    if (job.phase === "images" || job.phase === "saving") reply.header("Retry-After", POLL_SECONDS);
+    return reply.send(job);
+  }
+
+  // Both GETs are polled about once a second while an import runs, so they stay
+  // out of the info log, which would otherwise gain a line a second for minutes.
+
+  // The running job, or the last to finish — how Settings finds an import again
+  // after a reload (#452). `{ job: null }` rather than a 404 for "none yet", which
+  // is an answer, not a missing resource.
+  app.get("/api/import/current", { logLevel: "warn" }, async (_request, reply) => {
+    reply.header("Cache-Control", "no-store");
+    return reply.send({ job: jobs.current() });
+  });
+
+  app.get<{ Params: { jobId: string } }>(
+    "/api/import/:jobId",
+    { schema: { params: jobParams }, logLevel: "warn" },
+    async (request, reply) => {
+      const job = jobs.get(request.params.jobId);
+      // Unknown, superseded by a later import, or lost to a restart.
+      if (job === null) throw app.httpErrors.notFound("Import not found");
+      return sendJob(reply, job);
+    },
+  );
+
+  /**
+   * An archive import (#45, #452). Inside the request: receive the upload, check
+   * it is a zip, read and validate it, and plan — so a bad file is refused with
+   * the same fixed answers as ever. Then 202 with the job, whose images and
+   * transaction run in the background; the client follows `Location`.
+   */
+  async function importZip(request: FastifyRequest, reply: FastifyReply, mode: ImportMode) {
     const media = options.media;
     if (!media) throw app.httpErrors.badRequest(INVALID_IMPORT_MESSAGE);
-    if (importing) throw app.httpErrors.conflict(BUSY_MESSAGE);
-    importing = true;
-
-    let aborted = false;
-    reply.raw.on("close", () => {
-      if (!reply.raw.writableEnded) aborted = true;
-    });
+    if (!jobs.claim()) throw app.httpErrors.conflict(BUSY_MESSAGE);
 
     let path: string | undefined;
-    let summary: ImportSummary;
+    // Once the job owns the archive and the lock, this request must not touch either.
+    let handedOff = false;
     try {
       path = await media.store.importPath();
       await receive(request.body as Readable, path, maxArchiveBytes, idleTimeoutMs);
       if (!(await startsWithZipMagic(path))) throw new ArchiveError("invalid");
-      summary = await importArchive({
+      const prepared = await prepareArchiveImport({
         db,
-        store: media.store,
-        limiter: media.limiter,
         path,
         limits: archiveLimits,
         maxImagesPerItem: media.maxImagesPerItem,
-        isAborted: () => aborted,
+        mode,
       });
+      const archivePath = path;
+      const job = jobs.start(
+        prepared.imagesTotal,
+        (control) =>
+          runArchiveImport({
+            db,
+            store: media.store,
+            limiter: media.limiter,
+            prepared,
+            isAborted: () => control.aborted,
+            onImage: (done) => control.imageDone(done),
+            onSaving: () => control.saving(),
+          }),
+        {
+          cleanup: () => rm(archivePath, { force: true }),
+          classify: (error) => {
+            // Same split as a refusal in the request: the server's own trouble is
+            // logged (an errno error names a path under the media folder, never
+            // user data) and reads "server"; anything about the file reads
+            // "invalid", with nothing of its message kept.
+            if (isSystemError(error)) {
+              app.log.error({ err: error }, "background import failed");
+              return "server";
+            }
+            return error instanceof ImportAbortedError ? "server" : "invalid";
+          },
+        },
+      );
+      handedOff = true;
+      return reply
+        .code(202)
+        .header("Location", `/api/import/${job.id}`)
+        .header("Retry-After", POLL_SECONDS)
+        .header("Cache-Control", "no-store")
+        .send(job);
     } catch (error) {
       if (error instanceof ArchiveError && error.reason === "too-large") {
         throw app.httpErrors.payloadTooLarge(TOO_LARGE_MESSAGE);
@@ -185,16 +261,17 @@ export async function registerExportRoutes(app: FastifyInstance, db: DatabaseHan
       if (isSystemError(error)) throw error;
       throw app.httpErrors.badRequest(INVALID_IMPORT_MESSAGE);
     } finally {
-      // Before replying, so nobody — the client, the next import — ever sees the
-      // archive still on disk. The lock is released whatever happens here: a stuck
-      // flag would refuse every import until a restart (review of #449).
-      try {
-        if (path !== undefined) await rm(path, { force: true });
-      } finally {
-        importing = false;
+      // A refusal: before replying, so nobody — the client, the next import — ever
+      // sees the archive still on disk. The claim is released whatever happens
+      // here: a stuck one would refuse every import until a restart (review of #449).
+      if (!handedOff) {
+        try {
+          if (path !== undefined) await rm(path, { force: true });
+        } finally {
+          jobs.release();
+        }
       }
     }
-    return reply.code(200).send(summary);
   }
 }
 
