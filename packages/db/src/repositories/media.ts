@@ -144,6 +144,51 @@ export class MediaRepository {
     return this.#db.insert(schema.media).values(validated).onConflictDoNothing().run().changes > 0;
   }
 
+  /** Each item's live image count; items with none are left out (#453). */
+  liveCounts(itemIds: readonly string[]): Map<string, number> {
+    const counts = new Map<string, number>();
+    for (const chunk of chunks(itemIds)) {
+      for (const row of this.#db
+        .select({ itemId: schema.media.itemId, n: sql<number>`count(*)` })
+        .from(schema.media)
+        .where(and(inArray(schema.media.itemId, chunk), isNull(schema.media.deletedAt)))
+        .groupBy(schema.media.itemId)
+        .all()) {
+        counts.set(row.itemId, row.n);
+      }
+    }
+    return counts;
+  }
+
+  /**
+   * Adds a backup's image to an item that already exists (#453). Unlike
+   * `insertImported` it takes a fresh position after every row the item has,
+   * trashed ones included — the archive's position would collide with the
+   * item's own images — so nothing already there is reordered. Synchronous, so
+   * the count and the insert share the caller's transaction.
+   *
+   * False, writing nothing, when the item already holds `maxLive` live images.
+   * Throws when the id is taken: the caller planned it as free, and its
+   * transaction must roll back rather than half-apply.
+   */
+  insertAttached(media: Media, maxLive: number): boolean {
+    const live =
+      this.#db
+        .select({ n: sql<number>`count(*)` })
+        .from(schema.media)
+        .where(and(eq(schema.media.itemId, media.itemId), isNull(schema.media.deletedAt)))
+        .get()?.n ?? 0;
+    if (live >= maxLive) return false;
+    const last = this.#db
+      .select({ max: sql<number | null>`max(${schema.media.position})` })
+      .from(schema.media)
+      .where(eq(schema.media.itemId, media.itemId))
+      .get();
+    const validated = MediaSchema.parse({ ...media, position: (last?.max ?? -1) + 1 });
+    this.#db.insert(schema.media).values(validated).run();
+    return true;
+  }
+
   async countLive(itemId: string): Promise<number> {
     const row = this.#db
       .select({ n: sql<number>`count(*)` })

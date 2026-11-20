@@ -1,6 +1,13 @@
 import { EXPORT_VERSION, ExportDocumentSchema, type FieldDefinition } from "@mycollections/core";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { exportBackup, exportCollection, importBackup, planImport, TooManyImagesError } from "./backup.js";
+import {
+  exportBackup,
+  exportCollection,
+  importBackup,
+  importPlanned,
+  planImport,
+  TooManyImagesError,
+} from "./backup.js";
 import { type DatabaseHandle, openDatabase } from "./open-database.js";
 
 const fields: FieldDefinition[] = [{ id: "title", type: "text", label: "Title", required: true }];
@@ -66,6 +73,8 @@ describe("importBackup", () => {
         itemsSkipped: 0,
         mediaImported: 0,
         mediaSkipped: 0,
+        mediaAttached: 0,
+        mediaOverLimit: 0,
       });
       expect(await fresh.collections.list()).toEqual([collection]);
       expect(await fresh.items.listByCollection(collection.id)).toEqual([item]);
@@ -89,6 +98,8 @@ describe("importBackup", () => {
         itemsSkipped: 1,
         mediaImported: 0,
         mediaSkipped: 0,
+        mediaAttached: 0,
+        mediaOverLimit: 0,
       });
       expect(await fresh.collections.list()).toEqual([collection]);
       expect(await fresh.items.listByCollection(collection.id)).toEqual([item]);
@@ -291,13 +302,13 @@ describe("backups and images (#45)", () => {
 
       const fresh = await openDatabase({ path: ":memory:" });
       try {
-        expect(planImport(fresh, doc)).toEqual({ media: [image], mediaSkipped: 0 });
+        expect(planImport(fresh, doc)).toEqual({ media: [image], attach: [], mediaSkipped: 0, mediaOverLimit: 0 });
       } finally {
         fresh.close();
       }
       // The same document against the database it came from: every item exists,
       // so no image is touched — existing rows are left as they are.
-      expect(planImport(handle, doc)).toEqual({ media: [], mediaSkipped: 1 });
+      expect(planImport(handle, doc)).toEqual({ media: [], attach: [], mediaSkipped: 1, mediaOverLimit: 0 });
     });
 
     it("skips an image whose id is already in use, even under an item the import adds", async () => {
@@ -307,7 +318,12 @@ describe("backups and images (#45)", () => {
       const newItem = { ...item, id: "8d3f4c0e-6a3b-4f7e-9b2a-1c5d7e9f0a1b" };
       const moved = { ...image, itemId: newItem.id };
       const crafted = { ...doc, collections: [collection], items: [newItem], media: [moved] };
-      expect(planImport(handle, ExportDocumentSchema.parse(crafted))).toEqual({ media: [], mediaSkipped: 1 });
+      expect(planImport(handle, ExportDocumentSchema.parse(crafted))).toEqual({
+        media: [],
+        attach: [],
+        mediaSkipped: 1,
+        mediaOverLimit: 0,
+      });
     });
 
     it("refuses an item with more live images than one item may hold, trashed ones not counted", async () => {
@@ -362,6 +378,8 @@ describe("backups and images (#45)", () => {
         itemsSkipped: 1,
         mediaImported: 0,
         mediaSkipped: 1,
+        mediaAttached: 0,
+        mediaOverLimit: 0,
       });
     });
 
@@ -391,6 +409,117 @@ describe("backups and images (#45)", () => {
         fresh.media.insertImported({ ...image, itemId: squatterItem.id });
         expect(() => importBackup(fresh, doc, "skip", plan)).toThrow();
         expect((await fresh.collections.list()).map((c) => c.name)).toEqual(["Other"]);
+      } finally {
+        fresh.close();
+      }
+    });
+  });
+  describe("attaching images to items already here (#453)", () => {
+    const UNUSED = [
+      "6a6a6a6a-0000-4000-8000-000000000001",
+      "6a6a6a6a-0000-4000-8000-000000000002",
+      "6a6a6a6a-0000-4000-8000-000000000003",
+    ];
+
+    /** A backup of one item with three images, then the item's images removed here as if added after it was taken. */
+    async function backupThenLoseImages() {
+      const { item } = await seed();
+      const a = await addImage(item.id, { width: 1 });
+      const b = await addImage(item.id, { width: 2 });
+      const trashed = await addImage(item.id, { width: 3 });
+      await handle.media.softDelete(item.id, trashed.id);
+      const doc = await exportBackup(handle);
+      await handle.items.softDelete(item.id);
+      // Purging and re-inserting the item drops its images while keeping its id and row.
+      await handle.items.purge(item.id);
+      handle.items.insertImported(item);
+      return { item, doc, a, b, trashed };
+    }
+
+    it("plans the free-id live images of existing items, leaving trashed and taken ones out", async () => {
+      const { doc, a, b } = await backupThenLoseImages();
+      const taken = { ...b, id: UNUSED[0] as string };
+      handle.media.insertImported(taken);
+      const crafted = ExportDocumentSchema.parse({
+        ...doc,
+        media: [...doc.media, { ...b, id: taken.id, position: 9 }],
+      });
+      const plan = planImport(handle, crafted, { mode: "attach-media" });
+      expect(plan.media).toEqual([]);
+      expect(plan.attach.map((row) => row.id)).toEqual([a.id, b.id]);
+      // The trashed image and the taken id.
+      expect(plan.mediaSkipped).toBe(2);
+      expect(plan.mediaOverLimit).toBe(0);
+    });
+
+    it("skip mode still leaves an existing item's images alone", async () => {
+      const { doc } = await backupThenLoseImages();
+      expect(planImport(handle, doc)).toEqual({ media: [], attach: [], mediaSkipped: 3, mediaOverLimit: 0 });
+    });
+
+    it("counts the item's own live images against the cap and leaves the excess out, in archive order", async () => {
+      const { item, doc, a } = await backupThenLoseImages();
+      await addImage(item.id, { width: 9 });
+      const plan = planImport(handle, doc, { mode: "attach-media", maxImagesPerItem: 2 });
+      expect(plan.attach.map((row) => row.id)).toEqual([a.id]);
+      expect(plan.mediaOverLimit).toBe(1);
+      expect(plan.mediaSkipped).toBe(1);
+    });
+
+    it("appends attached images after the item's own, leaving its rows as they were", async () => {
+      const { item, doc, a, b } = await backupThenLoseImages();
+      const own = await addImage(item.id, { width: 9 });
+      const plan = planImport(handle, doc, { mode: "attach-media" });
+      const { summary, notAttached } = importPlanned(handle, doc, "attach-media", plan);
+      expect(summary).toEqual({
+        collectionsImported: 0,
+        collectionsSkipped: 1,
+        itemsImported: 0,
+        itemsSkipped: 1,
+        mediaImported: 0,
+        mediaAttached: 2,
+        mediaSkipped: 1,
+        mediaOverLimit: 0,
+      });
+      expect(notAttached).toEqual([]);
+      const rows = await handle.media.listByItem(item.id);
+      expect(rows.map((row) => [row.id, row.position])).toEqual([
+        [own.id, 0],
+        [a.id, 1],
+        [b.id, 2],
+      ]);
+      expect(rows[0]).toEqual(own);
+    });
+
+    it("re-checks the cap as it inserts, handing back a row that no longer fits", async () => {
+      const { item, doc, a, b } = await backupThenLoseImages();
+      const plan = planImport(handle, doc, { mode: "attach-media", maxImagesPerItem: 2 });
+      expect(plan.attach).toHaveLength(2);
+      // Someone uploads an image while the import is still writing files.
+      await addImage(item.id, { width: 9 });
+      const { summary, notAttached } = importPlanned(handle, doc, "attach-media", plan, { maxImagesPerItem: 2 });
+      expect(notAttached.map((row) => row.id)).toEqual([b.id]);
+      expect(summary).toMatchObject({ mediaAttached: 1, mediaOverLimit: 1, mediaSkipped: 1 });
+      expect((await handle.media.listByItem(item.id)).map((row) => row.id)).toContain(a.id);
+    });
+
+    it("every image of the document is counted exactly once in the summary", async () => {
+      const { item, doc } = await backupThenLoseImages();
+      await addImage(item.id, { width: 9 });
+      const plan = planImport(handle, doc, { mode: "attach-media", maxImagesPerItem: 2 });
+      const { summary } = importPlanned(handle, doc, "attach-media", plan, { maxImagesPerItem: 2 });
+      expect(summary.mediaImported + summary.mediaAttached + summary.mediaSkipped + summary.mediaOverLimit).toBe(
+        doc.media.length,
+      );
+    });
+
+    it("a JSON document with no images imports the same in either mode", async () => {
+      const { collection } = await seed();
+      const doc = await exportBackup(handle);
+      const fresh = await openDatabase({ path: ":memory:" });
+      try {
+        expect(importBackup(fresh, doc, "attach-media")).toMatchObject({ collectionsImported: 1, mediaAttached: 0 });
+        expect((await fresh.collections.list()).map((c) => c.id)).toEqual([collection.id]);
       } finally {
         fresh.close();
       }

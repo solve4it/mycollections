@@ -2,19 +2,34 @@ import { EXPORT_VERSION, type ExportDocument, ExportDocumentSchema, type Media }
 import type { DatabaseHandle } from "./open-database.js";
 
 /**
- * Import conflict strategy. Only "skip" is implemented today: rows whose id
- * already exists are left untouched, making imports idempotent and never
- * destructive. "replace" / "merge" are reserved for future use.
+ * Import conflict strategy. In both, a collection or item row whose id already
+ * exists is left untouched, so imports are idempotent and never destructive.
+ *
+ * - "skip": an existing item's images are skipped along with it.
+ * - "attach-media" (#453): an existing item also gets the archive's live images
+ *   whose ids are free, appended after its own, up to the per-item cap.
  */
-export type ImportMode = "skip";
+export type ImportMode = "skip" | "attach-media";
 
+export const IMPORT_MODES: readonly ImportMode[] = ["skip", "attach-media"];
+
+/**
+ * What an import did. Every image row in the document is counted exactly once,
+ * in one of the four media counts.
+ */
 export interface ImportSummary {
   collectionsImported: number;
   collectionsSkipped: number;
   itemsImported: number;
   itemsSkipped: number;
+  /** Images that came in with an item the import added. */
   mediaImported: number;
+  /** Images added to an item that was already here ("attach-media" only). */
+  mediaAttached: number;
+  /** Images left out because their item was already here, their id was taken, or (attaching) they were trashed. */
   mediaSkipped: number;
+  /** Images left out because their existing item already held as many as it may ("attach-media" only). */
+  mediaOverLimit: number;
 }
 
 /**
@@ -54,16 +69,23 @@ export class TooManyImagesError extends Error {
 }
 
 export interface ImportPlan {
-  /** The image rows to import; the caller writes exactly these files before importing. */
+  /** Image rows of items the import adds; the caller writes exactly these files before importing. */
   media: Media[];
-  /** Image rows left out because their item is already here, or their id is taken. */
+  /** Image rows to append to items already here ("attach-media"); their files are written first too. */
+  attach: Media[];
+  /** Image rows left out; see `ImportSummary.mediaSkipped`. */
   mediaSkipped: number;
+  /** Image rows left out over an existing item's cap; see `ImportSummary.mediaOverLimit`. */
+  mediaOverLimit: number;
 }
 
 export interface PlanOptions {
+  mode?: ImportMode;
   /** Most live images one item may hold; the upload route's limit. */
   maxImagesPerItem?: number;
 }
+
+const DEFAULT_MAX_IMAGES_PER_ITEM = 50;
 
 /**
  * Decides which image rows an import will add, reading only (#45). It runs
@@ -75,10 +97,18 @@ export interface PlanOptions {
  * never changes what an existing item looks like. An image whose id is already
  * taken is skipped too.
  *
+ * In "attach-media" mode (#453) an existing item's live images with free ids are
+ * planned to be appended instead, in archive order, counting the item's own live
+ * images against the cap; the excess is left out and counted, not refused —
+ * attaching to an item that already has photos reaching the cap is an ordinary
+ * outcome. Trashed archive images are not attached: the point is to bring back
+ * photos, not to fill the trash.
+ *
  * @throws TooManyImagesError if an added item would hold more live images than allowed.
  */
 export function planImport(handle: DatabaseHandle, document: ExportDocument, options: PlanOptions = {}): ImportPlan {
-  const maxImagesPerItem = options.maxImagesPerItem ?? 50;
+  const mode = options.mode ?? "skip";
+  const maxImagesPerItem = options.maxImagesPerItem ?? DEFAULT_MAX_IMAGES_PER_ITEM;
   const existingItems = handle.items.existingIds(document.items.map((item) => item.id));
   const takenMedia = handle.media.existingIds(document.media.map((row) => row.id));
 
@@ -90,7 +120,30 @@ export function planImport(handle: DatabaseHandle, document: ExportDocument, opt
     if (count > maxImagesPerItem) throw new TooManyImagesError();
     live.set(row.itemId, count);
   }
-  return { media, mediaSkipped: document.media.length - media.length };
+
+  const attach: Media[] = [];
+  let mediaOverLimit = 0;
+  if (mode === "attach-media") {
+    const candidates = document.media
+      .filter((row) => existingItems.has(row.itemId) && !takenMedia.has(row.id) && row.deletedAt === null)
+      .sort((a, b) => a.position - b.position);
+    const counts = handle.media.liveCounts([...new Set(candidates.map((row) => row.itemId))]);
+    for (const row of candidates) {
+      const count = counts.get(row.itemId) ?? 0;
+      if (count >= maxImagesPerItem) {
+        mediaOverLimit += 1;
+        continue;
+      }
+      counts.set(row.itemId, count + 1);
+      attach.push(row);
+    }
+  }
+  return {
+    media,
+    attach,
+    mediaSkipped: document.media.length - media.length - attach.length - mediaOverLimit,
+    mediaOverLimit,
+  };
 }
 
 /**
@@ -125,23 +178,53 @@ export function importDocument(
   mode: ImportMode = "skip",
   plan?: ImportPlan,
 ): ImportSummary {
-  if (mode !== "skip") {
+  return importPlanned(handle, doc, mode, plan).summary;
+}
+
+export interface ImportOutcome {
+  summary: ImportSummary;
+  /**
+   * Attach rows that no longer fit when the transaction ran (an upload landed
+   * while the files were being written). They have no row, so the caller removes
+   * the files it wrote for them.
+   */
+  notAttached: Media[];
+}
+
+/**
+ * `importDocument`, also handing back the planned attach rows it could not insert
+ * (#453). The cap is checked again inside the transaction, because a background
+ * import (#452) writes its files over minutes while the item stays editable.
+ */
+export function importPlanned(
+  handle: DatabaseHandle,
+  doc: ExportDocument,
+  mode: ImportMode = "skip",
+  plan?: ImportPlan,
+  options: { maxImagesPerItem?: number } = {},
+): ImportOutcome {
+  if (!IMPORT_MODES.includes(mode)) {
     throw new Error(`Unsupported import mode: ${mode}`);
   }
   if (plan === undefined && doc.media.length > 0) {
     throw new Error("image rows cannot be imported without their files");
   }
   const planned = plan?.media ?? [];
+  const attach = plan?.attach ?? [];
+  const maxImagesPerItem = options.maxImagesPerItem ?? DEFAULT_MAX_IMAGES_PER_ITEM;
 
-  return handle.sqlite.transaction((): ImportSummary => {
+  return handle.sqlite.transaction((): ImportOutcome => {
     const summary: ImportSummary = {
       collectionsImported: 0,
       collectionsSkipped: 0,
       itemsImported: 0,
       itemsSkipped: 0,
       mediaImported: 0,
-      mediaSkipped: doc.media.length - planned.length,
+      mediaAttached: 0,
+      mediaSkipped: plan?.mediaSkipped ?? doc.media.length,
+      mediaOverLimit: plan?.mediaOverLimit ?? 0,
     };
+    const notAttached: Media[] = [];
 
     // Collections first so items can satisfy the foreign key constraint, and
     // items before the images that reference them.
@@ -165,7 +248,16 @@ export function importDocument(
       }
       summary.mediaImported += 1;
     }
+    // Empty unless the plan was made in "attach-media" mode.
+    for (const row of attach) {
+      if (handle.media.insertAttached(row, maxImagesPerItem)) {
+        summary.mediaAttached += 1;
+      } else {
+        summary.mediaOverLimit += 1;
+        notAttached.push(row);
+      }
+    }
 
-    return summary;
+    return { summary, notAttached };
   })();
 }
