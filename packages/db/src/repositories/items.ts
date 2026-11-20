@@ -1,8 +1,10 @@
 import { randomUUID } from "node:crypto";
 import {
+  checkImportedFields,
   type DeletedItem,
   type FieldDefinition,
   filterSuitsField,
+  type ImportIssue,
   ITEM_FILTER_MAX_VALUE_LENGTH,
   type Item,
   type ItemCounts,
@@ -27,6 +29,17 @@ export interface CreateItemInput {
   status?: ItemStatus;
   fields: Record<string, unknown>;
 }
+
+/** One row of a table import (#44): typed values keyed by field id. */
+export interface ImportRowInput {
+  status?: ItemStatus;
+  fields: Record<string, unknown>;
+}
+
+export type ImportRowsResult =
+  | { ok: true; created: number }
+  | { ok: false; reason: "not-found" }
+  | { ok: false; reason: "invalid"; row: number; issue: ImportIssue | "unknown-field" };
 
 /** A collection's live items and the owned ones among them — the dashboard's numbers (#42). */
 export interface CollectionItemTally {
@@ -326,12 +339,6 @@ export class ItemsRepository {
     return item;
   }
 
-  /**
-   * Inserts a fully-formed item (preserving its id and timestamps) for backup
-   * restore. Skips the row if an item with the same id already exists, so imports
-   * are idempotent and non-destructive. Synchronous so it can participate in a
-   * caller's transaction. Returns whether a row was inserted.
-   */
   /** Which of these ids already name an item, trashed or not (#45). */
   existingIds(ids: readonly string[]): Set<string> {
     const found = new Set<string>();
@@ -348,10 +355,55 @@ export class ItemsRepository {
     return found;
   }
 
+  /**
+   * Inserts a fully-formed item (preserving its id and timestamps) for backup
+   * restore. Skips the row if an item with the same id already exists, so imports
+   * are idempotent and non-destructive. Synchronous so it can participate in a
+   * caller's transaction. Returns whether a row was inserted.
+   */
   insertImported(item: Item): boolean {
     const validated = ItemSchema.parse(item);
     const result = this.#db.insert(schema.items).values(itemToRow(validated)).onConflictDoNothing().run();
     return result.changes > 0;
+  }
+
+  /**
+   * Adds rows from a table import (#44) in one transaction: all of them, or none.
+   * The collection is read inside the transaction, so it cannot be trashed or have
+   * its fields changed between the check and the inserts. Every row is re-checked
+   * against those fields (core's `checkImportedFields`), and a refusal names only
+   * the row's index and a fixed word, never a value.
+   */
+  importRows(collectionId: string, rows: readonly ImportRowInput[]): ImportRowsResult {
+    return this.#db.transaction((tx) => {
+      const collection = tx
+        .select({ fields: schema.collections.fields })
+        .from(schema.collections)
+        .where(and(eq(schema.collections.id, collectionId), isNull(schema.collections.deletedAt)))
+        .get();
+      if (!collection) return { ok: false, reason: "not-found" } as const;
+      const definitions = JSON.parse(collection.fields) as FieldDefinition[];
+      const now = new Date().toISOString();
+      // Every row is checked before the first insert, so a refusal writes nothing.
+      const items: Item[] = [];
+      for (const [index, row] of rows.entries()) {
+        const checked = checkImportedFields(definitions, row.fields);
+        if (!checked.ok) return { ok: false, reason: "invalid", row: index, issue: checked.issue } as const;
+        items.push(
+          ItemSchema.parse({
+            id: randomUUID(),
+            collectionId,
+            status: row.status ?? "owned",
+            fields: checked.fields,
+            createdAt: now,
+            updatedAt: now,
+            deletedAt: null,
+          }),
+        );
+      }
+      for (const item of items) tx.insert(schema.items).values(itemToRow(item)).run();
+      return { ok: true, created: items.length } as const;
+    });
   }
 
   async getById(id: string, options: ReadOptions = {}): Promise<Item | null> {
