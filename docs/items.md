@@ -44,7 +44,9 @@ How to write values:
 | Web address, email | A full `https://` address; an email address              |
 | Status             | Owned, Wanted or Ordered; an empty cell means Owned      |
 
-Photos can't come from a CSV file. Add them on each item's page, or restore a backup that holds them.
+Photos can't come from a CSV file. Add them on each item's page, or restore a backup that holds them. A collection with a required photo field can't be imported into from CSV, and the import page says so.
+
+A row with more cells than the header row has columns is skipped. That usually means a comma inside a value that isn't in quotes, such as `Smith, Jr.`; put the value in double quotes (`"Smith, Jr."`).
 
 ## Collected and remaining
 

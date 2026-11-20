@@ -715,6 +715,19 @@ test.describe("accessibility", () => {
     await expectNoAccessibilityViolations(page);
   });
 
+  test("the CSV import for a collection with a required image field", async ({ page, api }) => {
+    await api.reset();
+    const collection = await api.createCollection({
+      name: "Vinyl records",
+      fields: [...FIELDS, { id: "sleeve", label: "Sleeve", type: "image", required: true }],
+    });
+
+    await page.goto(`/collections/${collection.id}/import`);
+    await expect(page.getByText("“Sleeve” is a required image field", { exact: false })).toBeVisible();
+    await expect(page.getByLabel("CSV file")).toHaveCount(0);
+    await expectNoAccessibilityViolations(page);
+  });
+
   test("a refused CSV import", async ({ page, api }) => {
     await api.reset();
     const collection = await api.createCollection({ name: "Vinyl records", fields: FIELDS });

@@ -19,7 +19,13 @@ vi.mock("../../lib/api-client.js", async (importOriginal) => {
   };
 });
 
+vi.mock("../../lib/csv-import.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../lib/csv-import.js")>();
+  return { ...actual, readCsv: vi.fn(actual.readCsv) };
+});
+
 import { ApiError, getCollection, importItems } from "../../lib/api-client.js";
+import { type CsvReadResult, readCsv } from "../../lib/csv-import.js";
 
 const testRouteTree = rootRoute.addChildren([authenticatedRoute.addChildren([importItemsRoute])]);
 
@@ -70,6 +76,7 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup();
+  vi.mocked(readCsv).mockRestore?.();
 });
 
 describe("the CSV import page (#44)", () => {
@@ -201,5 +208,58 @@ describe("the CSV import page (#44)", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Add 2 items" }));
     expect(await screen.findByRole("alert")).toHaveTextContent(message);
     expect(screen.getByRole("button", { name: "Add 2 items" })).not.toHaveAttribute("aria-disabled");
+  });
+});
+
+describe("the CSV import page's edges (#44, branch review)", () => {
+  it("says up front that a collection with a required image field cannot be imported from CSV", async () => {
+    vi.mocked(getCollection).mockResolvedValue({
+      ...COLLECTION,
+      fields: [...COLLECTION.fields, { id: "f-photo", label: "Photo", type: "image", required: true }],
+    });
+    renderImport();
+    expect(
+      await screen.findByText(
+        "“Photo” is a required image field, and images can’t come from a CSV file, so items can’t be imported into this collection from CSV.",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByLabelText("CSV file")).not.toBeInTheDocument();
+  });
+
+  it("skips a row with more cells than the header, and says so", async () => {
+    renderImport();
+    await chooseFile("Title,Year\nFoo, Jr.,2020\nEmma,1816\n");
+    const skipped = await screen.findByRole("list", { name: "Rows that will be skipped" });
+    expect(skipped).toHaveTextContent("Row 1");
+    expect(skipped).toHaveTextContent("Column 3: more cells than the header row has columns");
+    expect(screen.getByRole("button", { name: "Add 1 item" })).toBeInTheDocument();
+  });
+
+  it("announces the same read error again for a second file, by inserting the alert anew", async () => {
+    renderImport();
+    await chooseFile("Title\n");
+    const first = await screen.findByRole("alert");
+    await chooseFile("Title\n");
+    await waitFor(() => expect(screen.getByRole("alert")).not.toBe(first));
+    expect(screen.getByRole("alert")).toHaveTextContent("That file has no rows under its header row.");
+  });
+
+  it("keeps the file chosen last when an earlier one finishes reading after it", async () => {
+    let finishFirst!: (result: CsvReadResult) => void;
+    vi.mocked(readCsv).mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finishFirst = resolve;
+        }),
+    );
+    renderImport();
+    await chooseFile("ignored");
+    await chooseFile(CSV);
+    expect(await screen.findByText("2 rows will be added.")).toBeInTheDocument();
+    finishFirst({ ok: true, table: { headers: ["Title"], rows: [["Stale"]] } });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(screen.getByText("2 rows will be added.")).toBeInTheDocument();
+    expect(screen.queryByRole("combobox", { name: "Title" })).toBeInTheDocument();
+    expect(screen.getByRole("combobox", { name: "Year" })).toBeInTheDocument();
   });
 });

@@ -1,4 +1,4 @@
-import { type FieldDefinition, type ImportIssue, ITEM_STATUSES, type ItemStatus } from "@mycollections/core";
+import { type FieldDefinition, ITEM_STATUSES, type ItemStatus } from "@mycollections/core";
 import { createRoute, Link } from "@tanstack/react-router";
 import type { TFunction } from "i18next";
 import { type ChangeEvent, type MouseEvent, useEffect, useId, useMemo, useRef, useState } from "react";
@@ -8,10 +8,12 @@ import { FieldValue } from "../../components/FieldValue.js";
 import { Icon } from "../../components/Icon.js";
 import { CollectionDetailSkeleton } from "../../components/Skeleton.js";
 import {
+  type CellIssue,
   type ColumnTarget,
   type CsvReadFailure,
   type CsvTable,
   convertRows,
+  fieldsCsvCannotFill,
   mappingProblems,
   readCsv,
   suggestMapping,
@@ -53,10 +55,11 @@ function parseTarget(value: string): ColumnTarget {
 /** Why a cell was refused, in words that say what the field wanted. */
 function issueReason(
   t: TFunction<"collections">,
-  issue: ImportIssue,
+  issue: CellIssue,
   field: FieldDefinition | undefined,
   statusLabels: Record<ItemStatus, string>,
 ): string {
+  if (issue === "extra-cells") return t("import_issue_extra_cells");
   if (issue === "required") return t("import_issue_required");
   if (issue === "too-long") return t("import_issue_too_long");
   if (!field)
@@ -107,6 +110,8 @@ function ImportItemsPage() {
   const columnsHeadingRef = useRef<HTMLHeadingElement>(null);
   const doneHeadingRef = useRef<HTMLHeadingElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  // Which file choice is the latest: a slow read of an earlier file must not land over it.
+  const latestRead = useRef(0);
   // Bumped on each file read, so the move into "Match columns" happens once per file.
   const [readCount, setReadCount] = useState(0);
 
@@ -142,7 +147,12 @@ function ImportItemsPage() {
     if (!file || !collection) return;
     importItems.reset();
     setDone(null);
+    // Cleared first, so a second file refused for the same reason inserts its alert
+    // anew and is announced again, rather than leaving the first one in place.
+    setReadError(null);
+    const read = ++latestRead.current;
     const result = await readCsv(file);
+    if (read !== latestRead.current) return;
     if (!result.ok) {
       setChosen(null);
       setReadError(result.reason);
@@ -203,6 +213,23 @@ function ImportItemsPage() {
         ) : (
           <CollectionDetailSkeleton label={t("collection_loading")} count={1} />
         )}
+      </div>
+    );
+  }
+
+  // Decided with the owner: no column can fill a required image field, so the page
+  // says so instead of offering a mapping whose Add could never be pressed.
+  const imageFieldsRequired = fieldsCsvCannotFill(fields);
+  if (imageFieldsRequired.length > 0) {
+    return (
+      <div className="import-items-page">
+        {backLink}
+        <h1>{t("import_heading", { name: collection.name })}</h1>
+        {imageFieldsRequired.map((fieldId) => (
+          <p key={fieldId}>
+            {t("import_unavailable_image", { field: fields.find((field) => field.id === fieldId)?.label ?? "" })}
+          </p>
+        ))}
       </div>
     );
   }
@@ -362,9 +389,10 @@ function ImportItemsPage() {
                           {t("import_skipped_row", { row: row.row })}
                           <ul>
                             {row.issues.map(({ column, issue }) => {
-                              const target = chosen.mapping[column] as ColumnTarget;
+                              // Undefined for an extra cell past the header, which has no target.
+                              const target = chosen.mapping[column];
                               const field =
-                                target.kind === "field" ? fields.find((f) => f.id === target.fieldId) : undefined;
+                                target?.kind === "field" ? fields.find((f) => f.id === target.fieldId) : undefined;
                               return (
                                 <li key={column}>
                                   {t("import_issue_cell", {
