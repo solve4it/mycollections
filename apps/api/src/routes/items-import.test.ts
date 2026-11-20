@@ -1,4 +1,9 @@
-import { type Collection, type FieldDefinition, ITEM_IMPORT_MAX_ROWS } from "@mycollections/core";
+import {
+  type Collection,
+  type FieldDefinition,
+  ITEM_IMPORT_MAX_CELL_LENGTH,
+  ITEM_IMPORT_MAX_ROWS,
+} from "@mycollections/core";
 import { type DatabaseHandle, openDatabase } from "@mycollections/db";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { buildApp } from "../app.js";
@@ -113,12 +118,18 @@ describe("POST /api/collections/:id/items/import (#44)", () => {
     expect(await titles()).toEqual([]);
   });
 
-  it("takes a full-size import well past Fastify's default body limit", async () => {
-    const title = "t".repeat(200);
-    const items = Array.from({ length: ITEM_IMPORT_MAX_ROWS }, () => ({ fields: { title } }));
-    const res = await post({ items });
+  it("takes a body well past Fastify's default 1 MiB limit", async () => {
+    // Few rows of the longest text a cell may hold: past the default limit in bytes
+    // without 10,000 rows of work, whose time depends on how busy the machine is
+    // (5.6 s against a 5 s timeout on a shared CI runner). The row cap has its own
+    // tests: core's schema at exactly the cap, and the 413 one past it here.
+    const title = "t".repeat(ITEM_IMPORT_MAX_CELL_LENGTH);
+    const items = Array.from({ length: 150 }, () => ({ fields: { title } }));
+    const body = JSON.stringify({ items });
+    expect(body.length).toBeGreaterThan(1024 * 1024);
+    const res = await post(body);
     expect(res.statusCode).toBe(201);
-    expect(res.json()).toEqual({ created: ITEM_IMPORT_MAX_ROWS });
+    expect(res.json()).toEqual({ created: 150 });
   });
 
   it("answers 404 for a missing or trashed collection without writing", async () => {
