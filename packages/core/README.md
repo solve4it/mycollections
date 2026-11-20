@@ -56,6 +56,26 @@ Only owned items count toward the target ("collected"); wanted and ordered ones 
 
 Items that compare equal keep insertion order in the sort's own direction, so a descending key reverses ties too. Empty values sort last in both directions, which makes a descending `name` or field sort the exact reverse of its ascending one only when no value is empty; `status`, `createdAt` and `updatedAt` are never empty. So `-status` lists wanted items newest first, not merely wanted before owned.
 
+### Importing items from a table (#44)
+
+`item-import.ts` holds the one set of rules the CSV import uses in two places: the browser turns each cell into a typed value for its preview with `coerceCell()`, and the API re-checks the typed rows it receives with `checkImportedFields()`. The server never re-reads strings, so the preview and the import cannot disagree.
+
+| Field type      | A cell is read as                                                                                      | Empty cell |
+| --------------- | ------------------------------------------------------------------------------------------------------ | ---------- |
+| `text`          | The text, trimmed                                                                                      | `""`       |
+| `number`        | A plain decimal (`42`, `-3.25`, `.5`); no `1e3`, `0x10`, `Infinity` or thousands commas                | `null`     |
+| `currency`      | An optional minus, one currency symbol, digits grouped by commas in threes or not at all (`$1,234.56`) | `null`     |
+| `rating`        | A whole number from 0 to the field's `max`                                                             | `null`     |
+| `boolean`       | `true`/`yes`/`y`/`1` or `false`/`no`/`n`/`0`, any case                                                 | `false`    |
+| `date`          | A real calendar date as `YYYY-MM-DD`                                                                   | `""`       |
+| `url` / `email` | An `http(s)` URL / an email address                                                                    | `""`       |
+| `select`        | An option exactly, else the one option equal ignoring case                                             | `""`       |
+| `multiselect`   | Options separated by `;` (`MULTISELECT_SEPARATOR`), each matched as for `select`, duplicates dropped   | `[]`       |
+| `tags`          | Split on commas, trimmed, empties dropped (as the item form does)                                      | `[]`       |
+| `image`         | Never imported: images arrive with their files                                                         | `""`       |
+
+An empty cell stores what the item form stores for an untouched field (`emptyFieldValue()`), so imported items filter and sort like hand-made ones. A required field refuses an empty cell, except a yes/no field, where an unchecked box is an answer. `coerceStatus()` reads a status key or the current language's label, passed in by the caller since core holds no translations. A refusal is a fixed word (`invalid`, `required`, `too-long`), never the value. `ItemImportRequestSchema` caps a request at `ITEM_IMPORT_MAX_ROWS` (10,000) rows, and every text value at `ITEM_IMPORT_MAX_CELL_LENGTH` (10,000) characters.
+
 ### Provider contracts
 
 | Export                                                    | Purpose                                                                                                                                                  |
