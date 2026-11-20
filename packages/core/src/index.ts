@@ -45,6 +45,21 @@ export {
   parseItemFilters,
 } from "./item-filter.js";
 export {
+  type CheckedFields,
+  type CoerceResult,
+  checkImportedFields,
+  coerceCell,
+  coerceStatus,
+  emptyFieldValue,
+  type ImportIssue,
+  ITEM_IMPORT_MAX_CELL_LENGTH,
+  ITEM_IMPORT_MAX_ROWS,
+  type ItemImportRequest,
+  ItemImportRequestSchema,
+  MULTISELECT_SEPARATOR,
+  validateFieldValue,
+} from "./item-import.js";
+export {
   formatItemSort,
   ITEM_SEARCH_MAX_LENGTH,
   type ItemSort,
