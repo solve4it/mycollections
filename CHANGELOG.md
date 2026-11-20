@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.0.9](https://github.com/solve4it/mycollections/compare/mycollections-v0.0.8...mycollections-v0.0.9) (2026-11-20)
+
+
+### Features
+
+* **api,web:** background archive imports with progress, and attach photos to existing items ([#452](https://github.com/solve4it/mycollections/issues/452), [#453](https://github.com/solve4it/mycollections/issues/453)) ([#462](https://github.com/solve4it/mycollections/issues/462)) ([ce1c452](https://github.com/solve4it/mycollections/commit/ce1c452d1f102ebe3709790e2eb9d27568df7c27))
+* **core:** shared cell coercion and row checks for item import ([#44](https://github.com/solve4it/mycollections/issues/44), 1/4) ([#466](https://github.com/solve4it/mycollections/issues/466)) ([b9d0054](https://github.com/solve4it/mycollections/commit/b9d0054e5b2f95e44e46c6d37f3f3ab083ac737d))
+* **db,api:** add the item import route, all rows or none ([#44](https://github.com/solve4it/mycollections/issues/44), 2/4) ([#467](https://github.com/solve4it/mycollections/issues/467)) ([022b257](https://github.com/solve4it/mycollections/commit/022b25778187e794e51121e484127cb34b99562f))
+* **web:** add the CSV import page to a collection ([#44](https://github.com/solve4it/mycollections/issues/44), 4/4) ([#470](https://github.com/solve4it/mycollections/issues/470)) ([cb9fdf6](https://github.com/solve4it/mycollections/commit/cb9fdf68ea92345c915567489e010521ab5504fd))
+* **web:** give the web app a favicon ([#472](https://github.com/solve4it/mycollections/issues/472)) ([#473](https://github.com/solve4it/mycollections/issues/473)) ([b5c4b21](https://github.com/solve4it/mycollections/commit/b5c4b2118e20d509c44dd3fb9675815136b17668))
+* **web:** read, map and type CSV rows for item import ([#44](https://github.com/solve4it/mycollections/issues/44), 3/4) ([#469](https://github.com/solve4it/mycollections/issues/469)) ([61c4886](https://github.com/solve4it/mycollections/commit/61c48868b4cf0bf03370b6f45ea7c631c8e67b54))
+
+
+### Bug Fixes
+
+* **deps:** update all non-major dependencies ([#458](https://github.com/solve4it/mycollections/issues/458)) ([3aaf7a3](https://github.com/solve4it/mycollections/commit/3aaf7a3365a3ebbc7c2f3909e5a3442475be5be5))
+* **docs-site:** add the favicon and check built asset URLs ([#332](https://github.com/solve4it/mycollections/issues/332)) ([#471](https://github.com/solve4it/mycollections/issues/471)) ([cb646d1](https://github.com/solve4it/mycollections/commit/cb646d1c9f1dbf41b6d57f2492ec49a74b83adc6))
+* **web:** hold the job poll in Settings import tests instead of racing it ([#463](https://github.com/solve4it/mycollections/issues/463)) ([#464](https://github.com/solve4it/mycollections/issues/464)) ([4a95728](https://github.com/solve4it/mycollections/commit/4a95728695ab246f5c0d60064b8f5038839d4b68))
+
 ## [0.0.8](https://github.com/solve4it/mycollections/compare/mycollections-v0.0.7...mycollections-v0.0.8) (2026-11-14)
 
 
