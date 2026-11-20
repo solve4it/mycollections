@@ -110,7 +110,16 @@ describe("GET /api/export as an archive (#45)", () => {
         headers: { ...auth, "content-type": "application/zip" },
         payload: exported.rawPayload,
       });
-      expect(res.json()).toMatchObject({ collectionsImported: 1, itemsImported: 1, mediaImported: 1 });
+      // An archive import runs in the background (#452): follow the job to its end.
+      expect(res.statusCode).toBe(202);
+      let job = res.json() as { phase: string; summary: unknown };
+      while (job.phase === "images" || job.phase === "saving") {
+        await new Promise((resolve) => setTimeout(resolve, 5));
+        job = (
+          await target.inject({ method: "GET", url: res.headers.location as string, headers: auth })
+        ).json() as typeof job;
+      }
+      expect(job.summary).toMatchObject({ collectionsImported: 1, itemsImported: 1, mediaImported: 1 });
       expect(await fresh.media.listByItem(item.id)).toEqual([image]);
       const served = await target.inject({
         method: "GET",

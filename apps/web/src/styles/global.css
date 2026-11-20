@@ -1598,6 +1598,28 @@ p[role="alert"] {
   color: var(--ink);
 }
 
+/* A background import's progress (#452): the native bar, themed rather than
+   replaced — it is already a named progressbar, and goes indeterminate by itself
+   when it loses its value while saving. The count under it is the content; the
+   bar repeats it for the eye. */
+.import-progress {
+  display: grid;
+  gap: var(--space-1);
+  max-inline-size: 28rem;
+  margin-block: var(--space-3);
+}
+
+.import-progress progress {
+  inline-size: 100%;
+  block-size: 0.75rem;
+  accent-color: var(--stamp);
+}
+
+.import-progress .form-hint {
+  margin: 0;
+  font-family: var(--font-mono);
+}
+
 /* Settings: trash (#35). Rows are the item-row card at a smaller weight — same
    card, same border, same two-column split of content and actions — because a
    trashed row is still a catalog entry, just one on its way out. */

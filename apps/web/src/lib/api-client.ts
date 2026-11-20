@@ -317,8 +317,32 @@ export interface ImportSummary {
   itemsImported: number;
   itemsSkipped: number;
   mediaImported: number;
+  /** Images added to items that were already here (#453). */
+  mediaAttached: number;
   mediaSkipped: number;
+  /** Images left out because their item already held as many as one may (#453). */
+  mediaOverLimit: number;
 }
+
+/**
+ * How an import treats items that are already here (#453): "skip" leaves them
+ * exactly as they are; "attach-media" also adds the archive's photos of them.
+ */
+export type ImportMode = "skip" | "attach-media";
+
+/** A background archive import, as `GET /api/import/:jobId` reports it (#452). */
+export interface ImportJob {
+  id: string;
+  phase: "images" | "saving" | "done" | "failed";
+  imagesDone: number;
+  imagesTotal: number;
+  summary: ImportSummary | null;
+  /** A fixed reason, never a message: the file's fault, or the server's. */
+  failure: "invalid" | "server" | null;
+}
+
+/** A JSON import finishes inside its request; an archive import answers with its job (#452). */
+export type ImportResult = { summary: ImportSummary } | { job: ImportJob };
 
 /** Fetches the full export — a zip of the document and its images (#45) — as a Blob for a browser download. */
 export async function exportData(): Promise<Blob> {
@@ -341,19 +365,36 @@ export async function exportCollection(id: string): Promise<Blob> {
 export type ImportInput = { document: unknown } | { archive: Blob };
 
 /**
- * Sends a backup to the server and returns the import summary. An archive goes
- * as the raw body with its own type — never read, never re-encoded — so the
- * server sees exactly the file the user chose. A 413 (too large) and a 409
- * (another import running) come back as `ApiError` with that status.
+ * Sends a backup to the server. A JSON backup comes back with its summary; an
+ * archive comes back with its background job (#452), whose progress and outcome
+ * `getImportJob` reads. An archive goes as the raw body with its own type —
+ * never read, never re-encoded — so the server sees exactly the file the user
+ * chose. A 413 (too large) and a 409 (another import running) come back as
+ * `ApiError` with that status.
  */
-export async function importData(input: ImportInput): Promise<ImportSummary> {
+export async function importData(input: ImportInput, mode: ImportMode = "skip"): Promise<ImportResult> {
   const init: RequestInit =
     "archive" in input
       ? { method: "POST", body: input.archive, headers: { "Content-Type": "application/zip" } }
       : { method: "POST", body: JSON.stringify(input.document) };
-  const res = await request("/api/import", init);
+  const res = await request(mode === "skip" ? "/api/import" : `/api/import?mode=${mode}`, init);
   if (!res.ok) throw new ApiError(res.status);
-  return res.json() as Promise<ImportSummary>;
+  if (res.status === 202) return { job: (await res.json()) as ImportJob };
+  return { summary: (await res.json()) as ImportSummary };
+}
+
+/** One background import (#452). A 404 — superseded, or lost to a server restart — throws `ApiError(404)`. */
+export async function getImportJob(id: string): Promise<ImportJob> {
+  const res = await request(`/api/import/${id}`);
+  if (!res.ok) throw new ApiError(res.status);
+  return res.json() as Promise<ImportJob>;
+}
+
+/** The running import, or the last one to finish; null when the server has run none (#452). */
+export async function getCurrentImport(): Promise<ImportJob | null> {
+  const res = await request("/api/import/current");
+  if (!res.ok) throw new ApiError(res.status);
+  return ((await res.json()) as { job: ImportJob | null }).job;
 }
 
 /**

@@ -100,7 +100,9 @@ describe("POST /api/import", () => {
         itemsImported: 1,
         itemsSkipped: 0,
         mediaImported: 0,
+        mediaAttached: 0,
         mediaSkipped: 0,
+        mediaOverLimit: 0,
       });
       expect(await fresh.collections.list()).toEqual([collection]);
       expect(await fresh.items.listByCollection(collection.id)).toEqual([item]);
@@ -127,7 +129,9 @@ describe("POST /api/import", () => {
         itemsImported: 0,
         itemsSkipped: 1,
         mediaImported: 0,
+        mediaAttached: 0,
         mediaSkipped: 0,
+        mediaOverLimit: 0,
       });
     } finally {
       fresh.close();

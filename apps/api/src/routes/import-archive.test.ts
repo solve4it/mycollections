@@ -104,6 +104,44 @@ function postZip(app: Awaited<ReturnType<typeof buildApp>>, body: Buffer) {
   });
 }
 
+type App = Awaited<ReturnType<typeof buildApp>>;
+type Reply = Awaited<ReturnType<App["inject"]>>;
+
+interface JobState {
+  id: string;
+  phase: "images" | "saving" | "done" | "failed";
+  imagesDone: number;
+  imagesTotal: number;
+  summary: Record<string, number> | null;
+  failure: "invalid" | "server" | null;
+}
+
+/** Follows a 202 to its job's end (#452), polling the job the Location header names. */
+async function finished(app: App, res: Reply): Promise<JobState> {
+  expect(res.statusCode).toBe(202);
+  const location = res.headers.location as string;
+  const deadline = Date.now() + 5_000;
+  for (;;) {
+    const poll = await app.inject({ method: "GET", url: location, headers: auth });
+    expect(poll.statusCode).toBe(200);
+    const job = poll.json() as JobState;
+    if (job.phase === "done" || job.phase === "failed") return job;
+    if (Date.now() > deadline) throw new Error(`import still ${job.phase}`);
+    await new Promise((resolve) => setTimeout(resolve, 5));
+  }
+}
+
+/** Posts an archive and waits for its import to end. */
+async function importZip(app: App, body: Buffer, url = "/api/import"): Promise<JobState> {
+  const res = await app.inject({
+    method: "POST",
+    url,
+    headers: { ...auth, "content-type": "application/zip" },
+    payload: body,
+  });
+  return finished(app, res);
+}
+
 function mediaFiles(): string[] {
   const dir = join(root, "media");
   return readdirSync(dir, { recursive: true, withFileTypes: true })
@@ -120,15 +158,23 @@ describe("POST /api/import with an archive (#45)", () => {
       [rows[1]?.id as string, await webp(4, 4)],
     ]);
     const { app } = await targetApp();
-    const res = await postZip(app, await archive(document, images));
-    expect(res.statusCode).toBe(200);
-    expect(res.json()).toEqual({
-      collectionsImported: 1,
-      collectionsSkipped: 0,
-      itemsImported: 1,
-      itemsSkipped: 0,
-      mediaImported: 2,
-      mediaSkipped: 0,
+    const job = await importZip(app, await archive(document, images));
+    expect(job).toEqual({
+      id: expect.stringMatching(/^[0-9a-f-]{36}$/),
+      phase: "done",
+      imagesDone: 2,
+      imagesTotal: 2,
+      failure: null,
+      summary: {
+        collectionsImported: 1,
+        collectionsSkipped: 0,
+        itemsImported: 1,
+        itemsSkipped: 0,
+        mediaImported: 2,
+        mediaAttached: 0,
+        mediaSkipped: 0,
+        mediaOverLimit: 0,
+      },
     });
 
     const restored = await target.media.listByItem(rows[0]?.itemId as string);
@@ -149,7 +195,7 @@ describe("POST /api/import with an archive (#45)", () => {
   it("leaves nothing behind in the import folder", async () => {
     const { document, rows } = await sourceDocument(1);
     const { app } = await targetApp();
-    await postZip(app, await archive(document, new Map([[rows[0]?.id as string, await webp()]])));
+    await importZip(app, await archive(document, new Map([[rows[0]?.id as string, await webp()]])));
     expect(readdirSync(join(root, "media", ".import"))).toEqual([]);
   });
 
@@ -160,9 +206,10 @@ describe("POST /api/import with an archive (#45)", () => {
       [rows[1]?.id as string, Buffer.from("plain text pretending to be an image")],
     ]);
     const { app } = await targetApp();
-    const res = await postZip(app, await archive(document, images));
-    expect(res.statusCode).toBe(400);
-    expect(res.json()).toEqual(INVALID);
+    // Images are processed after the 202, so this refusal is the job's (#452): a
+    // fixed reason, never the pipeline's message.
+    const job = await importZip(app, await archive(document, images));
+    expect(job).toMatchObject({ phase: "failed", failure: "invalid", summary: null });
     expect(mediaFiles()).toEqual([]);
     expect(await target.collections.list({ includeDeleted: true })).toEqual([]);
   });
@@ -171,12 +218,12 @@ describe("POST /api/import with an archive (#45)", () => {
     const { document, rows } = await sourceDocument(1);
     const row = rows[0] as Media;
     const { app } = await targetApp();
-    expect((await postZip(app, await archive(document, new Map([[row.id, await webp(8, 6)]])))).statusCode).toBe(200);
+    expect((await importZip(app, await archive(document, new Map([[row.id, await webp(8, 6)]])))).phase).toBe("done");
     const path = join(root, "media", row.itemId, `${row.id}.webp`);
     const before = readFileSync(path);
 
-    const again = await postZip(app, await archive(document, new Map([[row.id, await webp(30, 30)]])));
-    expect(again.json()).toMatchObject({ mediaImported: 0, mediaSkipped: 1 });
+    const again = await importZip(app, await archive(document, new Map([[row.id, await webp(30, 30)]])));
+    expect(again.summary).toMatchObject({ mediaImported: 0, mediaSkipped: 1 });
     expect(readFileSync(path).equals(before)).toBe(true);
   });
 
@@ -201,13 +248,14 @@ describe("POST /api/import with an archive (#45)", () => {
     const { app } = await targetApp({ limiter });
     const body = await archive(document, new Map([[rows[0]?.id as string, await webp()]]));
 
-    const first = postZip(app, body);
-    await new Promise((resolve) => setTimeout(resolve, 50));
+    // The first answers 202 and goes on in the background, held at its first image.
+    const first = await postZip(app, body);
+    expect(first.statusCode).toBe(202);
     const second = await postZip(app, body);
     expect(second.statusCode).toBe(409);
     expect(second.json()).toEqual({ statusCode: 409, error: "Conflict", message: "Another import is in progress" });
     release();
-    expect((await first).statusCode).toBe(200);
+    expect((await finished(app, first)).phase).toBe("done");
   });
 });
 
@@ -276,15 +324,14 @@ describe("review of #449", () => {
     const { app } = await targetApp({ store: broken });
     expect((await postZip(app, body)).statusCode).toBe(500);
     fail = false;
-    expect((await postZip(app, body)).statusCode).toBe(200);
+    expect((await importZip(app, body)).phase).toBe("done");
   });
 
   it("refuses a JSON import while an archive import is running, so neither can change what the other planned", async () => {
     const { document, rows } = await sourceDocument(1);
     const { limiter, release } = heldLimiter();
     const { app } = await targetApp({ limiter });
-    const first = postZip(app, await archive(document, new Map([[rows[0]?.id as string, await webp()]])));
-    await new Promise((resolve) => setTimeout(resolve, 50));
+    const first = await postZip(app, await archive(document, new Map([[rows[0]?.id as string, await webp()]])));
     const json = await app.inject({
       method: "POST",
       url: "/api/import",
@@ -293,7 +340,7 @@ describe("review of #449", () => {
     });
     expect(json.statusCode).toBe(409);
     release();
-    expect((await first).json()).toMatchObject({ itemsImported: 1, mediaImported: 1 });
+    expect((await finished(app, first)).summary).toMatchObject({ itemsImported: 1, mediaImported: 1 });
   });
 
   it.each(["application/x-zip-compressed", "Application/ZIP", "application/zip; charset=binary"])(
@@ -307,7 +354,7 @@ describe("review of #449", () => {
         headers: { ...auth, "content-type": contentType },
         payload: await archive(document, new Map([[rows[0]?.id as string, await webp()]])),
       });
-      expect(res.statusCode).toBe(200);
+      expect((await finished(app, res)).phase).toBe("done");
     },
   );
 
@@ -316,8 +363,8 @@ describe("review of #449", () => {
     await source.items.create({ collectionId: collection.id, fields: { title: "Kind of Blue" } });
     const { media: _media, ...rest } = await exportBackup(source);
     const { app } = await targetApp();
-    const res = await postZip(app, await archive({ ...rest, version: 1 } as unknown as ExportDocument, new Map()));
-    expect(res.json()).toMatchObject({ collectionsImported: 1, itemsImported: 1, mediaImported: 0 });
+    const job = await importZip(app, await archive({ ...rest, version: 1 } as unknown as ExportDocument, new Map()));
+    expect(job.summary).toMatchObject({ collectionsImported: 1, itemsImported: 1, mediaImported: 0 });
   });
 
   it("clears a stray file no row names instead of failing the import on it", async () => {
@@ -325,8 +372,8 @@ describe("review of #449", () => {
     const row = rows[0] as Media;
     const { app, store } = await targetApp();
     await store.write(row.itemId, row.id, { display: Buffer.from("stray"), thumb: Buffer.from("stray") });
-    const res = await postZip(app, await archive(document, new Map([[row.id, await webp()]])));
-    expect(res.json()).toMatchObject({ mediaImported: 1 });
+    const job = await importZip(app, await archive(document, new Map([[row.id, await webp()]])));
+    expect(job.summary).toMatchObject({ mediaImported: 1 });
   });
 
   it("stops waiting for an upload that goes quiet, freeing the lock and the disk", async () => {
@@ -352,8 +399,8 @@ describe("review of #449", () => {
       await new Promise((resolve) => setTimeout(resolve, 10));
     }
     expect(readdirSync(join(root, "media", ".import"))).toEqual([]);
-    const next = await postZip(app, await archive(document, new Map([[rows[0]?.id as string, await webp()]])));
-    expect(next.statusCode).toBe(200);
+    const next = await importZip(app, await archive(document, new Map([[rows[0]?.id as string, await webp()]])));
+    expect(next.phase).toBe("done");
   });
 
   it("stops at the abort check between images and removes what it wrote", async () => {
@@ -380,5 +427,196 @@ describe("review of #449", () => {
     ).rejects.toThrow(/aborted/);
     expect(mediaFiles()).toEqual([]);
     expect(await target.collections.list({ includeDeleted: true })).toEqual([]);
+  });
+});
+
+describe("archive imports run in the background (#452)", () => {
+  it("answers 202 once the archive is checked, naming the job, and reports progress until it is done", async () => {
+    const { document, rows } = await sourceDocument(2);
+    const images = new Map(await Promise.all(rows.map(async (row) => [row.id, await webp()] as const)));
+    const { limiter, release } = heldLimiter();
+    const { app } = await targetApp({ limiter });
+
+    const res = await postZip(app, await archive(document, images));
+    expect(res.statusCode).toBe(202);
+    const accepted = res.json() as JobState;
+    expect(accepted).toEqual({
+      id: expect.stringMatching(/^[0-9a-f-]{36}$/),
+      phase: "images",
+      imagesDone: 0,
+      imagesTotal: 2,
+      summary: null,
+      failure: null,
+    });
+    expect(res.headers.location).toBe(`/api/import/${accepted.id}`);
+    expect(res.headers["retry-after"]).toBe("1");
+
+    // Held at its first image: nothing is in the database yet.
+    const running = await app.inject({ method: "GET", url: `/api/import/${accepted.id}`, headers: auth });
+    expect(running.json()).toMatchObject({ phase: "images", imagesDone: 0, imagesTotal: 2 });
+    expect(running.headers["retry-after"]).toBe("1");
+    expect(await target.collections.list({ includeDeleted: true })).toEqual([]);
+
+    release();
+    const done = await finished(app, res);
+    expect(done).toMatchObject({ id: accepted.id, phase: "done", imagesDone: 2, imagesTotal: 2 });
+    expect(done.summary).toMatchObject({ itemsImported: 1, mediaImported: 2 });
+    const after = await app.inject({ method: "GET", url: `/api/import/${accepted.id}`, headers: auth });
+    expect(after.headers["retry-after"]).toBeUndefined();
+  });
+
+  it("GET /api/import/current is null before any import, and then the latest job", async () => {
+    const { document, rows } = await sourceDocument(1);
+    const { app } = await targetApp();
+    const before = await app.inject({ method: "GET", url: "/api/import/current", headers: auth });
+    expect(before.statusCode).toBe(200);
+    expect(before.json()).toEqual({ job: null });
+
+    const job = await importZip(app, await archive(document, new Map([[rows[0]?.id as string, await webp()]])));
+    const after = await app.inject({ method: "GET", url: "/api/import/current", headers: auth });
+    expect(after.json()).toEqual({ job });
+  });
+
+  it("answers 404 for a job it does not know, and 400 for an id that is not one", async () => {
+    const { app } = await targetApp();
+    const unknown = await app.inject({
+      method: "GET",
+      url: "/api/import/0b1c2d3e-4f50-4617-8293-a4b5c6d7e8f9",
+      headers: auth,
+    });
+    expect(unknown.statusCode).toBe(404);
+    expect(unknown.json()).toEqual({ statusCode: 404, error: "Not Found", message: "Import not found" });
+    expect((await app.inject({ method: "GET", url: "/api/import/nope", headers: auth })).statusCode).toBe(400);
+  });
+
+  it("needs the token to read a job", async () => {
+    const { app } = await targetApp();
+    expect((await app.inject({ method: "GET", url: "/api/import/current" })).statusCode).toBe(401);
+  });
+
+  it("still refuses a bad archive in the request itself, before any job exists", async () => {
+    const { document, rows } = await sourceDocument(3);
+    const images = new Map(await Promise.all(rows.map(async (row) => [row.id, await webp()] as const)));
+    const store = await MediaStore.open(join(root, "media"));
+    const app = await buildApp({ db: target, token: TOKEN, media: { store, maxImagesPerItem: 2 } });
+    const res = await postZip(app, await archive(document, images));
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toEqual(INVALID);
+    expect((await app.inject({ method: "GET", url: "/api/import/current", headers: auth })).json()).toEqual({
+      job: null,
+    });
+    expect(readdirSync(join(root, "media", ".import"))).toEqual([]);
+  });
+
+  it("keeps the archive until the job ends, then removes it", async () => {
+    const { document, rows } = await sourceDocument(1);
+    const { limiter, release } = heldLimiter();
+    const { app } = await targetApp({ limiter });
+    const res = await postZip(app, await archive(document, new Map([[rows[0]?.id as string, await webp()]])));
+    expect(readdirSync(join(root, "media", ".import"))).toHaveLength(1);
+    release();
+    await finished(app, res);
+    expect(readdirSync(join(root, "media", ".import"))).toEqual([]);
+  });
+
+  it("closing the server mid-import stops the job and removes what it wrote", async () => {
+    const { document, rows } = await sourceDocument(1);
+    const { limiter, release } = heldLimiter();
+    const { app } = await targetApp({ limiter });
+    const res = await postZip(app, await archive(document, new Map([[rows[0]?.id as string, await webp()]])));
+    expect(res.statusCode).toBe(202);
+    const closing = app.close();
+    release();
+    await closing;
+    expect(mediaFiles()).toEqual([]);
+    expect(readdirSync(join(root, "media", ".import"))).toEqual([]);
+    expect(await target.collections.list({ includeDeleted: true })).toEqual([]);
+  });
+});
+
+describe("attaching an archive's images to items already here (#453)", () => {
+  /** The target already holds the document's collection and item, without their images. */
+  async function targetWithoutImages(document: ExportDocument) {
+    const { app } = await targetApp();
+    const json = await app.inject({
+      method: "POST",
+      url: "/api/import",
+      headers: { ...auth, "content-type": "application/json" },
+      payload: JSON.stringify({ ...document, media: [] }),
+    });
+    expect(json.statusCode).toBe(200);
+    return app;
+  }
+
+  it("skips them by default, and attaches them with mode=attach-media", async () => {
+    const { document, rows } = await sourceDocument(2);
+    const images = new Map(await Promise.all(rows.map(async (row) => [row.id, await webp()] as const)));
+    const app = await targetWithoutImages(document);
+    const body = await archive(document, images);
+
+    const skipped = await importZip(app, body);
+    expect(skipped.summary).toMatchObject({ itemsSkipped: 1, mediaImported: 0, mediaAttached: 0, mediaSkipped: 2 });
+    expect(skipped.imagesTotal).toBe(0);
+    expect(mediaFiles()).toEqual([]);
+
+    const attached = await importZip(app, body, "/api/import?mode=attach-media");
+    expect(attached).toMatchObject({ phase: "done", imagesTotal: 2, imagesDone: 2 });
+    expect(attached.summary).toEqual({
+      collectionsImported: 0,
+      collectionsSkipped: 1,
+      itemsImported: 0,
+      itemsSkipped: 1,
+      mediaImported: 0,
+      mediaAttached: 2,
+      mediaSkipped: 0,
+      mediaOverLimit: 0,
+    });
+    const itemId = rows[0]?.itemId as string;
+    expect((await target.media.listByItem(itemId)).map((row) => [row.id, row.position])).toEqual([
+      [rows[0]?.id, 0],
+      [rows[1]?.id, 1],
+    ]);
+    expect(mediaFiles()).toHaveLength(4);
+  });
+
+  it("reports images over the item's cap and writes no file for them", async () => {
+    const { document, rows } = await sourceDocument(3);
+    const images = new Map(await Promise.all(rows.map(async (row) => [row.id, await webp()] as const)));
+    const store = await MediaStore.open(join(root, "media"));
+    const app = await buildApp({ db: target, token: TOKEN, media: { store, maxImagesPerItem: 2 } });
+    await app.inject({
+      method: "POST",
+      url: "/api/import",
+      headers: { ...auth, "content-type": "application/json" },
+      payload: JSON.stringify({ ...document, media: [] }),
+    });
+    const job = await importZip(app, await archive(document, images), "/api/import?mode=attach-media");
+    expect(job.summary).toMatchObject({ mediaAttached: 2, mediaOverLimit: 1, mediaSkipped: 0 });
+    expect(mediaFiles()).toHaveLength(4);
+  });
+
+  it("accepts the mode on a JSON import, which has no images to attach", async () => {
+    const { app } = await targetApp();
+    const collection = await source.collections.create({ name: "Records", fields, isFiniteSet: false });
+    await source.items.create({ collectionId: collection.id, fields: { title: "Kind of Blue" } });
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/import?mode=attach-media",
+      headers: { ...auth, "content-type": "application/json" },
+      payload: JSON.stringify(await exportBackup(source)),
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ collectionsImported: 1, mediaAttached: 0 });
+  });
+
+  it("refuses a mode it does not know", async () => {
+    const { app } = await targetApp();
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/import?mode=replace",
+      headers: { ...auth, "content-type": "application/zip" },
+      payload: Buffer.from("PK"),
+    });
+    expect(res.statusCode).toBe(400);
   });
 });

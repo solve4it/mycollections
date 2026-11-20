@@ -1,4 +1,4 @@
-import type { Item } from "@mycollections/core";
+import type { Item, Media } from "@mycollections/core";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { emptyTrash } from "../empty-trash.js";
 import { type DatabaseHandle, openDatabase } from "../open-database.js";
@@ -237,5 +237,53 @@ describe("media and the trash", () => {
     await handle.items.softDelete(item.id);
     await handle.items.purge(item.id);
     expect(await handle.media.listFileRefs()).toEqual([{ itemId: other.id, id: b.id }]);
+  });
+});
+
+describe("MediaRepository import helpers for attaching to existing items (#453)", () => {
+  const archived = (itemId: string, overrides: Partial<Media> = {}): Media => ({
+    id: "55555555-5555-4555-8555-555555555555",
+    itemId,
+    kind: "image",
+    source: "user-camera",
+    mimeType: "image/webp",
+    bytes: 4096,
+    width: 320,
+    height: 200,
+    position: 0,
+    createdAt: "2026-01-02T03:04:05.000Z",
+    deletedAt: null,
+    ...overrides,
+  });
+
+  it("liveCounts maps each item to its live image count, trashed ones not counted", async () => {
+    await handle.media.create(image(item.id));
+    const trashed = await handle.media.create(image(item.id));
+    await handle.media.softDelete(item.id, trashed.id);
+    const counts = handle.media.liveCounts([item.id, other.id]);
+    expect([...counts.entries()]).toEqual([[item.id, 1]]);
+  });
+
+  it("insertAttached appends after every row the item has, trashed included, and keeps the archive's details", async () => {
+    await handle.media.create(image(item.id, { bytes: 1 }));
+    const trashed = await handle.media.create(image(item.id, { bytes: 2 }));
+    await handle.media.softDelete(item.id, trashed.id);
+    // Position 0 in the archive would collide with the first image; it goes to 2.
+    expect(handle.media.insertAttached(archived(item.id), 50)).toBe(true);
+    const attached = await handle.media.getForItem(item.id, "55555555-5555-4555-8555-555555555555");
+    expect(attached).toEqual(archived(item.id, { position: 2 }));
+    expect(await order(item.id)).toEqual([1, 4096]);
+  });
+
+  it("insertAttached refuses, writing nothing, when the item already holds the most live images it may", async () => {
+    await handle.media.create(image(item.id));
+    await handle.media.create(image(item.id));
+    expect(handle.media.insertAttached(archived(item.id), 2)).toBe(false);
+    expect(await handle.media.countLive(item.id)).toBe(2);
+  });
+
+  it("insertAttached throws on an id already in use, so the caller's transaction rolls back", async () => {
+    const existing = await handle.media.create(image(other.id));
+    expect(() => handle.media.insertAttached(archived(item.id, { id: existing.id }), 50)).toThrow();
   });
 });

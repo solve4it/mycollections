@@ -422,6 +422,7 @@ test.describe("keyboard traversal of every screen", () => {
       'combobox "Language"',
       'combobox "Theme"',
       'button "Export data"',
+      'checkbox "Also add photos to items you already have"',
       'button "Choose backup file"',
       restoreStop("Kind of Blue"),
       purgeStop("Kind of Blue"),
@@ -775,6 +776,12 @@ test.describe("every action is operable without a pointer", () => {
       'button "Choose backup file"',
     );
 
+    // The attach option (#453) is a plain checkbox that Space operates.
+    const attach = page.getByRole("checkbox", { name: "Also add photos to items you already have" });
+    await attach.focus();
+    await page.keyboard.press(" ");
+    await expect(attach, "Space must tick the attach-photos checkbox").toBeChecked();
+
     const toggle = page.getByRole("checkbox", { name: "Record error reports" });
     await toggle.focus();
     await page.keyboard.press(" ");
@@ -1068,6 +1075,38 @@ test.describe("focus while an action is in flight", () => {
 
     held.release();
     await expect(page.locator(".import-live")).toContainText("Imported");
+  });
+
+  /**
+   * An archive's upload is answered with a background job (#452), so the
+   * picker's busy state has to outlast the POST: here the job's first poll is
+   * held, and the picker must stay busy — and focused — until the job is done.
+   */
+  test("the file picker stays busy until a background import is done, not just uploaded", async ({ page, api }) => {
+    await api.reset();
+    const collection = await api.createCollection({ name: "Vinyl records", fields: FIELDS });
+    await api.createItem(collection.id, { title: "Kind of Blue", year: 1959 });
+    const backup = await api.exportArchive();
+    await api.reset();
+
+    await page.goto("/settings");
+    const picker = page.getByRole("button", { name: "Choose backup file" });
+    await expect(picker).toBeVisible();
+
+    const poll = await holdRequest(page, "**/api/import/*-*", "GET");
+    await picker.focus();
+    await picker.setInputFiles({ name: "backup.zip", mimeType: "application/zip", buffer: backup });
+
+    await poll.arrived;
+    await expectMarkedBusy(picker);
+    await expect(page.getByRole("progressbar", { name: "Importing images" })).toBeVisible();
+    expect(await focusedControl(page), "focus must stay on the file picker while the job runs").toBe(
+      'button "Choose backup file" [disabled]',
+    );
+
+    poll.release();
+    await expect(page.locator(".import-live")).toContainText("Imported 1 collections, 1 items");
+    await expect(picker).not.toHaveAttribute("aria-disabled");
   });
 });
 

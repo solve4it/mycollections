@@ -17,6 +17,7 @@ import {
   writeRedirectFile,
 } from "./open-browser.js";
 import { isPairingEnabled, PAIRING_TTL_MS, PairingCodes, pairingLink } from "./pairing.js";
+import { closeOnSignals } from "./shutdown.js";
 
 /**
  * A misconfiguration is the operator's to fix, so print the message rather than a stack
@@ -56,8 +57,10 @@ const media = await MediaStore.open(mediaDir).catch(exitWithConfigurationError);
 // An import killed mid-way leaves its uploaded archive in `.import/`; nothing is in flight yet (#45).
 await media.clearImports();
 // Files no row names any more: a crash between a purge's commit and its unlink, a
-// database restored from a backup older than its images. Nothing is in flight yet.
-const swept = await media.sweep(await handle.media.listFileRefs());
+// database restored from a backup older than its images, a background import killed
+// mid-way (#452). Nothing is in flight yet, so even a file written a moment before
+// the last run died goes: no grace period.
+const swept = await media.sweep(await handle.media.listFileRefs(), { graceMs: 0 });
 // One-time pairing links (#241), in development on loopback only. After a browser
 // pairs, the next link is printed straight away so a second browser can pair too.
 const pairingCodes = isPairingEnabled(config) ? new PairingCodes() : undefined;
@@ -116,6 +119,13 @@ const app = await buildApp({
 }).catch(exitWithConfigurationError);
 
 await app.listen({ port: config.port, host: config.host });
+
+// A clean close stops a background import and removes what it wrote (#452), and
+// lets SQLite close the database rather than leave that to the process exiting.
+closeOnSignals(async () => {
+  await app.close();
+  handle.close();
+});
 
 console.log(`Database: ${config.dbPath}`);
 console.log(`Media: ${mediaDir}`);

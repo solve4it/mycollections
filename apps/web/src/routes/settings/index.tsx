@@ -2,12 +2,11 @@ import { createRoute, useNavigate } from "@tanstack/react-router";
 import { type ChangeEvent, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Icon } from "../../components/Icon.js";
+import { ImportBackup } from "../../components/ImportBackup.js";
 import { TrashSection } from "../../components/TrashSection.js";
 import { clearToken, exportData, isTokenSessionOnly } from "../../lib/api-client.js";
 import { isErrorReportingEnabled, setErrorReportingEnabled } from "../../lib/error-reporter.js";
-import { useImportData } from "../../lib/queries.js";
 import { getThemePreference, isThemePreference, setThemePreference } from "../../lib/theme.js";
-import { isZipFile } from "../../lib/zip-file.js";
 import { authenticatedRoute } from "../_authenticated.js";
 
 export const settingsRoute = createRoute({
@@ -29,10 +28,8 @@ const THEME_OPTIONS = [
 function SettingsPage() {
   const { t, i18n } = useTranslation("settings");
   const navigate = useNavigate();
-  const importData = useImportData();
   const [exportError, setExportError] = useState(false);
   const [exporting, setExporting] = useState(false);
-  const [importInvalid, setImportInvalid] = useState(false);
   const [errorReporting, setErrorReporting] = useState(isErrorReportingEnabled);
   const [theme, setTheme] = useState(getThemePreference);
 
@@ -73,38 +70,6 @@ function SettingsPage() {
       setExporting(false);
     }
   }
-
-  async function handleImportFile(event: ChangeEvent<HTMLInputElement>) {
-    // What `disabled` used to do (#368). A file input cannot refuse the picker
-    // through ARIA, so the refusal is here: `aria-disabled` tells a screen
-    // reader the control is busy and keeps it in the tab order, and a second
-    // file chosen mid-import is ignored rather than queued.
-    if (importData.isPending) return;
-    const file = event.target.files?.[0];
-    // Reset the input so re-selecting the same file fires onChange again.
-    event.target.value = "";
-    if (!file) return;
-
-    setImportInvalid(false);
-    importData.reset();
-    // An export archive (#45) goes as it is; anything else must be a JSON backup.
-    if (await isZipFile(file)) {
-      importData.mutate({ archive: file });
-      return;
-    }
-    try {
-      importData.mutate({ document: JSON.parse(await file.text()) });
-    } catch {
-      setImportInvalid(true);
-    }
-  }
-
-  const importFailed = importInvalid || importData.isError;
-  // Too large and busy are not "your file is broken", so they say what they are.
-  // Read by status, as `ApiError` carries it; anything without one is a plain failure.
-  const importStatus = (importData.error as { status?: unknown } | null)?.status;
-  const importErrorKey =
-    importStatus === 413 ? "import_too_large" : importStatus === 409 ? "import_busy" : "import_error";
 
   return (
     <div>
@@ -160,47 +125,7 @@ function SettingsPage() {
         </button>
         {exportError && <p role="alert">{t("export_error")}</p>}
 
-        <p>{t("import_description")}</p>
-        {/* The icon sits beside the file input rather than inside a styled
-            label: restyling the picker itself belongs to the forms pass (#224). */}
-        <div className="import-row">
-          <Icon name="import" />
-          <input
-            id="import-file"
-            type="file"
-            accept=".zip,application/zip,.json,application/json"
-            className="touch-target"
-            aria-label={t("import_button")}
-            aria-disabled={importData.isPending || undefined}
-            onChange={handleImportFile}
-          />
-        </div>
-        {/* Always rendered, never conditional (#326). Both messages used to be
-            `role="status"` nodes created with their text already inside them,
-            and a live region inserted with content is announced by VoiceOver but
-            usually not by NVDA or JAWS — so an import's progress, and its
-            result, were announced to a fraction of the readers who needed them.
-            The region is here from the section's first commit, empty, and the
-            words arrive in it.
-
-            No role on the region and none on what lands inside: `role="status"`
-            implies `aria-live`, so a role on the message would make the message
-            the nearest live region for its own insertion and lose the
-            announcement. No `aria-atomic` either — the pending line is replaced
-            in place by the summary, and atomic would re-read the whole region
-            rather than what changed.
-
-            No layout wrapper, unlike the undo toast's: this region is in normal
-            flow with nothing to position, and an empty one is zero-height.
-
-            The failure stays outside it. `role="alert"` is a live region in its
-            own right, and a live region nested in a live region owns its own
-            subtree, so the polite one would never speak for it. */}
-        <div className="import-live" aria-live="polite">
-          {importData.isPending && <p>{t("import_pending")}</p>}
-          {importData.isSuccess && <p>{t("import_success", { ...importData.data })}</p>}
-        </div>
-        {importFailed && <p role="alert">{t(importErrorKey)}</p>}
+        <ImportBackup />
       </section>
 
       {/* Trash sits under Data: both are about what the app is holding, and the

@@ -30,6 +30,23 @@ function isMissing(error: unknown): boolean {
 }
 
 /**
+ * Creates `path` (owner-only, exclusively) in `folder`, which the caller has just
+ * made. `remove` of another image of the item can rmdir the folder between that
+ * mkdir and this write while it is still empty — a background import removes
+ * files at moments nobody chooses (review of #452). Once a file is in the folder
+ * rmdir fails, so one more mkdir is enough.
+ */
+async function writeInto(folder: string, path: string, data: Buffer): Promise<void> {
+  try {
+    await writeFile(path, data, { mode: 0o600, flag: "wx" });
+  } catch (error) {
+    if (!isMissing(error)) throw error;
+    await mkdir(folder, { recursive: true, mode: 0o700 });
+    await writeFile(path, data, { mode: 0o600, flag: "wx" });
+  }
+}
+
+/**
  * Where image files live: `<dir>/<itemId>/<mediaId>.webp` and
  * `<mediaId>.thumb.webp` (#37). Every path is built from ids, never from
  * anything a client sent, and nothing is ever stored that names a path.
@@ -71,7 +88,7 @@ export class MediaStore {
     const temps = { display: join(folder, `.${randomUUID()}.tmp`), thumb: join(folder, `.${randomUUID()}.tmp`) };
     try {
       for (const variant of ["display", "thumb"] as const) {
-        await writeFile(temps[variant], files[variant], { mode: 0o600, flag: "wx" });
+        await writeInto(folder, temps[variant], files[variant]);
         await rename(temps[variant], finals[variant]);
       }
     } catch (error) {
@@ -97,11 +114,12 @@ export class MediaStore {
    */
   async writeNew(itemId: string, mediaId: string, files: { display: Buffer; thumb: Buffer }): Promise<void> {
     const finals = { display: this.#path(itemId, mediaId, "display"), thumb: this.#path(itemId, mediaId, "thumb") };
-    await mkdir(join(this.#dir, itemId), { recursive: true, mode: 0o700 });
+    const folder = join(this.#dir, itemId);
+    await mkdir(folder, { recursive: true, mode: 0o700 });
     const created: string[] = [];
     try {
       for (const variant of ["display", "thumb"] as const) {
-        await writeFile(finals[variant], files[variant], { mode: 0o600, flag: "wx" });
+        await writeInto(folder, finals[variant], files[variant]);
         created.push(finals[variant]);
       }
     } catch (error) {
@@ -188,16 +206,19 @@ export class MediaStore {
    * Only names this store creates are ever touched: a stranger's file, a folder
    * that is not an item id, anything at all if the directory was pointed at the
    * wrong place, is left exactly where it is. And nothing newer than the grace
-   * period goes, since that may be an upload whose row is a moment away.
+   * period goes, since that may be an upload whose row is a moment away —
+   * unless the caller passes `graceMs: 0` because nothing can be in flight, as at
+   * startup (#452).
    */
-  async sweep(refs: readonly MediaFileRef[]): Promise<number> {
+  async sweep(refs: readonly MediaFileRef[], options: { graceMs?: number } = {}): Promise<number> {
     const keep = new Map<string, Set<string>>();
     for (const ref of refs) {
       const ids = keep.get(ref.itemId) ?? new Set<string>();
       ids.add(ref.id);
       keep.set(ref.itemId, ids);
     }
-    const cutoff = Date.now() - this.#graceMs;
+    const graceMs = options.graceMs ?? this.#graceMs;
+    const cutoff = Date.now() - graceMs;
     let removed = 0;
 
     for (const entry of await readdir(this.#dir, { withFileTypes: true })) {
@@ -211,7 +232,9 @@ export class MediaStore {
         if (!orphan) continue;
         const path = join(folder, file.name);
         try {
-          if ((await stat(path)).mtimeMs > cutoff) continue;
+          // No stat at all without a grace period: Date.now() is whole milliseconds and
+          // mtimeMs is not, so a file written this millisecond reads as newer than now.
+          if (graceMs > 0 && (await stat(path)).mtimeMs > cutoff) continue;
           await unlink(path);
           removed += 1;
         } catch (error) {

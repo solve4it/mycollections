@@ -19,6 +19,8 @@ vi.mock("../../lib/api-client.js", () => ({
   isTokenSessionOnly: vi.fn(() => false),
   exportData: vi.fn(),
   importData: vi.fn(),
+  getImportJob: vi.fn(),
+  getCurrentImport: vi.fn(),
   // The page's Trash section calls these; trash.test.tsx is where they are exercised.
   listTrash: vi.fn(),
   restoreItem: vi.fn(),
@@ -31,13 +33,18 @@ vi.mock("../../lib/api-client.js", () => ({
 import {
   ApiError,
   exportData,
+  getCurrentImport,
+  getImportJob,
   getToken,
+  type ImportJob,
+  type ImportResult,
   type ImportSummary,
   importData,
   isTokenSessionOnly,
   listTrash,
 } from "../../lib/api-client.js";
 import { isErrorReportingEnabled, setErrorReportingEnabled } from "../../lib/error-reporter.js";
+import { importPolling } from "../../lib/queries.js";
 import { getThemePreference, setThemePreference } from "../../lib/theme.js";
 
 const testRouteTree = rootRoute.addChildren([authenticatedRoute.addChildren([settingsRoute]), setupRoute]);
@@ -91,7 +98,9 @@ const IMPORT_SUMMARY: ImportSummary = {
   itemsImported: 5,
   itemsSkipped: 3,
   mediaImported: 4,
+  mediaAttached: 0,
   mediaSkipped: 0,
+  mediaOverLimit: 0,
 };
 
 /** A file that starts like every zip does (`PK\x03\x04`), as an export archive would (#45). */
@@ -118,7 +127,10 @@ beforeEach(() => {
   document.documentElement.removeAttribute("data-theme");
   vi.resetAllMocks();
   vi.mocked(exportData).mockResolvedValue(new Blob(["{}"], { type: "application/json" }));
-  vi.mocked(importData).mockResolvedValue(IMPORT_SUMMARY);
+  vi.mocked(importData).mockResolvedValue({ summary: IMPORT_SUMMARY });
+  vi.mocked(getCurrentImport).mockResolvedValue(null);
+  // Polled fast here; a second is the real interval.
+  importPolling.intervalMs = 10;
   vi.mocked(listTrash).mockResolvedValue({ collections: [], items: [] });
 });
 
@@ -352,7 +364,7 @@ describe("SettingsPage data import", () => {
   it("sends an export archive as it is, without reading it as JSON (#45)", async () => {
     renderSettings();
     const file = selectArchive(await screen.findByLabelText(/choose backup file/i));
-    await waitFor(() => expect(importData).toHaveBeenCalledWith({ archive: file }));
+    await waitFor(() => expect(importData).toHaveBeenCalledWith({ archive: file }, "skip"));
   });
 
   it("offers archives in the file picker as well as JSON backups (#45)", async () => {
@@ -388,9 +400,12 @@ describe("SettingsPage data import", () => {
     selectFile(input, JSON.stringify({ version: 1, exportedAt: "x", collections: [], items: [] }));
 
     await waitFor(() => expect(importData).toHaveBeenCalledTimes(1));
-    expect(importData).toHaveBeenCalledWith({
-      document: { version: 1, exportedAt: "x", collections: [], items: [] },
-    });
+    expect(importData).toHaveBeenCalledWith(
+      {
+        document: { version: 1, exportedAt: "x", collections: [], items: [] },
+      },
+      "skip",
+    );
     await waitFor(() => expect(importLiveRegion()).toHaveTextContent(/imported 2 collections, 5 items and 4 images/i));
     expect(importLiveRegion()).toHaveTextContent(/1 collections, 3 items and 0 images already present were skipped/i);
   });
@@ -400,7 +415,7 @@ describe("SettingsPage data import", () => {
     // that appears already holding its text is announced by VoiceOver but
     // usually not by NVDA or JAWS, and a test that only inspected the final DOM
     // would pass against exactly that bug.
-    const inFlight = deferred<ImportSummary>();
+    const inFlight = deferred<ImportResult>();
     vi.mocked(importData).mockReturnValue(inFlight.promise);
 
     renderSettings();
@@ -428,7 +443,7 @@ describe("SettingsPage data import", () => {
     const pending = within(before).getByText("Importing your backup…");
     expect(pending).not.toHaveAttribute("role");
 
-    inFlight.settle(IMPORT_SUMMARY);
+    inFlight.settle({ summary: IMPORT_SUMMARY });
 
     await waitFor(() => expect(importLiveRegion()).toHaveTextContent(/imported 2 collections, 5 items and 4 images/i));
     expect(importLiveRegion(), "the summary must replace the pending text in the same node").toBe(before);
@@ -444,7 +459,7 @@ describe("SettingsPage data import", () => {
   });
 
   it("announces progress while the import is in flight and stops once it succeeds", async () => {
-    const inFlight = deferred<ImportSummary>();
+    const inFlight = deferred<ImportResult>();
     vi.mocked(importData).mockReturnValue(inFlight.promise);
 
     renderSettings();
@@ -454,7 +469,7 @@ describe("SettingsPage data import", () => {
     await screen.findByLabelText(/choose backup file/i);
     await waitFor(() => expect(importLiveRegion()).toHaveTextContent("Importing your backup…"));
 
-    inFlight.settle(IMPORT_SUMMARY);
+    inFlight.settle({ summary: IMPORT_SUMMARY });
 
     await waitFor(() => expect(importLiveRegion()).toHaveTextContent(/imported 2 collections, 5 items and 4 images/i));
     expect(screen.queryByText("Importing your backup…")).not.toBeInTheDocument();
@@ -464,7 +479,7 @@ describe("SettingsPage data import", () => {
   // <body>, so a keyboard user who chose a file was thrown out of the page by
   // the import starting; the refusal of a second file moved into the handler.
   it("marks the file picker busy while the import is in flight and clears it afterwards", async () => {
-    const inFlight = deferred<ImportSummary>();
+    const inFlight = deferred<ImportResult>();
     vi.mocked(importData).mockReturnValue(inFlight.promise);
 
     renderSettings();
@@ -480,13 +495,13 @@ describe("SettingsPage data import", () => {
     selectFile(input, JSON.stringify({ version: 1, exportedAt: "x", collections: [], items: [] }));
     expect(vi.mocked(importData)).toHaveBeenCalledTimes(1);
 
-    inFlight.settle(IMPORT_SUMMARY);
+    inFlight.settle({ summary: IMPORT_SUMMARY });
 
     await waitFor(() => expect(input).not.toHaveAttribute("aria-disabled"));
   });
 
   it("stops announcing progress when the import fails", async () => {
-    const inFlight = deferred<ImportSummary>();
+    const inFlight = deferred<ImportResult>();
     vi.mocked(importData).mockReturnValue(inFlight.promise);
 
     renderSettings();
@@ -518,5 +533,197 @@ describe("SettingsPage data import", () => {
     selectFile(input, JSON.stringify({ version: 999 }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent(/import failed/i);
+  });
+});
+
+/** A background import's state (#452), running unless the overrides say otherwise. */
+function job(overrides: Partial<ImportJob> = {}): ImportJob {
+  return {
+    id: "0b1c2d3e-4f50-4617-8293-a4b5c6d7e8f9",
+    phase: "images",
+    imagesDone: 0,
+    imagesTotal: 8,
+    summary: null,
+    failure: null,
+    ...overrides,
+  };
+}
+
+/** The shell's hidden announcer, where milestone messages go. */
+function announcer(): HTMLElement {
+  const region = document.querySelector<HTMLElement>(".visually-hidden[aria-live]");
+  if (!region) throw new Error("no shell announcer");
+  return region;
+}
+
+describe("SettingsPage background archive imports (#452)", () => {
+  it("shows the job's progress outside the live region, then its summary inside it", async () => {
+    vi.mocked(importData).mockResolvedValue({ job: job() });
+    vi.mocked(getImportJob)
+      .mockResolvedValueOnce(job({ imagesDone: 3 }))
+      .mockResolvedValueOnce(job({ phase: "saving", imagesDone: 8 }))
+      .mockResolvedValue(job({ phase: "done", imagesDone: 8, summary: IMPORT_SUMMARY }));
+    renderSettings();
+    const input = await screen.findByLabelText(/choose backup file/i);
+    const before = importLiveRegion();
+    selectArchive(input);
+
+    const progress = await screen.findByRole("progressbar", { name: "Importing images" });
+    await waitFor(() => expect(progress).toHaveAttribute("value", "3"));
+    expect(progress).toHaveAttribute("max", "8");
+    expect(screen.getByText("3 of 8 images")).toBeInTheDocument();
+    // Each poll changes the count; inside the live region, every one would be read out.
+    expect(importLiveRegion()).not.toContainElement(progress);
+    expect(importLiveRegion()).toHaveTextContent("Importing your backup…");
+
+    await waitFor(() => expect(importLiveRegion()).toHaveTextContent(/imported 2 collections, 5 items and 4 images/i));
+    expect(importLiveRegion()).toBe(before);
+    expect(screen.queryByRole("progressbar")).not.toBeInTheDocument();
+    expect(getImportJob).toHaveBeenCalledWith("0b1c2d3e-4f50-4617-8293-a4b5c6d7e8f9");
+  });
+
+  it("drops the value while saving, so the bar reads as indeterminate", async () => {
+    vi.mocked(importData).mockResolvedValue({ job: job() });
+    vi.mocked(getImportJob).mockResolvedValue(job({ phase: "saving", imagesDone: 8 }));
+    renderSettings();
+    selectArchive(await screen.findByLabelText(/choose backup file/i));
+    await waitFor(() => expect(screen.getByText("Saving your collections…")).toBeInTheDocument());
+    expect(screen.getByRole("progressbar", { name: "Importing images" })).not.toHaveAttribute("value");
+  });
+
+  it("keeps the file picker busy until the job ends, not just until the upload is accepted", async () => {
+    vi.mocked(importData).mockResolvedValue({ job: job() });
+    vi.mocked(getImportJob).mockResolvedValue(job({ imagesDone: 1 }));
+    renderSettings();
+    const input = await screen.findByLabelText(/choose backup file/i);
+    selectArchive(input);
+    await screen.findByRole("progressbar");
+    expect(input).toHaveAttribute("aria-disabled", "true");
+    selectArchive(input);
+    expect(importData).toHaveBeenCalledTimes(1);
+
+    vi.mocked(getImportJob).mockResolvedValue(job({ phase: "done", imagesDone: 8, summary: IMPORT_SUMMARY }));
+    await waitFor(() => expect(input).not.toHaveAttribute("aria-disabled"));
+  });
+
+  it("finds a running import again after a reload, and reports it when it ends", async () => {
+    vi.mocked(getCurrentImport).mockResolvedValue(job({ imagesDone: 2 }));
+    vi.mocked(getImportJob)
+      .mockResolvedValueOnce(job({ imagesDone: 2 }))
+      .mockResolvedValue(job({ phase: "done", imagesDone: 8, summary: IMPORT_SUMMARY }));
+    renderSettings();
+    expect(await screen.findByRole("progressbar", { name: "Importing images" })).toBeInTheDocument();
+    expect(await screen.findByLabelText(/choose backup file/i)).toHaveAttribute("aria-disabled", "true");
+    await waitFor(() => expect(importLiveRegion()).toHaveTextContent(/imported 2 collections/i));
+    expect(importData).not.toHaveBeenCalled();
+  });
+
+  it("does not bring a finished job back when a new file is chosen after a reload (review of #452)", async () => {
+    vi.mocked(getCurrentImport).mockResolvedValue(job({ imagesDone: 2 }));
+    vi.mocked(getImportJob).mockResolvedValue(job({ phase: "done", imagesDone: 8, summary: IMPORT_SUMMARY }));
+    const upload = deferred<ImportResult>();
+    vi.mocked(importData).mockReturnValue(upload.promise);
+    renderSettings();
+    await waitFor(() => expect(importLiveRegion()).toHaveTextContent(/imported 2 collections/i));
+
+    selectArchive(screen.getByLabelText(/choose backup file/i));
+    await waitFor(() => expect(importLiveRegion()).toHaveTextContent("Importing your backup…"));
+    // Give a re-adopting effect its chance to run.
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(importLiveRegion()).toHaveTextContent(/^Importing your backup…$/);
+
+    upload.fail(new ApiError(409));
+    expect(await screen.findByRole("alert")).toHaveTextContent(/another import is still running/i);
+    expect(importLiveRegion()).toBeEmptyDOMElement();
+  });
+
+  it("says nothing about an import that had already finished before the page opened", async () => {
+    vi.mocked(getCurrentImport).mockResolvedValue(job({ phase: "done", summary: IMPORT_SUMMARY }));
+    renderSettings();
+    await screen.findByLabelText(/choose backup file/i);
+    await waitFor(() => expect(getCurrentImport).toHaveBeenCalled());
+    expect(importLiveRegion()).toBeEmptyDOMElement();
+    expect(screen.queryByRole("progressbar")).not.toBeInTheDocument();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
+  it.each([
+    ["invalid", "Import failed. Make sure you chose a valid MyCollections backup file."],
+    ["server", "The server could not finish the import. Nothing from it was kept; try again."],
+  ] as const)("says why a job failed (%s), with the fixed text for that reason", async (failure, text) => {
+    vi.mocked(importData).mockResolvedValue({ job: job() });
+    vi.mocked(getImportJob).mockResolvedValue(job({ phase: "failed", failure }));
+    renderSettings();
+    selectArchive(await screen.findByLabelText(/choose backup file/i));
+    const data = within(await dataSection());
+    expect(await data.findByRole("alert")).toHaveTextContent(text);
+    expect(importLiveRegion()).toBeEmptyDOMElement();
+    expect(screen.queryByRole("progressbar")).not.toBeInTheDocument();
+  });
+
+  it("says the import was interrupted when the server no longer knows the job", async () => {
+    vi.mocked(importData).mockResolvedValue({ job: job() });
+    vi.mocked(getImportJob).mockRejectedValue(new ApiError(404));
+    renderSettings();
+    const input = await screen.findByLabelText(/choose backup file/i);
+    selectArchive(input);
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "The import was interrupted, most likely by the server restarting. Nothing from it was kept; try again.",
+    );
+    expect(input).not.toHaveAttribute("aria-disabled");
+  });
+
+  it("announces each quarter of the way through, not every image, and not the end", async () => {
+    vi.mocked(importData).mockResolvedValue({ job: job() });
+    vi.mocked(getImportJob)
+      .mockResolvedValueOnce(job({ imagesDone: 1 }))
+      .mockResolvedValueOnce(job({ imagesDone: 2 }))
+      .mockResolvedValueOnce(job({ imagesDone: 3 }))
+      .mockResolvedValueOnce(job({ imagesDone: 5 }))
+      .mockResolvedValueOnce(job({ imagesDone: 7 }))
+      .mockResolvedValue(job({ phase: "done", imagesDone: 8, summary: IMPORT_SUMMARY }));
+    renderSettings();
+    selectArchive(await screen.findByLabelText(/choose backup file/i));
+    await waitFor(() => expect(importLiveRegion()).toHaveTextContent(/imported 2 collections/i));
+    const said = Array.from(announcer().children, (node) => node.textContent).filter((text) =>
+      text?.startsWith("Import"),
+    );
+    expect(said).toEqual(["Import 25% done", "Import 50% done", "Import 75% done"]);
+  });
+});
+
+describe("SettingsPage attaching photos to items already here (#453)", () => {
+  it("sends the attach mode only when the box is ticked", async () => {
+    renderSettings();
+    const box = await screen.findByRole("checkbox", { name: "Also add photos to items you already have" });
+    expect(box).not.toBeChecked();
+    const input = screen.getByLabelText(/choose backup file/i);
+    const first = selectArchive(input);
+    await waitFor(() => expect(importData).toHaveBeenLastCalledWith({ archive: first }, "skip"));
+    await waitFor(() => expect(importLiveRegion()).toHaveTextContent(/imported/i));
+
+    fireEvent.click(box);
+    const second = selectArchive(input);
+    await waitFor(() => expect(importData).toHaveBeenLastCalledWith({ archive: second }, "attach-media"));
+  });
+
+  it("reports attached images, and images left out over an item's limit", async () => {
+    vi.mocked(importData).mockResolvedValue({
+      summary: { ...IMPORT_SUMMARY, mediaAttached: 6, mediaOverLimit: 2 },
+    });
+    renderSettings();
+    selectArchive(await screen.findByLabelText(/choose backup file/i));
+    await waitFor(() => expect(importLiveRegion()).toHaveTextContent(/imported 2 collections/i));
+    expect(importLiveRegion()).toHaveTextContent("Added 6 images to items you already had.");
+    expect(importLiveRegion()).toHaveTextContent(
+      "Left out 2 images whose items already hold as many images as an item may.",
+    );
+  });
+
+  it("does not mention attaching or the limit when neither happened", async () => {
+    renderSettings();
+    selectArchive(await screen.findByLabelText(/choose backup file/i));
+    await waitFor(() => expect(importLiveRegion()).toHaveTextContent(/imported 2 collections/i));
+    expect(importLiveRegion()).not.toHaveTextContent(/added|left out/i);
   });
 });
