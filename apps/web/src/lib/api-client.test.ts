@@ -12,6 +12,7 @@ import {
   getItem,
   getTagValues,
   importData,
+  importItems,
   listCollections,
   listItems,
   listMedia,
@@ -360,5 +361,21 @@ describe("archive imports in the background (#452, #453)", () => {
     expect(await getCurrentImport()).toEqual(job);
     mockFetch(200, { job: null });
     expect(await getCurrentImport()).toBeNull();
+  });
+});
+
+describe("api-client item import (#44)", () => {
+  it("posts the typed rows to the collection's import route and reads the count", async () => {
+    const fetchMock = mockFetch(201, { created: 2 });
+    const items = [{ fields: { title: "Dune" } }, { status: "wanted" as const, fields: { title: "Emma" } }];
+    expect(await importItems("c1", items)).toEqual({ created: 2 });
+    expect(String(fetchMock.mock.calls[0]?.[0])).toMatch(/\/api\/collections\/c1\/items\/import$/);
+    expect(initOf(fetchMock).method).toBe("POST");
+    expect(JSON.parse(String(initOf(fetchMock).body))).toEqual({ items });
+  });
+
+  it("rejects with the status when the server refuses", async () => {
+    mockFetch(413, { message: "Import too large" });
+    await expect(importItems("c1", [{ fields: {} }])).rejects.toMatchObject({ status: 413 });
   });
 });
