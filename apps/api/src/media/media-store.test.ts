@@ -126,6 +126,15 @@ describe("MediaStore.sweep", () => {
     expect(readdirSync(join(dir, ITEM))).toHaveLength(2);
   });
 
+  it("takes even a fresh file when told nothing is in flight, as at startup (#452)", async () => {
+    // A server killed mid-import leaves files written moments ago; at the next
+    // start no write can be in flight, so the grace period only delays them.
+    const store = await MediaStore.open(dir);
+    await store.write(ITEM, MEDIA, files());
+    expect(await store.sweep([], { graceMs: 0 })).toBe(2);
+    expect(existsSync(join(dir, ITEM))).toBe(false);
+  });
+
   it("never deletes anything it did not create — a media directory pointed at the wrong place loses nothing", async () => {
     const store = await MediaStore.open(dir);
     const strangers = [join(dir, "notes.txt"), join(dir, "Photos")];
