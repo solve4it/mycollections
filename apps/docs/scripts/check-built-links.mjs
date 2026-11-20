@@ -56,8 +56,20 @@ const built = new Set(
   }),
 );
 
+/** Every file the build produced, as the path that serves it: assets included. */
+const emitted = new Set();
+async function collect(dir) {
+  for (const entry of await readdir(dir, { withFileTypes: true })) {
+    const full = join(dir, entry.name);
+    if (entry.isDirectory()) await collect(full);
+    else emitted.add(full.slice(DIST.length).replaceAll("\\", "/"));
+  }
+}
+await collect(DIST);
+
 const markdownLinks = [];
 const dangling = [];
+const missingAssets = [];
 
 for (const file of files) {
   const from = file.slice(DIST.length + 1);
@@ -69,8 +81,18 @@ for (const file of files) {
       markdownLinks.push(`${from} → ${link}`);
       continue;
     }
-    // Only page links are checked; assets are emitted by the build itself.
-    if (!path.startsWith("/") || /\.[a-z0-9]+$/i.test(path)) continue;
+    // An asset — a path ending in a file extension — must be a file the build
+    // emitted (#332). Resolved against the page's own URL, as a browser does, so a
+    // relative `<img src="./x.png">` that bypassed Astro's image pipeline is caught
+    // rather than 404ing with the build green.
+    if (/\.[a-z0-9]+$/i.test(path)) {
+      const page = `https://example.com${BASE}/${from.replace(/index\.html$/, "").replace(/\.html$/, "/")}`;
+      const asset = decodeURIComponent(new URL(path, page).pathname);
+      const withoutBase = asset.startsWith(`${BASE}/`) ? asset.slice(BASE.length) : null;
+      if (withoutBase === null || !emitted.has(withoutBase)) missingAssets.push(`${from} → ${link}`);
+      continue;
+    }
+    if (!path.startsWith("/")) continue;
     const url = new URL(path, "https://example.com").pathname;
     const withoutBase = url.startsWith(BASE) ? url.slice(BASE.length) : url;
     if (!built.has(withoutBase) && !built.has(`${withoutBase}/`)) {
@@ -79,7 +101,7 @@ for (const file of files) {
   }
 }
 
-if (markdownLinks.length > 0 || dangling.length > 0) {
+if (markdownLinks.length > 0 || dangling.length > 0 || missingAssets.length > 0) {
   if (markdownLinks.length > 0) {
     console.error(`[check-built-links] ${markdownLinks.length} link(s) still point at a Markdown file:`);
     for (const line of markdownLinks.sort()) console.error(`  ${line}`);
@@ -91,7 +113,12 @@ if (markdownLinks.length > 0 || dangling.length > 0) {
     for (const line of dangling.sort()) console.error(`  ${line}`);
     console.error("  → usually a missing or doubled `base` prefix.");
   }
+  if (missingAssets.length > 0) {
+    console.error(`[check-built-links] ${missingAssets.length} asset URL(s) point at a file the build did not emit:`);
+    for (const line of [...new Set(missingAssets)].sort().slice(0, 20)) console.error(`  ${line}`);
+    console.error("  → a file missing from public/, or a raw <img src> that bypassed Astro's image pipeline.");
+  }
   process.exit(1);
 }
 
-console.log(`[check-built-links] ${files.length} page(s) checked, all in-site links resolve.`);
+console.log(`[check-built-links] ${files.length} page(s) checked, all in-site links and assets resolve.`);
