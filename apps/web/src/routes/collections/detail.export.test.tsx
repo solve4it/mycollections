@@ -101,6 +101,14 @@ describe("exporting a collection from its page (#45)", () => {
     await waitFor(() => expect(button).not.toHaveAttribute("aria-disabled"));
   });
 
+  it("links to the CSV import beside Export (#44)", async () => {
+    renderDetail();
+    expect(await screen.findByRole("link", { name: "Import CSV" })).toHaveAttribute(
+      "href",
+      `/collections/${COLLECTION.id}/import`,
+    );
+  });
+
   it("says so in an alert when the export fails", async () => {
     vi.mocked(exportCollection).mockRejectedValue(new Error("500"));
     renderDetail();

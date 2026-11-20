@@ -2,6 +2,7 @@ import { rootRoute } from "./routes/__root.js";
 import { authenticatedRoute } from "./routes/_authenticated.js";
 import { collectionDetailRoute } from "./routes/collections/$id.js";
 import { editCollectionRoute } from "./routes/collections/edit.js";
+import { importItemsRoute } from "./routes/collections/import.js";
 import { collectionsRoute } from "./routes/collections/index.js";
 import { itemDetailRoute } from "./routes/collections/item.js";
 import { newCollectionRoute } from "./routes/collections/new.js";
@@ -22,6 +23,7 @@ export const routeTree = rootRoute.addChildren([
     editCollectionRoute,
     collectionDetailRoute,
     itemDetailRoute,
+    importItemsRoute,
     collectionsRoute,
     settingsRoute,
   ]),

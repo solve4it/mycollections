@@ -590,6 +590,10 @@ function CollectionDetailPage() {
             <Icon name="export" />
             {tCollections("export_collection")}
           </button>
+          <Link to="/collections/$id/import" params={{ id }} className="touch-target button-quiet">
+            <Icon name="import" />
+            {tCollections("import_csv")}
+          </Link>
         </div>
       </div>
       {/* Inserted with its message inside: a role="alert" is announced on insertion.

@@ -1620,6 +1620,63 @@ p[role="alert"] {
   font-family: var(--font-mono);
 }
 
+/* CSV import (#44). The mapping is ordinary form rows, one per column; the
+   preview is a plain data table that scrolls sideways on its own rather than
+   widening the page, since a file may map many columns. */
+.import-items-page {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.import-items-page section {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.import-items-page .form-row select {
+  max-inline-size: 24rem;
+}
+
+.import-items-page select[aria-invalid="true"] {
+  border-color: var(--danger);
+}
+
+/* A mapping that cannot be used yet. The danger ink on the page, not a fill:
+   it explains the button under it rather than shouting over the form. */
+.import-items-page .form-error {
+  margin: 0;
+  color: var(--danger);
+  font-weight: 600;
+}
+
+.import-items-page .table-scroll {
+  overflow-x: auto;
+}
+
+.import-items-page table {
+  border-collapse: collapse;
+  min-inline-size: 100%;
+}
+
+.import-items-page caption {
+  text-align: start;
+  color: var(--ink-muted);
+  padding-block-end: var(--space-1);
+}
+
+.import-items-page th,
+.import-items-page td {
+  border-block-end: 1px solid var(--line);
+  padding: var(--space-1) var(--space-2);
+  text-align: start;
+  vertical-align: top;
+}
+
+.import-items-skipped {
+  margin: 0;
+  padding-inline-start: var(--space-4);
+}
+
 /* Settings: trash (#35). Rows are the item-row card at a smaller weight — same
    card, same border, same two-column split of content and actions — because a
    trashed row is still a catalog entry, just one on its way out. */
