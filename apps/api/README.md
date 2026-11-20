@@ -48,7 +48,9 @@ All routes require `Authorization: Bearer <token>` except `GET /api/health` and 
 | `DELETE` | `/api/trash/collections/:id`                                     | Permanently delete a trashed collection and its items                                                                                                                  |
 | `GET`    | `/api/export`                                                    | Download an export archive (`.zip`) of every collection, item and image                                                                                                |
 | `GET`    | `/api/collections/:id/export`                                    | Download one live collection's archive, same format (404 if missing or trashed)                                                                                        |
-| `POST`   | `/api/import`                                                    | Restore a backup document (`?mode=skip`)                                                                                                                               |
+| `POST`   | `/api/import`                                                    | Restore a backup (`?mode=skip` or `attach-media`); JSON answers `200` with counts, an archive `202` with its job                                                       |
+| `GET`    | `/api/import/current`                                            | The running import job, or the last one to finish: `{ job }`, `null` before any                                                                                        |
+| `GET`    | `/api/import/:jobId`                                             | One import job: phase, images done/total, and its summary or failure (404 once superseded or lost to a restart)                                                        |
 
 ### Searching and sorting items (#41, #42)
 
@@ -235,14 +237,26 @@ The images are read one at a time as the zip streams, so a large collection neit
 
 **Version 2** (#45) adds `media`, one row per image, soft-deleted ones included. The image files travel beside the document in the export archive; the document never embeds them. A version 1 document (no `media` key) is still read, as version 2 with no images. Version 2 refuses a repeated image id, and an image whose item is not in the document. Images are a version bump rather than an additive field because the top level is strict: an older app refuses an unknown top-level key instead of ignoring it.
 
-`POST /api/import` accepts either version, and answers with counts: `collectionsImported`, `collectionsSkipped`, `itemsImported`, `itemsSkipped`, `mediaImported` and `mediaSkipped`. The import plans which images to bring in before anything is written: only images of items it adds, never those of an item already here, and never an id already in use. An added item holding more live images than one item may (50) refuses the whole file. The whole import runs in a single
+`POST /api/import` accepts either version, and answers with counts: `collectionsImported`, `collectionsSkipped`, `itemsImported`, `itemsSkipped`, `mediaImported`, `mediaAttached`, `mediaSkipped` and `mediaOverLimit`. Every image row in the document is counted in exactly one of the four media counts. (An archive's counts arrive in its job's `summary`; see [Importing an archive](#importing-an-archive-45).) The import plans which images to bring in before anything is written: only images of items it adds, never those of an item already here, and never an id already in use. An added item holding more live images than one item may (50) refuses the whole file. The whole import runs in a single
 transaction, so an invalid payload is rejected with `400` and leaves the database
 untouched (no partial writes). Every refusal has the same body, `{"statusCode":400,
 "error":"Bad Request","message":"Invalid import file"}`. The thrown error's message is
 never sent: Zod quotes unknown key names and SQLite quotes table and constraint names,
-and both come from a file someone else may have written (#45). The only `mode` today is `skip` (the default):
-records whose id already exists are left as-is, making imports idempotent and
-non-destructive. `replace` / `merge` modes are reserved for the future.
+and both come from a file someone else may have written (#45). In both modes, a
+collection or item whose id already exists is left as-is, making imports idempotent and
+non-destructive:
+
+- `skip` (the default): an existing item's images are skipped along with it.
+- `attach-media` (#453): an existing item also gets the archive's live images whose ids
+  are free, appended after its own images (fresh positions after every row it has,
+  trashed ones included), so nothing already there is reordered. Its own live images
+  count against the 50-image cap; the excess is left out and counted in
+  `mediaOverLimit`, not refused. Trashed archive images are not attached. The cap is
+  checked again inside the transaction, so an upload that lands while the files are
+  being written cannot push an item over it. A JSON body has no images, so the mode
+  changes nothing there.
+
+`replace` / `merge` modes are reserved for the future.
 
 The document embeds full collection records, so it carries each finite set's
 `targetCount`. Adding that field did not change `version`: a version 1 backup written
@@ -289,7 +303,7 @@ The web app's setup screen sends the code to `POST /api/pair` as `{"code": "<cod
 
 The archive is treated as untrusted input:
 
-- **Received** into `<MEDIA_DIR>/.import/` (owner-only, on the same disk as the images, emptied at every start), with bytes counted as they arrive. Over 2 GiB answers `413 {"message":"Import too large"}`. The rest of the body is read and discarded so the client sees the 413, but only up to 8 MiB past the cap; beyond that the connection is cut. An upload that sends nothing for a minute is dropped. The file is removed either way before the response.
+- **Received** into `<MEDIA_DIR>/.import/` (owner-only, on the same disk as the images, emptied at every start), with bytes counted as they arrive. Over 2 GiB answers `413 {"message":"Import too large"}`. The rest of the body is read and discarded so the client sees the 413, but only up to 8 MiB past the cap; beyond that the connection is cut. An upload that sends nothing for a minute is dropped. A refused archive is removed before the response; an accepted one stays until its job ends.
 - **Read** with [yauzl](https://github.com/thejoshwolfe/yauzl), trusting only the central directory, with these caps:
 
   | Limit          | Value          |
@@ -303,11 +317,24 @@ The archive is treated as untrusted input:
   | Total inflated | 2 GiB + 64 MiB |
 
   Each size cap is checked on the declared size first and counted again while inflating. The item and collection counts are checked before the schema validates anything. Validating and inserting cost per record, so a small zip holding a huge document must not get that far: 170,000 items once blocked the server for 12 seconds and used 2.8 GB. Also refused: a deflated image inflating more than 20:1, encrypted entries, compression other than stored or deflate, and any repeated name. Images are found by the path their validated row implies, never by an entry's own name.
-- **Planned before anything is written.** Images come in only with items the import adds, never onto an item already here, and never under an id already in use. An added item with more than 50 live images refuses the whole archive.
+- **Planned before anything is written.** Images come in only with items the import adds (or, with `?mode=attach-media`, onto items already here, as above), and never under an id already in use. An added item with more than 50 live images refuses the whole archive.
 - **Re-processed.** Every image goes through the same pipeline as an upload: sniff, pixel cap, re-encode, metadata stripped. Its width, height, size and type are what that produced, not what the archive claimed. Imports share the upload limiter but wait for a turn rather than get a 503.
 - **Written without overwriting.** Files go first, each created exclusively, so an existing file is never replaced. Files under an id that no row names, left by a purge whose delete failed, are cleared first. Then all the rows go in one transaction. Any failure removes exactly the files this import wrote.
-- **One import at a time, JSON or archive.** A second one answers `409 {"message":"Another import is in progress"}`. The plan holds only while nothing else adds the items it chose to attach images to. The lock is released however the import ends.
-- **Refused with fixed text.** Every refusal of the file is `400 {"message":"Invalid import file"}`. A server-side failure, such as a full disk, is a generic 500.
+- **One import at a time, JSON or archive.** A second one answers `409 {"message":"Another import is in progress"}`, from the upload until the background job ends. The plan holds only while nothing else adds the items it chose to attach images to. The lock is released however the import ends.
+- **Refused with fixed text.** Every refusal of the file in the request is `400 {"message":"Invalid import file"}`. A server-side failure, such as a full disk, is a generic 500.
+
+### Background jobs (#452)
+
+Receiving, checking, reading and planning happen inside the request, so a bad file is still refused with the answers above. The images and the transaction then run in the background: an accepted archive answers `202` with `Location: /api/import/<jobId>` and `Retry-After: 1`, and a body of the job's state:
+
+```json
+{ "id": "…", "phase": "images", "imagesDone": 0, "imagesTotal": 32, "summary": null, "failure": null }
+```
+
+- `phase` is `images` (processing and writing files), `saving` (the one transaction), then `done` with `summary` set, or `failed` with `failure` set to `invalid` (the file's fault: an image the pipeline refused, a row the database refused) or `server` (a full disk, a permission, a shutdown). A fixed word, never a message; system errors are logged with no request data.
+- Poll `GET /api/import/:jobId`; running answers carry `Retry-After: 1`. Both job routes log at `warn` only, so polling adds no lines to the info log. `GET /api/import/current` answers `{ "job": … }`, the running job or the last to finish, so a reloaded page can find an import still under way.
+- Job state is in memory, one slot, the latest job only. A restart forgets it (and `GET /api/import/:jobId` then answers 404): it already clears `.import/`, so a job could never resume.
+- Hanging up no longer stops an import. Closing the server does: SIGTERM or SIGINT closes the app, which stops the job at its next image, removes the files it wrote, and waits for that before the database closes. A second signal exits at once. Files from a server killed outright are swept at the next start, which runs with no grace period since nothing is in flight then.
 
 ## Images (#37)
 
